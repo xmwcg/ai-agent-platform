@@ -53,6 +53,19 @@ function isRunning() {
   catch { return false; }
 }
 
+/* 启动/同步时的背景声音提醒（仅 Windows，失败静默忽略） */
+function playNotify() {
+  if (process.platform !== 'win32') return;
+  try {
+    const ps = spawn('powershell', [
+      '-NoProfile', '-Command',
+      '[System.Media.SystemSounds]::Asterisk.Play()',
+    ], { stdio: 'ignore', windowsHide: true });
+    ps.on('error', () => {});
+    ps.unref();
+  } catch (e) { /* 音频不可用时不干扰主流程 */ }
+}
+
 /* ----------------------------- git 封装 ----------------------------- */
 function git(args, cb) {
   const p = spawn('git', args, { cwd: ROOT, env: process.env });
@@ -150,6 +163,8 @@ function runDaemon() {
       logLine('⚠️ 监听出错: ' + e.message);
     });
     logLine(`✅ 监听就绪（防抖 ${DEBOUNCE_MS / 1000}s，远程 ${REMOTE}/${BRANCH}）`);
+    logLine('🔔 已播放启动提示音（后台监听中）');
+    playNotify();
   } catch (e) {
     logLine('❌ 无法启动文件监听: ' + e.message);
     process.exit(1);
@@ -183,7 +198,7 @@ function cmdStart() {
   console.log('✅ 自动部署监听已启动 (PID ' + child.pid + ')');
   console.log('   查看日志: node scripts/auto-deploy.cjs log');
   console.log('   停止:     node scripts/auto-deploy.cjs stop');
-  console.log('   现在用任何工具改本项目文件，停手 10 秒后自动同步到服务器。');
+  console.log('   现在用任何工具改本项目文件，停手 30 秒后自动同步到服务器。');
 }
 
 function cmdStop() {
