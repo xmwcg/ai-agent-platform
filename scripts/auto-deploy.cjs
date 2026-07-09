@@ -27,7 +27,7 @@ const { spawn } = require('child_process');
 const ROOT = path.resolve(__dirname, '..');
 const LOG_FILE = path.join(ROOT, 'scripts', 'auto-deploy.log');
 const PID_FILE = path.join(os.tmpdir(), 'ai-agent-platform-auto-deploy.pid');
-const DEBOUNCE_MS = 10 * 1000;
+const DEBOUNCE_MS = 30 * 1000;
 const REMOTE = 'prod';
 const BRANCH = 'main';
 
