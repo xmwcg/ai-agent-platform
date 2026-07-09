@@ -43,7 +43,7 @@ export default function Login() {
       <Card style={{ width: 420, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <Title level={2} style={{ marginBottom: 4 }}>欢迎回来</Title>
-          <Text type="secondary">登录到 AI Agent Platform · v1.1.0-demo</Text>
+          <Text type="secondary">登录到 AI Agent Platform · 自动部署已开启 v2.0.0</Text>
         </div>
 
         <Form
