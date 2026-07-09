@@ -16,7 +16,12 @@
     "test": "npm run test:server && npm run check:superpowers && npm run test:client",
     "test:server": "cd server && npm test",
     "test:client": "cd client && npm test",
-    "check:superpowers": "node scripts/check-superpowers-sync.cjs"
+    "check:superpowers": "node scripts/check-superpowers-sync.cjs",
+    "auto:deploy": "node scripts/auto-deploy.cjs",
+    "auto:start": "node scripts/auto-deploy.cjs start",
+    "auto:stop": "node scripts/auto-deploy.cjs stop",
+    "auto:status": "node scripts/auto-deploy.cjs status",
+    "auto:log": "node scripts/auto-deploy.cjs log"
   },
   "keywords": ["ai", "agent", "rag", "knowledge-management", "learning"],
   "author": "Your Name",
