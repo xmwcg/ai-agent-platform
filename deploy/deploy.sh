@@ -17,8 +17,8 @@ if grep -q "请替换" server/.env; then
   exit 1
 fi
 
-echo "==> [2/4] 构建镜像（无缓存，确保干净）"
-docker compose build --no-cache
+echo "==> [2/4] 构建镜像（启用层缓存，仅源码层重编，提速一键部署）"
+docker compose build
 
 echo "==> [3/4] 后台启动全栈"
 docker compose up -d
