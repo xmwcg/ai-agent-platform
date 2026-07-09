@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: ai-platform-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: ai-agent-platform
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - ai-platform-network
+    # 安全加固：不对外暴露端口，仅 docker 内网可访问
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-platform-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-platform-network
+    # 安全加固：不对外暴露端口，仅 docker 内网可访问
+
+  # 后端服务
+  server:
+    build: ./server
+    container_name: ai-platform-server
+    restart: unless-stopped
+    # 仅本机回环可访问，便于健康检查；公网不可直达（由前端 nginx 反代）
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - mongodb
+      - redis
+    # 仅保留基础设施变量；密钥与业务开关一律来自挂载的 server/.env
+    # （Docker environment 会作为 process.env 注入且 dotenv 默认不覆盖，
+    #   故切勿在此写 JWT_SECRET / ENABLE_MOCK_MODE / DEFAULT_PAY_PROVIDER，
+    #   否则会覆盖 .env 中的真实值）
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/ai-agent-platform
+      - REDIS_URL=redis://redis:6379
+    # 运行时挂载生产 .env（不烤进镜像，避免密钥泄露到镜像层）
+    volumes:
+      - ./server/.env:/usr/src/app/.env:ro
+      - server_uploads:/usr/src/app/uploads
+    networks:
+      - ai-platform-network
+
+  # 前端服务（Nginx 托管静态 + 反代 /api 到 server）
+  client:
+    build: ./client
+    container_name: ai-platform-client
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # 阶段2 上线 HTTPS 时改为 "443:443" 并挂载证书（见 client/nginx.ssl.conf）
+    depends_on:
+      - server
+    networks:
+      - ai-platform-network
+
+networks:
+  ai-platform-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  server_uploads:

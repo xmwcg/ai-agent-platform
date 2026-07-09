@@ -1,0 +1,22 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+coverage/
+
+# 运行时数据
+uploads/
+logs/
+*.log
+test-run*.log
+lint-run*.log
+
+# 密钥与环境变量（禁止提交；保留示例模板）
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# 系统
+.DS_Store
+Thumbs.db

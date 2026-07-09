@@ -1,0 +1,19 @@
+#!/bin/bash
+# ============================================================
+# post-receive — git push 即触发一键部署
+# 安装位置：/opt/ai-agent-platform.git/hooks/post-receive
+# 由 setup 步骤复制并 chmod +x
+# ============================================================
+set -e
+
+GIT_DIR=/opt/ai-agent-platform.git
+WORK_TREE=/opt/ai-agent-platform
+BRANCH=main
+
+echo "==> 检出 $BRANCH 到工作树 $WORK_TREE"
+git --git-dir="$GIT_DIR" --work-tree="$WORK_TREE" checkout -f "$BRANCH"
+
+echo "==> 触发一键部署（后台执行，日志: /var/log/ai-platform-deploy.log）"
+nohup bash "$WORK_TREE/deploy/push-deploy.sh" >> /var/log/ai-platform-deploy.log 2>&1 &
+
+echo "==> push 完成。查看部署进度: tail -f /var/log/ai-platform-deploy.log"
