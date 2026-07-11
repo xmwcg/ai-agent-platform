@@ -18,11 +18,24 @@ if [ ! -f server/.env ]; then
   exit 1
 fi
 
+# ---------- 0.5 构建前门禁：类型检查/测试，阻止坏代码上线 ----------
+echo "==> [0.5] 构建前门禁（tsc / 测试）"
+cd "$PROJECT_ROOT/server"
+echo "  -> server tsc --noEmit"
+npx tsc --noEmit || { echo "❌ server 类型检查未通过，部署中止（坏代码不会上线）"; exit 1; }
+if [ -n "${DEPLOY_RUN_TESTS:-}" ]; then
+  echo "  -> server 测试"
+  npm test || { echo "❌ server 测试未通过，部署中止（坏代码不会上线）"; exit 1; }
+fi
+cd "$PROJECT_ROOT"
+
 # ---------- 1. 构建前端静态资源（client Dockerfile 依赖预构建的 dist）----------
-echo "==> [1/2] 构建前端静态资源 (npm ci + vite build)"
+echo "==> [1/2] 构建前端静态资源 (npm install + vite build)"
 cd "$PROJECT_ROOT/client"
-# 干净安装，保证与 package-lock.json 完全一致
-npm ci
+# 使用 npm install 而非 npm ci：client 的 lockfile 含跨平台可选二进制（@tauri-apps/cli-*），
+# 在服务器平台执行 npm ci 会报 "Missing from lock file" 而中断构建；
+# npm install 可容错并完成安装，从而让最新代码真正构建上线。
+npm install --no-audit --no-fund
 # 增大 Node 堆内存，避免 vite 构建时 OOM
 export NODE_OPTIONS=--max-old-space-size=2048
 npm run build

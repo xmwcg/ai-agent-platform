@@ -83,6 +83,49 @@ function git(args, cb) {
   p.on('error', (e) => cb(e));
 }
 
+/* ----------------------- 通用命令执行（门禁用） ----------------------- */
+function run(cmdArray, cwd, cb) {
+  const p = spawn(cmdArray[0], cmdArray.slice(1), { cwd, env: process.env, windowsHide: true });
+  let out = '';
+  p.stdout.on('data', (d) => (out += d));
+  p.stderr.on('data', (d) => (out += d));
+  p.on('close', (code) => {
+    if (code !== 0) {
+      if (out.trim()) logLine(out.trim());
+      cb(new Error('命令失败 (exit ' + code + '): ' + cmdArray.join(' ')));
+    } else {
+      cb(null, out);
+    }
+  });
+  p.on('error', (e) => cb(e));
+}
+
+/* ----------------------------- 部署前门禁 ----------------------------- */
+// 在 git push 之前跑类型检查/测试，阻止坏代码被自动同步上线。
+// 默认：server tsc + client tsc + client lint（快，秒级）。
+// 设置环境变量 AUTO_DEPLOY_TESTS=1 可额外跑 server 全部测试（较慢）。
+const GATE_TESTS = !!process.env.AUTO_DEPLOY_TESTS;
+function runGate(cb) {
+  const checks = [
+    { label: 'server tsc', cwd: path.join(ROOT, 'server'), cmd: ['npx', 'tsc', '--noEmit'] },
+    { label: 'client tsc', cwd: path.join(ROOT, 'client'), cmd: ['npx', 'tsc', '--noEmit'] },
+    { label: 'client lint', cwd: path.join(ROOT, 'client'), cmd: ['npm', 'run', 'lint'] },
+  ];
+  if (GATE_TESTS) {
+    checks.push({ label: 'server test', cwd: path.join(ROOT, 'server'), cmd: ['npm', 'test'] });
+  }
+  let i = 0;
+  (function next() {
+    if (i >= checks.length) return cb(null);
+    const c = checks[i++];
+    logLine('🔍 门禁检查: ' + c.label);
+    run(c.cmd, c.cwd, (err) => {
+      if (err) return cb(new Error('门禁未通过 (' + c.label + ')'));
+      next();
+    });
+  })();
+}
+
 /* ----------------------------- 守护进程核心 ----------------------------- */
 function runDaemon() {
   logLine('🚀 自动部署监听启动，监听目录: ' + ROOT);
@@ -134,15 +177,22 @@ function runDaemon() {
           return finish();
         }
         const msg = 'auto-deploy: 自动同步 ' + ts().replace(/[: ]/g, '-');
-        git(['commit', '-m', msg], (err3) => {
-          if (err3) return finish('❌ git commit 失败');
-          logLine('✓ 已提交本地改动');
-          git(['push', REMOTE, BRANCH], (err4) => {
-            if (err4) return finish('❌ git push 失败（服务器部署未触发）');
-            logLine('🚀 已推送到服务器，服务器将自动部署（约 3 分钟）');
-            finish();
+          git(['commit', '-m', msg], (err3) => {
+            if (err3) return finish('❌ git commit 失败');
+            logLine('✓ 已提交本地改动');
+            runGate((gateErr) => {
+              if (gateErr) {
+                logLine('🛑 门禁失败，已阻断推送：坏代码不会上线。' + gateErr.message);
+                return finish('❌ 门禁未通过，未推送（请本地修复 tsc/lint' + (GATE_TESTS ? '/test' : '') + ' 后重试）');
+              }
+              logLine('✓ 门禁通过（tsc' + (GATE_TESTS ? '/test' : '') + '/lint），允许推送');
+              git(['push', REMOTE, BRANCH], (err4) => {
+                if (err4) return finish('❌ git push 失败（服务器部署未触发）');
+                logLine('🚀 已推送到服务器，服务器将自动部署（约 3 分钟）');
+                finish();
+              });
+            });
           });
-        });
       });
     });
 
