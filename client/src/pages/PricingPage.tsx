@@ -80,6 +80,24 @@ export default function PricingPage() {
     load();
   }, []);
 
+  // 组件卸载时清理轮询定时器
+  useEffect(() => () => stopPolling(), []);
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const closeModal = () => {
+    stopPolling();
+    setConfirmOpen(false);
+    setPayStatus('confirm');
+    setQr(null);
+    setPaying(null);
+  };
+
   const handleSelect = (item: PlanFromServer | CreditsPackage, period?: 'monthly' | 'yearly') => {
     const id = 'id' in item ? item.id : '';
     if (id === currentPlan) {
@@ -88,41 +106,73 @@ export default function PricingPage() {
     }
     setSelectedItem(item);
     setSelectedPeriod(period || 'monthly');
+    setPayProvider('wechat');
+    setPayStatus('confirm');
+    setQr(null);
     setConfirmOpen(true);
+  };
+
+  // 轮询订单状态，付款成功后自动到账（后端对真实网关会主动查单兜底激活）
+  const startPolling = (orderNo: string, itemName: string, isCredits: boolean) => {
+    stopPolling();
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const r: any = await billingAPI.getOrderStatus(orderNo);
+        const st = r?.data?.status;
+        if (st === 'paid') {
+          stopPolling();
+          setPayStatus('success');
+          if (!isCredits && r?.data?.plan) setCurrentPlan(r.data.plan);
+          message.success(isCredits ? `成功购买 ${itemName}` : '支付成功！套餐已激活');
+        } else if (st === 'expired') {
+          stopPolling();
+          setPayStatus('expired');
+        }
+      } catch {
+        // 单次轮询失败忽略，等待下一次
+      }
+    }, 3000);
   };
 
   const handlePay = async () => {
     if (!selectedItem) return;
-    setPaying(('id' in selectedItem ? selectedItem.id : 'package'));
+    const isCredits = !('priceMonthly' in selectedItem);
+    const itemName = getItemName(selectedItem);
+    setPayStatus('creating');
+    setPaying('id' in selectedItem ? selectedItem.id : 'package');
     try {
-      if ('priceMonthly' in selectedItem && (selectedItem as PlanFromServer).priceMonthly > 0) {
-        // 订阅套餐
-        const res: any = await billingAPI.createOrder({
+      let res: any;
+      if (!isCredits) {
+        res = await billingAPI.createOrder({
           plan: selectedItem.id as 'free' | 'pro' | 'max',
           period: selectedPeriod,
+          provider: payProvider,
         });
-        // Mock 模式自动支付
-        if (res?.data?.payParams?.payUrl) {
-          await billingAPI.mockPay(res.data.orderNo);
-          message.success('支付成功！套餐已激活');
-          setCurrentPlan(selectedItem.id);
-        } else {
-          message.success('订单已创建，请完成支付');
-        }
-      } else if ('description' in selectedItem) {
-        // 积分包
-        const res: any = await billingAPI.createCreditsOrder({
+      } else {
+        res = await billingAPI.createCreditsOrder({
           packageId: selectedItem.id,
+          provider: payProvider,
         });
-        if (res?.data?.payParams?.payUrl) {
-          await billingAPI.mockPay(res.data.orderNo);
-          message.success(`成功购买 ${selectedItem.name}`);
-        } else {
-          message.success('订单已创建，请完成支付');
-        }
       }
-      setConfirmOpen(false);
+      const pp = res?.data?.payParams || {};
+      const orderNo = res?.data?.orderNo as string;
+
+      if (pp.payUrl) {
+        // Mock 模式（未配置真实密钥的演示环境）：直接完成
+        await billingAPI.mockPay(orderNo);
+        setPayStatus('success');
+        if (!isCredits) setCurrentPlan(selectedItem.id);
+        message.success(isCredits ? `成功购买 ${itemName}` : '支付成功！套餐已激活');
+      } else {
+        // 真实扫码：微信 codeUrl / 支付宝 qrCode
+        const qrValue = pp.codeUrl || pp.qrCode;
+        if (!qrValue) throw new Error('未获取到支付二维码，请稍后重试');
+        setQr({ value: qrValue, orderNo, itemName });
+        setPayStatus('waiting');
+        startPolling(orderNo, itemName, isCredits);
+      }
     } catch (e) {
+      setPayStatus('confirm');
       message.error(extractApiError(e, '支付失败'));
     }
     setPaying(null);
@@ -305,31 +355,93 @@ export default function PricingPage() {
         </Row>
       )}
 
-      {/* 确认支付弹窗 */}
+      {/* 支付弹窗：确认 → 扫码 → 结果 */}
       <Modal
-        title="确认订单"
+        title={payStatus === 'success' ? '支付成功' : payStatus === 'waiting' ? '扫码支付' : '确认订单'}
         open={confirmOpen}
-        onCancel={() => setConfirmOpen(false)}
-        onOk={handlePay}
-        okText="确认支付"
-        cancelText="返回"
-        okButtonProps={{
-          loading: !!paying,
-          style: { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none' },
-        }}
+        onCancel={closeModal}
+        footer={null}
+        destroyOnClose
+        maskClosable={payStatus !== 'waiting'}
       >
-        {selectedItem && (
+        {/* 确认下单 + 选择支付方式 */}
+        {selectedItem && (payStatus === 'confirm' || payStatus === 'creating') && (
           <div>
             <Paragraph>
               <strong>项目：</strong>{getItemName(selectedItem)}
               {priceType !== 'credits' && ` - ${selectedPeriod === 'yearly' ? '年付' : '月付'}`}
             </Paragraph>
             <Paragraph><strong>价格：</strong>{getItemPrice(selectedItem)}</Paragraph>
-            <Paragraph><strong>支付方式：</strong>微信支付 / Stripe</Paragraph>
-            <Paragraph type="secondary" style={{ fontSize: 12 }}>
-              当前为 Mock 模式，点击确认将模拟支付完成
-            </Paragraph>
+            <Divider style={{ margin: '12px 0' }} />
+            <Paragraph style={{ marginBottom: 8 }}><strong>选择支付方式</strong></Paragraph>
+            <Radio.Group
+              value={payProvider}
+              onChange={(e) => setPayProvider(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Radio value="wechat">
+                  <WechatOutlined style={{ color: '#09bb07', fontSize: 18, marginRight: 6 }} />
+                  微信支付（扫码）
+                </Radio>
+                <Radio value="alipay">
+                  <AlipayCircleOutlined style={{ color: '#1677ff', fontSize: 18, marginRight: 6 }} />
+                  支付宝（扫码）
+                </Radio>
+              </Space>
+            </Radio.Group>
+            <div style={{ textAlign: 'right', marginTop: 24 }}>
+              <Button onClick={closeModal} style={{ marginRight: 8 }}>返回</Button>
+              <Button
+                type="primary"
+                loading={payStatus === 'creating'}
+                onClick={handlePay}
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none' }}
+              >
+                确认支付
+              </Button>
+            </div>
           </div>
+        )}
+
+        {/* 扫码等待 */}
+        {payStatus === 'waiting' && qr && (
+          <div style={{ textAlign: 'center', padding: '8px 0' }}>
+            <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+              请使用{payProvider === 'wechat' ? '微信' : '支付宝'}扫描二维码完成支付
+            </Paragraph>
+            <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 12, border: '1px solid #eee' }}>
+              <QRCodeSVG value={qr.value} size={200} level="M" includeMargin />
+            </div>
+            <Paragraph style={{ marginTop: 16, fontSize: 22, fontWeight: 800 }}>
+              {selectedItem && getItemPrice(selectedItem)}
+            </Paragraph>
+            <Paragraph type="secondary">
+              <LoadingOutlined style={{ marginRight: 6 }} />
+              等待支付结果…（付款后自动到账）
+            </Paragraph>
+            <Button onClick={closeModal}>取消支付</Button>
+          </div>
+        )}
+
+        {/* 支付成功 */}
+        {payStatus === 'success' && (
+          <Result
+            status="success"
+            title="支付成功"
+            subTitle={qr ? qr.itemName : (selectedItem ? getItemName(selectedItem) : '')}
+            extra={<Button type="primary" onClick={closeModal}>完成</Button>}
+          />
+        )}
+
+        {/* 订单过期 */}
+        {payStatus === 'expired' && (
+          <Result
+            status="warning"
+            title="订单已过期"
+            subTitle="支付二维码已失效，请重新下单"
+            extra={<Button type="primary" onClick={() => { setQr(null); setPayStatus('confirm'); }}>重新下单</Button>}
+          />
         )}
       </Modal>
 
