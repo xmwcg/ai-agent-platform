@@ -41,15 +41,15 @@ export default function Text2ImgPage() {
   const [error, setError] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [progress, setProgress] = useState('');
+  /** 匿名用户当日剩余真实生成次数（undefined=已登录或无限制提示） */
+  const [anonLeft, setAnonLeft] = useState<number | undefined>(undefined);
 
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStart = useRef<number>(0);
 
   const sizeOptions = [
-    { label: '1024×1024', value: '1024x1024' },
-    { label: '512×512', value: '512x512' },
-    { label: '768×1344（竖版）', value: '768x1344' },
-    { label: '1344×768（横版）', value: '1344x768' }
+    { label: '1024×1024（高清）', value: '1024x1024' },
+    { label: '768×768（标准）', value: '768x768' }
   ];
 
   const styleOptions = [
@@ -102,6 +102,8 @@ export default function Text2ImgPage() {
       });
       const taskId: string | undefined = res?.data?.taskId;
       if (!taskId) throw new Error('未返回任务 ID');
+      // 透出匿名剩余次数（已登录用户为 undefined）
+      setAnonLeft(typeof res?.data?.anonRealLeft === 'number' ? res.data.anonRealLeft : undefined);
       pollStart.current = Date.now();
       pollTimer.current = setInterval(() => pollTask(taskId), POLL_INTERVAL_MS);
       // 立即查一次
@@ -222,10 +224,10 @@ export default function Text2ImgPage() {
               <Text strong>数量</Text>
               <Slider
                 min={1}
-                max={4}
+                max={2}
                 value={count}
                 onChange={setCount}
-                marks={{ 1: '1', 2: '2', 3: '3', 4: '4' }}
+                marks={{ 1: '1', 2: '2' }}
                 style={{ marginTop: 8 }}
               />
             </div>
@@ -238,6 +240,13 @@ export default function Text2ImgPage() {
                 style={{ marginTop: 8, width: '100%' }}
               />
             </div>
+            {anonLeft !== undefined && (
+              <div style={{ marginBottom: 12, fontSize: 12, color: anonLeft > 0 ? '#8c6d1f' : '#cf1322' }}>
+                {anonLeft > 0
+                  ? `游客模式：今日还可真实生成 ${anonLeft} 次，超出后将自动切换为演示模式（不消耗算力）`
+                  : '今日真实生成次数已用尽，本次将使用演示模式（不消耗算力）。登录可解锁完整额度。'}
+              </div>
+            )}
             <Button
               type="primary"
               size="large"
