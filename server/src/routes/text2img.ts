@@ -337,4 +337,22 @@ router.get('/providers', optionalAuth, async (_req: Request, res: Response) => {
   });
 });
 
+/** 诊断：异步任务队列状态 */
+router.get('/queue-stats', optionalAuth, async (_req: Request, res: Response) => {
+  try {
+    const { mediaQueue } = await import('../services/queue.service');
+    const length = await mediaQueue.length();
+    res.json({
+      success: true,
+      data: {
+        queueName: 'media-gen',
+        pendingJobs: length,
+        status: length > 100 ? 'busy' : length > 10 ? 'active' : 'idle',
+      },
+    });
+  } catch (e: any) {
+    res.json({ success: true, data: { queueName: 'media-gen', pendingJobs: 0, status: 'unavailable', note: e.message } });
+  }
+});
+
 export default router;

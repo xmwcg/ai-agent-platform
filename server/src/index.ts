@@ -93,6 +93,12 @@ reloadCustomProviders().catch(err => {
   logger.warn('index', `自定义模型加载跳过：${err.message}`);
 });
 
+// 启动异步任务队列 Worker（媒体生成 / 文件转换等长任务后台处理）
+import { mediaWorker } from './services/queue.service';
+mediaWorker.start().catch(err => {
+  logger.warn('index', `任务队列 Worker 启动失败: ${err.message}`);
+});
+
 // 注册路由
 app.use('/api/auth', authRoutes);
 app.use('/api/compare', compareRoutes);

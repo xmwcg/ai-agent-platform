@@ -54,70 +54,67 @@ export default function CourseDetail() {
   const navigate = useNavigate();
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
+  const [enrolling, setEnrolling] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
+  const [progress, setProgress] = useState<{ completionPct: number; completedChapters: number[]; totalChapters: number }>({
+    completionPct: 0, completedChapters: [], totalChapters: 0,
+  });
 
   const loadCourse = async () => {
     if (!id) return;
     setLoading(true);
     try {
       const res: any = await apiClient.get(`/courses/${id}`);
-      if (res.data) {
-        setCourse(res.data);
-      } else {
-        // 模拟数据
-        setCourse({
-          _id: id,
-          title: 'Linux 入门到精通',
-          description: '从零开始学习 Linux 系统管理，涵盖文件操作、权限管理、服务配置等核心技能。',
-          category: 'Linux',
-          level: 'beginner',
-          tags: ['Linux', '运维', '命令行'],
-          price: 0,
-          enrolledCount: 128,
-          duration: 3600,
-          chapters: [
-            {
-              title: '第1章：Linux 基础入门',
-              description: '了解 Linux 历史、发行版选择、安装方式',
-              duration: 45,
-              resources: [
-                { title: '什么是 Linux？', type: 'video' },
-                { title: '常见发行版对比', type: 'article' },
-                { title: '安装 Ubuntu 实战', type: 'code' }
-              ],
-              quiz: { title: '第1章测验', questions: [{ type: 'single', question: 'Linux 内核作者是？' }] }
-            },
-            {
-              title: '第2章：文件与目录操作',
-              description: '掌握 ls、cd、cp、mv、rm 等核心命令',
-              duration: 60,
-              resources: [
-                { title: '文件系统结构', type: 'article' },
-                { title: '文件操作命令实战', type: 'code' }
-              ],
-              quiz: { title: '第2章测验', questions: [{ type: 'multi', question: '以下哪些是文件操作命令？' }] }
-            },
-            {
-              title: '第3章：用户与权限管理',
-              description: '理解 Linux 用户体系、文件权限、sudo 配置',
-              duration: 50,
-              resources: [
-                { title: '用户和用户组', type: 'video' },
-                { title: 'rwx 权限详解', type: 'article' }
-              ],
-              quiz: { title: '第3章测验', questions: [{ type: 'judge', question: 'chmod 755 表示所有者有 rwx 权限' }] }
-            }
-          ]
-        });
+      const data = res.data?.data;
+      if (data) {
+        setCourse(data);
       }
     } catch {
-      message.error('加载课程失败');
+      // 网络错误静默处理
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { loadCourse(); }, [id]);
+  /** 加载用户进度 */
+  const loadProgress = async () => {
+    if (!id) return;
+    try {
+      const res: any = await apiClient.get(`/courses/${id}/progress`);
+      const data = res.data?.data;
+      if (data?.enrolled) {
+        setEnrolled(true);
+        setProgress({
+          completionPct: data.completionPct || 0,
+          completedChapters: data.completedChapters || [],
+          totalChapters: data.totalChapters || 0,
+        });
+      }
+    } catch { /* 未登录或加载失败静默忽略 */ }
+  };
+
+  /** 报名课程 */
+  const handleEnroll = async () => {
+    if (!id || enrolling) return;
+    setEnrolling(true);
+    try {
+      const res: any = await apiClient.post(`/courses/${id}/enroll`);
+      if (res.data?.data?.enrolled) {
+        setEnrolled(true);
+        message.success('已加入学习！');
+        await loadProgress();
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.error || '报名失败，请先登录');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCourse();
+    loadProgress();
+  }, [id]);
 
   if (loading) {
     return (
@@ -176,10 +173,8 @@ export default function CourseDetail() {
             </div>
             <Button
               type="primary" size="large" style={{ marginTop: 16, width: 200 }}
-              onClick={() => {
-                setEnrolled(true);
-                message.success('已加入学习！');
-              }}
+              loading={enrolling}
+              onClick={enrolled ? () => message.info('已在学习中') : handleEnroll}
             >
               {enrolled ? '继续学习' : '开始学习'}
             </Button>
@@ -192,9 +187,13 @@ export default function CourseDetail() {
         <Card style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text strong>学习进度</Text>
-            <Text type="secondary">35%</Text>
+            <Text type="secondary">{progress.completionPct}%</Text>
           </div>
-          <Progress percent={35} style={{ marginTop: 8 }} />
+          <Progress
+            percent={progress.completionPct}
+            status={progress.completionPct === 100 ? 'success' : 'active'}
+            style={{ marginTop: 8 }}
+          />
         </Card>
       )}
 
@@ -207,7 +206,7 @@ export default function CourseDetail() {
             label: (
               <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                 <Badge
-                  count={idx < 1 ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : null}
+                  count={progress.completedChapters.includes(idx) ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : null}
                   offset={[-4, 0]}
                 />
                 <span style={{ marginLeft: 8, flex: 1 }}>

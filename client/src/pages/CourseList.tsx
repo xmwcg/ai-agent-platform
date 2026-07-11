@@ -40,55 +40,27 @@ export default function CourseList() {
       if (filter.category) params.category = filter.category;
       if (filter.level) params.level = filter.level;
       const res: any = await apiClient.get('/courses', { params });
-      if (res.data) {
-        setCourses(res.data);
+      const data = res.data?.data || [];
+      if (data.length > 0) {
+        setCourses(data.map((c: any) => ({
+          _id: c._id,
+          title: c.title || '',
+          description: c.description || '',
+          category: c.category || '',
+          level: c.level || '',
+          tags: c.tags || [],
+          price: c.price ?? 0,
+          chaptersCount: c.chapters?.length || c.chapterCount || 0,
+          enrolledCount: c.enrolledStudents ?? 0,
+          duration: c.totalDuration || 0,
+          isPublished: c.isPublished,
+          createdAt: c.createdAt,
+        })));
+      } else {
+        setCourses([]);
       }
     } catch {
-      // 使用模拟数据
-      setCourses([
-        {
-          _id: 'course1',
-          title: 'Linux 入门到精通',
-          description: '从零开始学习 Linux 系统管理，涵盖文件操作、权限管理、服务配置等核心技能。',
-          category: 'Linux',
-          level: 'beginner',
-          tags: ['Linux', '运维', '命令行'],
-          price: 0,
-          chaptersCount: 8,
-          enrolledCount: 128,
-          duration: 3600,
-          isPublished: true,
-          createdAt: '2025-01-01'
-        },
-        {
-          _id: 'course2',
-          title: '云计算架构师 2026',
-          description: '面向未来的云原生架构设计，包含 AWS/Azure/GCP 多平台实战。',
-          category: '云计算',
-          level: 'advanced',
-          tags: ['云计算', 'DevOps', '架构'],
-          price: 199,
-          chaptersCount: 12,
-          enrolledCount: 56,
-          duration: 7200,
-          isPublished: true,
-          createdAt: '2025-01-05'
-        },
-        {
-          _id: 'course3',
-          title: '大模型部署实战',
-          description: '从模型选型到生产部署，掌握 LLM 全生命周期管理。',
-          category: 'AI',
-          level: 'intermediate',
-          tags: ['LLM', '部署', 'AI'],
-          price: 99,
-          chaptersCount: 6,
-          enrolledCount: 89,
-          duration: 4800,
-          isPublished: true,
-          createdAt: '2025-01-08'
-        }
-      ]);
+      setCourses([]);
     } finally {
       setLoading(false);
     }
@@ -134,9 +106,9 @@ export default function CourseList() {
             allowClear
             style={{ width: 140 }}
             options={[
-              { label: 'Linux', value: 'Linux' },
+              { label: '操作系统', value: '操作系统' },
               { label: '云计算', value: '云计算' },
-              { label: 'AI', value: 'AI' }
+              { label: 'AI/ML', value: 'AI/ML' }
             ]}
             onChange={(v) => setFilter(f => ({ ...f, category: v }))}
           />
@@ -157,9 +129,10 @@ export default function CourseList() {
                 cover={
                   <div style={{
                     height: 160,
-                    background: course.category === 'Linux' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                    background: course.category === '操作系统' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
                       : course.category === '云计算' ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
-                      : 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                      : course.category === 'AI/ML' ? 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
+                      : 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}>
                     <BookOutlined style={{ fontSize: 48, color: '#fff' }} />
