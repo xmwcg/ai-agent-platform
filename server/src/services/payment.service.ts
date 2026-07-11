@@ -10,7 +10,7 @@
 import crypto from 'crypto';
 import axios from 'axios';
 
-export type PaymentProvider = 'wechat' | 'stripe' | 'mock';
+export type PaymentProvider = 'wechat' | 'stripe' | 'alipay' | 'mock';
 
 export interface CreateOrderInput {
   orderNo: string;
@@ -47,12 +47,22 @@ export interface WebhookExtraHeaders {
   wechatTimestamp?: string;
   wechatNonce?: string;
   wechatSerial?: string;
+  /** 支付宝异步通知：express.urlencoded 解析后的表单参数对象（验签用） */
+  alipayParams?: Record<string, string>;
+}
+
+/** 主动查单结果（前端轮询兜底激活） */
+export interface QueryOrderResult {
+  paid: boolean;
+  transactionId?: string;
 }
 
 export interface PaymentGateway {
   readonly name: PaymentProvider;
   createOrder(input: CreateOrderInput): Promise<PaymentOrderResult>;
   verifyWebhook(rawBody: string, signature: string, extra?: WebhookExtraHeaders): Promise<WebhookResult | null>;
+  /** 可选：向渠道主动查询订单支付状态（回调延迟/未配公网时的兜底） */
+  queryOrder?(orderNo: string): Promise<QueryOrderResult>;
 }
 
 /* ----------------------- 真实 Webhook 验签工具（可单测） ----------------------- */
@@ -95,6 +105,54 @@ export function verifyWeChatSignature(timestamp: string, nonce: string, body: st
   verifier.update(message, 'utf8');
   try {
     return verifier.verify(publicKeyPem, signature, 'base64');
+  } catch {
+    return false;
+  }
+}
+
+/* ----------------------- 支付宝 RSA2 签名/验签工具 ----------------------- */
+
+/** 将裸 base64 密钥补全为 PEM 格式（兼容用户直接粘贴支付宝控制台的无头密钥） */
+export function normalizeAlipayPem(key: string, type: 'PRIVATE' | 'PUBLIC'): string {
+  const k = (key || '').trim().replace(/\\n/g, '\n');
+  if (k.includes('BEGIN')) return k;
+  const header = type === 'PRIVATE' ? 'PRIVATE KEY' : 'PUBLIC KEY';
+  const body = k.replace(/\s+/g, '').match(/.{1,64}/g)?.join('\n') || k;
+  return `-----BEGIN ${header}-----\n${body}\n-----END ${header}-----`;
+}
+
+/** 支付宝要求北京时间（UTC+8）格式 yyyy-MM-dd HH:mm:ss */
+export function alipayBeijingTimestamp(now: number = Date.now()): string {
+  const d = new Date(now + 8 * 3600 * 1000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+}
+
+/** 支付宝请求签名：按 key 升序拼接 `k=v&k=v`（排除 sign 与空值），RSA-SHA256 → base64 */
+export function alipaySign(params: Record<string, string>, privateKeyPem: string): string {
+  const str = Object.keys(params)
+    .filter((k) => k !== 'sign' && params[k] !== '' && params[k] != null)
+    .sort()
+    .map((k) => `${k}=${params[k]}`)
+    .join('&');
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(str, 'utf8');
+  return signer.sign(privateKeyPem, 'base64');
+}
+
+/** 支付宝异步通知验签：排除 sign / sign_type，按 key 升序拼接后用支付宝公钥验证 */
+export function alipayVerify(params: Record<string, string>, publicKeyPem: string): boolean {
+  const sign = params.sign;
+  if (!sign) return false;
+  const str = Object.keys(params)
+    .filter((k) => k !== 'sign' && k !== 'sign_type' && params[k] !== '' && params[k] != null)
+    .sort()
+    .map((k) => `${k}=${params[k]}`)
+    .join('&');
+  const verifier = crypto.createVerify('RSA-SHA256');
+  verifier.update(str, 'utf8');
+  try {
+    return verifier.verify(publicKeyPem, sign, 'base64');
   } catch {
     return false;
   }
@@ -236,6 +294,20 @@ class WeChatPayGateway implements PaymentGateway {
       return null;
     }
   }
+
+  /** 主动查单（微信 v3：按商户订单号查询），前端轮询兜底 */
+  async queryOrder(orderNo: string): Promise<QueryOrderResult> {
+    if (!this.mchId || !this.privateKey) return { paid: false };
+    const urlPath = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}?mchid=${this.mchId}`;
+    const resp = await axios.get(`https://api.mch.weixin.qq.com${urlPath}`, {
+      headers: {
+        Authorization: this.authHeader('GET', urlPath, ''),
+        Accept: 'application/json',
+      },
+    });
+    const state = resp.data?.trade_state;
+    return { paid: state === 'SUCCESS', transactionId: resp.data?.transaction_id };
+  }
 }
 
 /* ----------------------------- Stripe ----------------------------- */
@@ -298,12 +370,106 @@ class StripeGateway implements PaymentGateway {
   }
 }
 
+/* ----------------------------- 支付宝当面付 ----------------------------- */
+
+class AlipayGateway implements PaymentGateway {
+  readonly name: PaymentProvider = 'alipay';
+
+  private get appId() { return process.env.ALIPAY_APP_ID || ''; }
+  private get privateKey() {
+    return process.env.ALIPAY_PRIVATE_KEY ? normalizeAlipayPem(process.env.ALIPAY_PRIVATE_KEY, 'PRIVATE') : '';
+  }
+  /** 支付宝公钥（PEM/裸 base64），用于异步通知验签 */
+  private get alipayPublicKey() {
+    return process.env.ALIPAY_PUBLIC_KEY ? normalizeAlipayPem(process.env.ALIPAY_PUBLIC_KEY, 'PUBLIC') : '';
+  }
+  private get gateway() { return process.env.ALIPAY_GATEWAY || 'https://openapi.alipay.com/gateway.do'; }
+
+  private ensureConfigured() {
+    if (!this.appId || !this.privateKey) {
+      throw new Error('支付宝未配置：请在 .env 设置 ALIPAY_APP_ID / ALIPAY_PRIVATE_KEY');
+    }
+  }
+
+  /** 统一发起一次已签名的开放平台调用 */
+  private async call(method: string, bizContent: Record<string, any>, withNotify = false): Promise<any> {
+    const params: Record<string, string> = {
+      app_id: this.appId,
+      method,
+      format: 'JSON',
+      charset: 'utf-8',
+      sign_type: 'RSA2',
+      timestamp: alipayBeijingTimestamp(),
+      version: '1.0',
+      biz_content: JSON.stringify(bizContent),
+    };
+    if (withNotify) {
+      params.notify_url = `${process.env.PUBLIC_BASE_URL || ''}/api/billing/webhook/alipay`;
+    }
+    params.sign = alipaySign(params, this.privateKey);
+    const resp = await axios.post(this.gateway, new URLSearchParams(params).toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+    });
+    return resp.data;
+  }
+
+  async createOrder(input: CreateOrderInput): Promise<PaymentOrderResult> {
+    this.ensureConfigured();
+    const data = await this.call('alipay.trade.precreate', {
+      out_trade_no: input.orderNo,
+      total_amount: (input.amount / 100).toFixed(2), // 元，两位小数
+      subject: input.description,
+    }, true);
+    const node = data?.alipay_trade_precreate_response;
+    if (!node || node.code !== '10000' || !node.qr_code) {
+      throw new Error(`支付宝下单失败：${node?.sub_msg || node?.msg || 'unknown'}`);
+    }
+    return {
+      provider: 'alipay',
+      orderNo: input.orderNo,
+      amount: input.amount,
+      currency: input.currency,
+      status: 'pending',
+      payParams: { qrCode: node.qr_code },
+    };
+  }
+
+  async verifyWebhook(_rawBody: string, _signature: string, extra?: WebhookExtraHeaders): Promise<WebhookResult | null> {
+    const params = extra?.alipayParams;
+    if (!params) return null;
+    // 配置了支付宝公钥则强制验签，防伪造回调
+    if (this.alipayPublicKey && !alipayVerify(params, this.alipayPublicKey)) {
+      return null;
+    }
+    const status = params.trade_status;
+    return {
+      orderNo: params.out_trade_no,
+      success: status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED',
+      transactionId: params.trade_no,
+      eventType: status,
+    };
+  }
+
+  /** 主动查单（alipay.trade.query），前端轮询兜底 */
+  async queryOrder(orderNo: string): Promise<QueryOrderResult> {
+    if (!this.appId || !this.privateKey) return { paid: false };
+    const data = await this.call('alipay.trade.query', { out_trade_no: orderNo });
+    const node = data?.alipay_trade_query_response;
+    const status = node?.trade_status;
+    return {
+      paid: status === 'TRADE_SUCCESS' || status === 'TRADE_FINISHED',
+      transactionId: node?.trade_no,
+    };
+  }
+}
+
 /* ------------------------------ 工厂 ------------------------------ */
 
 const gateways: Record<PaymentProvider, PaymentGateway> = {
   mock: new MockGateway(),
   wechat: new WeChatPayGateway(),
   stripe: new StripeGateway(),
+  alipay: new AlipayGateway(),
 };
 
 export function getPaymentGateway(provider: PaymentProvider = 'mock'): PaymentGateway {

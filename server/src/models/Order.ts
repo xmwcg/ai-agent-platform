@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export type PaymentProvider = 'wechat' | 'stripe' | 'mock';
+export type PaymentProvider = 'wechat' | 'stripe' | 'alipay' | 'mock';
 export type OrderStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'refunded';
 export type BillingPeriod = 'monthly' | 'yearly';
 export type OrderType = 'subscription' | 'credits_pack';
@@ -40,7 +40,7 @@ const orderSchema = new Schema<IOrder>(
     period: { type: String, enum: ['monthly', 'yearly'], default: 'monthly' },
     amount: { type: Number, required: true },
     currency: { type: String, default: 'CNY' },
-    provider: { type: String, enum: ['wechat', 'stripe', 'mock'], default: 'mock' },
+    provider: { type: String, enum: ['wechat', 'stripe', 'alipay', 'mock'], default: 'mock' },
     status: {
       type: String,
       enum: ['pending', 'paid', 'failed', 'expired', 'refunded'],

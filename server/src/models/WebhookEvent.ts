@@ -12,7 +12,7 @@ export type WebhookStatus = 'received' | 'processed' | 'skipped' | 'failed';
 export interface IWebhookEvent extends Document {
   /** Stripe evt_xxx 或微信 transaction_id */
   eventId: string;
-  provider: 'wechat' | 'stripe';
+  provider: 'wechat' | 'stripe' | 'alipay';
   orderNo?: string;
   transactionId?: string;
   status: WebhookStatus;
@@ -27,7 +27,7 @@ export interface IWebhookEvent extends Document {
 const webhookEventSchema = new Schema<IWebhookEvent>(
   {
     eventId: { type: String, required: true, unique: true },
-    provider: { type: String, enum: ['wechat', 'stripe'], required: true },
+    provider: { type: String, enum: ['wechat', 'stripe', 'alipay'], required: true },
     orderNo: { type: String, index: true },
     transactionId: { type: String },
     status: {

@@ -18,7 +18,7 @@ const router = Router();
 const createOrderSchema: ValidationSchema = {
   plan: { type: 'string', oneOf: ['free', 'pro', 'max'] },
   period: { type: 'string', oneOf: ['monthly', 'yearly'] },
-  provider: { type: 'string', oneOf: ['mock', 'wechat', 'stripe'] },
+  provider: { type: 'string', oneOf: ['mock', 'wechat', 'stripe', 'alipay'] },
 };
 
 /** 生成订单号：AI + 时间戳 + 随机 */
@@ -260,7 +260,58 @@ router.get('/orders/:orderNo/pay', requireAuth, async (req: AuthRequest, res: Re
   }
 });
 
-// 支付网关回调（微信 / Stripe）—— 带幂等性、重放防护、审计日志
+// 查询订单支付状态（前端扫码后轮询用）
+// 对真实网关（微信/支付宝）主动查单：即便公网回调延迟/未到，扫码付款后也能可靠到账
+router.get('/orders/:orderNo/status', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const order = await Order.findOne({ orderNo: req.params.orderNo });
+    if (!order) return res.status(404).json({ success: false, error: '订单不存在' });
+    if (order.userId.toString() !== req.user!.id) {
+      return res.status(403).json({ success: false, error: '无权查看他人订单' });
+    }
+
+    // 已支付：直接返回，并回带最新积分/套餐，便于前端刷新
+    if (order.status === 'paid') {
+      const u = await User.findById(order.userId).select('plan credits').lean();
+      return res.json({ success: true, data: { status: 'paid', orderNo: order.orderNo, plan: u?.plan, credits: u?.credits } });
+    }
+
+    // 主动查单兜底（仅真实网关且实现了 queryOrder）
+    const gateway = getPaymentGateway(order.provider);
+    if (isRealGateway(order.provider) && typeof gateway.queryOrder === 'function') {
+      try {
+        const q = await gateway.queryOrder(order.orderNo);
+        if (q.paid) {
+          // 原子占位：只有仍未支付的订单才会被标记，避免并发轮询重复激活
+          const claimed = await Order.findOneAndUpdate(
+            { orderNo: order.orderNo, status: { $ne: 'paid' } },
+            { $set: { status: 'paid', paidAt: new Date(), transactionId: q.transactionId || order.transactionId } },
+            { new: true }
+          );
+          if (claimed) {
+            if (claimed.orderType === 'credits_pack' && claimed.packageId) {
+              await grantCreditsPack(claimed.userId.toString(), claimed.packageId, claimed.orderNo);
+            } else {
+              await activateSubscription(claimed.userId.toString(), claimed.plan, claimed.period, claimed.orderNo);
+            }
+            logger.info('billing', `轮询查单激活成功: orderNo=${claimed.orderNo} provider=${order.provider}`);
+          }
+          const u = await User.findById(order.userId).select('plan credits').lean();
+          return res.json({ success: true, data: { status: 'paid', orderNo: order.orderNo, plan: u?.plan, credits: u?.credits } });
+        }
+      } catch (e) {
+        logger.warn('billing', `主动查单失败: ${order.orderNo} ${(e as Error).message}`);
+      }
+    }
+
+    const expired = order.expiresAt && new Date(order.expiresAt).getTime() < Date.now();
+    return res.json({ success: true, data: { status: expired ? 'expired' : 'pending', orderNo: order.orderNo } });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 支付网关回调（微信 / 支付宝 / Stripe）—— 带幂等性、重放防护、审计日志
 router.post('/webhook/:provider', async (req: Request, res: Response) => {
   try {
     const provider = req.params.provider as PaymentProvider;
