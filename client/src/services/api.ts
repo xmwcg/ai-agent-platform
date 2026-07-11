@@ -138,6 +138,8 @@ export const billingAPI = {
   createCreditsOrder: (data: { packageId: string; provider?: string }) =>
     apiClient.post('/billing/credits-packages/order', data),
   mockPay: (orderNo: string) => apiClient.get(`/billing/orders/${orderNo}/pay`),
+  // 查询订单支付状态（前端扫码后轮询；真实网关会主动查单兜底激活）
+  getOrderStatus: (orderNo: string) => apiClient.get(`/billing/orders/${orderNo}/status`),
   cancelSubscription: () => apiClient.post('/billing/subscription/cancel'),
   getOrders: () => apiClient.get('/billing/orders/history'),
   getPaymentStatus: () => apiClient.get('/billing/payment-status'),
