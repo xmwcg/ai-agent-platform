@@ -31,6 +31,12 @@ app.use(authRouter);
 
 const PHONE = '13800000000';
 
+// 清理短信限频/验证码 key，避免用例间串扰
+beforeEach(async () => {
+  await redisClient.del(`sms:limit:${PHONE}`);
+  await redisClient.del(`sms:code:${PHONE}`);
+});
+
 describe('微信扫码登录（Mock）', () => {
   it('GET /auth/wechat/qr 返回可渲染的 authorizeUrl 与 state', async () => {
     const res = await request(app).get('/wechat/qr');
