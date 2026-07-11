@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
-  Card, Typography, Button, Tag, message, Modal, Divider, Segmented, Row, Col, Spin,
+  Card, Typography, Button, Tag, message, Modal, Divider, Segmented, Row, Col, Spin, Radio, Space, Result,
 } from 'antd';
-import { CheckOutlined, CrownOutlined, ThunderboltOutlined, WalletOutlined } from '@ant-design/icons';
+import {
+  CheckOutlined, CrownOutlined, ThunderboltOutlined, WalletOutlined,
+  WechatOutlined, AlipayCircleOutlined, LoadingOutlined,
+} from '@ant-design/icons';
+import { QRCodeSVG } from 'qrcode.react';
 import { billingAPI, extractApiError } from '@/services/api';
 
 const { Title, Paragraph, Text } = Typography;
@@ -40,6 +44,11 @@ export default function PricingPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<PlanFromServer | CreditsPackage | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  // 支付方式与支付流程状态
+  const [payProvider, setPayProvider] = useState<'wechat' | 'alipay'>('wechat');
+  const [payStatus, setPayStatus] = useState<'confirm' | 'creating' | 'waiting' | 'success' | 'expired'>('confirm');
+  const [qr, setQr] = useState<{ value: string; orderNo: string; itemName: string } | null>(null);
+  const pollRef = useRef<number | null>(null);
 
   // 从后端加载数据
   const [plans, setPlans] = useState<PlanFromServer[]>([]);
