@@ -1,0 +1,16 @@
+PASS src/routes/text2img.test.ts
+  成本封顶：数量与分辨率
+    √ n 超过上限被钳制为 2，非法分辨率归一为 1024x1024 (33 ms)
+    √ n 缺失时默认 1，合法分辨率放行 (4 ms)
+  匿名用户每日限次真实生成
+    √ 未达上限：走真实混元（返回 hunyuan）并累加计数 (3 ms)
+    √ 已达上限：强制 Mock，不再垫付 (2 ms)
+  安全校验
+    √ 空 prompt 被拒 (3 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       5 passed, 5 total
+Snapshots:   0 total
+Time:        4.87 s, estimated 5 s
+Ran all test suites matching /src\\routes\\text2img.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

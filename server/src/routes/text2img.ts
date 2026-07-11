@@ -3,65 +3,138 @@ import { mediaGenService } from '../services/media-gen.service';
 import { MediaTask } from '../models/MediaTask';
 import { storeImage, isHttpUrl, getObjectStorage } from '../lib/object-storage';
 import { optionalAuth } from '../middleware/auth';
-import { quotaIncrement } from '../middleware/subscription';
+import {
+  enforceQuota,
+  enforceCostValve,
+  quotaIncrement,
+  quotaCostRecord,
+} from '../middleware/subscription';
+import { redisClient } from '../config/database';
 import { sendError } from '../lib/http-error';
 import { logger } from '../lib/logger';
 
 const router = Router();
+
+// ─── 成本与限额常量（集中管理，便于一键调整）─────────────
+/** 单次最多生成张数（封顶，避免一次请求刷爆成本） */
+const TEXT2IMG_MAX_N = 2;
+/** 允许的分辨率白名单（其余归一为默认档） */
+const TEXT2IMG_ALLOWED_SIZES = ['768x768', '1024x1024'];
+const TEXT2IMG_DEFAULT_SIZE = '1024x1024';
+/** 预估混元文生图单价（分/张），仅用于成本阀门计量，不向用户收费 */
+const TEXT2IMG_COST_FEN_PER_IMAGE = 8;
+/** 匿名用户每日真实生成次数上限，超出后自动转 Mock（免垫付） */
+const ANON_DAILY_LIMIT = 3;
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** 取客户端 IP（兼容反代场景） */
+function getClientIp(req: Request): string {
+  const xff = req.headers['x-forwarded-for'];
+  if (typeof xff === 'string') return xff.split(',')[0].trim();
+  return req.ip || 'unknown';
+}
 
 /**
  * 文生图：真实异步生成
  * 提交请求 → 交由 media-gen 多厂商框架（混元 TC3 / Mock 兜底）→ 返回 taskId（异步任务）
  * 前端轮询 GET /query/:taskId 获取结果；结果图片落对象存储（OSS）后返回稳定 URL。
  */
-router.post('/generate', optionalAuth, async (req: Request, res: Response) => {
-  try {
-    const { prompt, negativePrompt, size, n, style, provider } = req.body;
+router.post(
+  '/generate',
+  optionalAuth,
+  enforceQuota('media_gen'), // 登录用户：当日次数配额前置拦截（超额 402）
+  enforceCostValve(), // 登录用户：当日垫付成本预算前置拦截
+  async (req: Request, res: Response) => {
+    try {
+      const { prompt, negativePrompt, size, n, style, provider } = req.body;
 
-    if (!prompt || !prompt.trim()) {
-      return res.status(400).json({ success: false, error: 'Prompt 不能为空' });
+      if (!prompt || !prompt.trim()) {
+        return res.status(400).json({ success: false, error: 'Prompt 不能为空' });
+      }
+
+      const userId = (req as any).user?.id;
+
+      // —— 服务端成本封顶：数量与分辨率 ——
+      const safeN = Math.min(Math.max(Number(n) || 1, 1), TEXT2IMG_MAX_N);
+      const safeSize = TEXT2IMG_ALLOWED_SIZES.includes(size) ? size : TEXT2IMG_DEFAULT_SIZE;
+
+      // —— 匿名用户每日限次真实生成，超出转 Mock（免垫付）——
+      let anonRealLeft: number | undefined;
+      let effectiveProvider = provider || undefined;
+      let anonKey: string | undefined;
+      let anonUsed = 0;
+      if (!userId) {
+        const ip = getClientIp(req);
+        anonKey = `anon_t2i:${ip}:${todayKey()}`;
+        try {
+          anonUsed = Number(await redisClient.get(anonKey)) || 0;
+        } catch {/* 忽略：计数异常不阻断 */ }
+        if (anonUsed >= ANON_DAILY_LIMIT) {
+          effectiveProvider = 'mock'; // 限额用尽，强制演示模式
+        }
+      }
+
+      const result = await mediaGenService.generate({
+        type: 'text2img',
+        prompt: prompt.trim(),
+        ...(negativePrompt ? { negativePrompt } : {}),
+        size: safeSize,
+        n: safeN,
+        ...(style ? { style } : {}),
+        ...(effectiveProvider ? { provider: effectiveProvider as any } : {}),
+      });
+
+      // 把 userId 关联回任务，便于按用户隔离历史
+      if (userId && result.taskId) {
+        await MediaTask.findOneAndUpdate(
+          { taskId: result.taskId },
+          { $set: { userId } },
+          { new: true }
+        ).catch(() => {/* 可忽略：任务可能尚未落库 */});
+      }
+
+      // 仅真实（混元）生成才计费/计配额；Mock 演示不花平台钱
+      const isReal = result.provider !== 'mock';
+      if (isReal) {
+        const fen = TEXT2IMG_COST_FEN_PER_IMAGE * safeN;
+        if (userId) {
+          quotaIncrement(userId, 'media_gen').catch(() => {/* 配额失败不阻断 */});
+          quotaCostRecord(userId, fen).catch(() => {/* 成本记录失败不阻断 */});
+        } else if (anonKey) {
+          // 匿名真实生成：累加当日计数（用于限次）
+          try {
+            await redisClient.incr(anonKey);
+            await redisClient.expire(anonKey, 86400);
+          } catch {/* 忽略 */ }
+        }
+      }
+
+      // 匿名用户当日剩余真实次数（已包含本次）
+      if (!userId) {
+        anonRealLeft = Math.max(ANON_DAILY_LIMIT - (anonUsed + (isReal ? 1 : 0)), 0);
+      }
+
+      // 同步返回任务句柄，前端据此轮询
+      res.json({
+        success: true,
+        data: {
+          taskId: result.taskId,
+          status: result.status,
+          provider: result.provider,
+          note: result.note,
+          // 提示匿名用户当日剩余真实生成次数（已受限额保护）
+          anonRealLeft,
+        },
+      });
+    } catch (err) {
+      logger.error('text2img', '生成失败', err);
+      sendError(res, err);
     }
-
-    const userId = (req as any).user?.id;
-    const result = await mediaGenService.generate({
-      type: 'text2img',
-      prompt: prompt.trim(),
-      ...(negativePrompt ? { negativePrompt } : {}),
-      ...(size ? { size } : {}),
-      ...(n ? { n: Number(n) || 1 } : {}),
-      ...(style ? { style } : {}),
-      ...(provider ? { provider } : {}),
-    });
-
-    // 把 userId 关联回任务，便于按用户隔离历史
-    if (userId && result.taskId) {
-      await MediaTask.findOneAndUpdate(
-        { taskId: result.taskId },
-        { $set: { userId } },
-        { new: true }
-      ).catch(() => {/* 可忽略：任务可能尚未落库 */});
-    }
-
-    // 登录用户记一笔 media_gen 配额（与媒体生成技能一致）
-    if (userId) {
-      quotaIncrement(userId, 'media_gen').catch(() => {/* 配额失败不阻断生成 */});
-    }
-
-    // 同步返回任务句柄，前端据此轮询
-    res.json({
-      success: true,
-      data: {
-        taskId: result.taskId,
-        status: result.status,
-        provider: result.provider,
-        note: result.note,
-      },
-    });
-  } catch (err) {
-    logger.error('text2img', '生成失败', err);
-    sendError(res, err);
   }
-});
+);
 
 /**
  * 查询异步任务结果（轮询）。

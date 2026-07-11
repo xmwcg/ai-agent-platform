@@ -1,0 +1,664 @@
+PASS src/lib/object-storage.test.ts (10.33 s)
+PASS src/lib/crypto.test.ts (10.483 s)
+PASS src/services/secret-audit.service.test.ts (12.34 s)
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:10.711Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 21 次
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+    console.warn
+      2026-07-11T23:01:10.725Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 22 次
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+    console.warn
+      2026-07-11T23:01:10.726Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 23 次
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+    console.warn
+      2026-07-11T23:01:10.726Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 24 次
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+    console.warn
+      2026-07-11T23:01:10.727Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 25 次
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+PASS src/routes/text2img.test.ts (13.354 s)
+PASS src/services/media-gen.test.ts (13.744 s)
+PASS src/skills/skills-pipeline.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:12.270Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/skills/defs/ai-chat.skill.ts:2:1)
+      at Object.<anonymous> (src/skills/registry.ts:9:1)
+      at Object.<anonymous> (src/skills/skills-pipeline.test.ts:1:1)
+
+    console.log
+      2026-07-11T23:01:13.064Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/skills/skills.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:12.738Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/skills/defs/ai-chat.skill.ts:2:1)
+      at Object.<anonymous> (src/skills/registry.ts:9:1)
+      at Object.<anonymous> (src/skills/skills.test.ts:1:1)
+
+    console.log
+      2026-07-11T23:01:13.219Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/services/media-gen.task.test.ts (15.059 s)
+PASS src/gateway/ai-gateway.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:13.242Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/gateway/ai-gateway.service.ts:17:1)
+      at Object.<anonymous> (src/gateway/ai-gateway.test.ts:18:1)
+
+PASS src/routes/tools.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:13.177Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/translation.service.ts:1:1)
+      at Object.<anonymous> (src/routes/tools.test.ts:1:1)
+
+PASS src/models/ApiUsageLog.test.ts
+PASS src/routes/customer-service.test.ts
+PASS src/middleware/rbac.test.ts
+PASS src/routes/quickstart.test.ts
+PASS src/routes/model-calendar.test.ts
+PASS src/services/ai-agent.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:14.513Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/services/ai-agent.test.ts:1:1)
+
+    console.log
+      2026-07-11T23:01:14.855Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/models/WebhookEvent.test.ts
+PASS src/models/ApiKey.test.ts
+PASS src/services/knowledge-graph.service.test.ts
+PASS src/services/cost-control.test.ts
+  ● Console
+
+    console.log
+      2026-07-11T23:01:15.429Z [INFO] notify [AI 成本预警] -> console: 当前套餐「free」今日 AI 成本约 ¥0.40 / 预算 ¥0.50，已逼近阈值，请注意限流或升级 BYOK。
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:15.438Z [INFO] notify [AI 成本预警] -> console: 当前套餐「free」今日 AI 成本约 ¥0.60 / 预算 ¥0.50，已逼近阈值，请注意限流或升级 BYOK。
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/models/CreditsTransaction.test.ts
+PASS src/models/ModelConfig.test.ts
+PASS src/services/payment.service.test.ts
+PASS src/services/notify.service.test.ts
+  ● Console
+
+    console.log
+      2026-07-11T23:01:15.698Z [INFO] notify [测试] -> console: hello
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:15.702Z [INFO] notify [AI 成本预警] -> openid_x: 当前套餐「pro」今日 AI 成本约 ¥3.00 / 预算 ¥5.00，已逼近阈值，请注意限流或升级 BYOK。
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/services/payment.webhook.test.ts
+PASS src/routes/customer-service.enhanced.test.ts (17.313 s)
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:15.148Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.enhanced.test.ts:1:1)
+
+PASS src/services/apikey.service.test.ts
+PASS src/services/vector-store.test.ts
+PASS src/routes/auth.login.test.ts (6.738 s)
+  ● Console
+
+    console.log
+      2026-07-11T23:01:15.816Z [INFO] auth [SMS Mock] 向 13800000000 发送验证码: 736273
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:15.876Z [INFO] auth [SMS Mock] 向 13800000000 发送验证码: 567628
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:15.889Z [INFO] auth [SMS Mock] 向 13800000000 发送验证码: 235359
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/services/sandbox.service.test.ts
+PASS src/lib/trace.test.ts
+  ● Console
+
+    console.debug
+      [trace:noop] op ok 0ms
+
+      at NoopTracer.trace (src/lib/trace.ts:68:15)
+
+    console.debug
+      [trace:noop] op error 1ms
+
+      at NoopTracer.trace (src/lib/trace.ts:68:15)
+
+PASS src/lib/validation.test.ts
+PASS src/middleware/rate-limit.test.ts
+PASS src/routes/customer-service.audit.test.ts (7.118 s)
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:15.818Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.audit.test.ts:9:1)
+
+PASS src/services/media-gen.tc3.test.ts
+PASS src/config/env-check.test.ts
+  ● Console
+
+    console.error
+      ⚠️/❌ JWT_SECRET 为弱占位值或为空，任何人可伪造 Token。
+         请设置强随机密钥：JWT_SECRET=$(openssl rand -base64 48)
+         生产环境拒绝启动。
+
+      29 |     if (isProd) {
+      30 |       // eslint-disable-next-line no-console
+    > 31 |       console.error(msg);
+         |               ^
+      32 |       process.exit(1);
+      33 |     }
+      34 |     // eslint-disable-next-line no-console
+
+      at validateStartupEnv (src/config/env-check.ts:31:15)
+      at Object.<anonymous> (src/config/env-check.test.ts:25:23)
+
+    console.warn
+      ⚠️/❌ JWT_SECRET 为弱占位值或为空，任何人可伪造 Token。
+         请设置强随机密钥：JWT_SECRET=$(openssl rand -base64 48)
+         生产环境拒绝启动。
+
+      33 |     }
+      34 |     // eslint-disable-next-line no-console
+    > 35 |     console.warn(msg);
+         |             ^
+      36 |   }
+      37 | }
+      38 |
+
+      at validateStartupEnv (src/config/env-check.ts:35:13)
+      at Object.<anonymous> (src/config/env-check.test.ts:25:23)
+
+PASS src/config/billing.test.ts
+PASS src/middleware/cors-config.test.ts
+PASS src/middleware/security-headers.test.ts
+PASS src/config/credits-pricing.test.ts
+PASS src/lib/http-error.test.ts
+PASS src/middleware/resourceAccess.test.ts
+PASS src/routes/customer-service.escalation.test.ts (17.814 s)
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:15.716Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.escalation.test.ts:1:1)
+
+PASS src/routes/marketplace-credits.integration.test.ts (20.07 s)
+  ● Console
+
+    console.log
+      2026-07-11T23:01:18.671Z [INFO] billing 积分包充值成功: userId=6a52cb3cff056efed8e0506a package=credits_500 credits=+500 balance=600
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+[0mPOST /api/billing/orders [32m200[0m 12.717 ms - 242[0m
+[0mGET /api/billing/orders/AI1783810879646805/pay [32m200[0m 41.895 ms - 50[0m
+[0mGET /api/billing/subscription [32m200[0m 7.742 ms - -[0m
+[0mGET /api/billing/orders/AI1783810879646805/pay [32m200[0m 2.062 ms - 44[0m
+[0mPOST /api/billing/orders [32m200[0m 3.087 ms - 242[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 13.906 ms - 17[0m
+[0mGET /api/billing/subscription [32m200[0m 4.404 ms - -[0m
+[0mPOST /api/billing/orders [32m200[0m 4.060 ms - 242[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 15.426 ms - 17[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 1.921 ms - 35[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 1.026 ms - 17[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 0.439 ms - 17[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 3.979 ms - 17[0m
+[0mPOST /api/billing/orders [32m200[0m 15.743 ms - 242[0m
+[0mGET /api/billing/orders/AI1783810879839289/pay [32m200[0m 8.463 ms - 50[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 6.763 ms - 36[0m
+[0mPOST /api/billing/orders [32m200[0m 3.058 ms - 242[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 8.940 ms - 17[0m
+[0mPOST /api/billing/orders [32m200[0m 4.945 ms - 242[0m
+[0mPOST /api/billing/webhook/wechat [32m200[0m 16.235 ms - 17[0m
+[0mGET /api/billing/subscription [32m200[0m 3.048 ms - -[0m
+[0mPOST /api/billing/orders [32m200[0m 3.587 ms - 242[0m
+[0mPOST /api/billing/webhook/wechat [32m200[0m 1.289 ms - 17[0m
+[0mPOST /api/billing/orders [32m200[0m 13.022 ms - 242[0m
+[0mPOST /api/billing/webhook/wechat [32m200[0m 11.448 ms - 17[0m
+[0mPOST /api/billing/webhook/wechat [32m200[0m 2.135 ms - 35[0m
+[0mPOST /api/billing/orders [32m200[0m 4.713 ms - 242[0m
+[0mPOST /api/billing/webhook/wechat [32m200[0m 2.944 ms - 17[0m
+PASS src/routes/billing.webhook.integration.test.ts (21.482 s)
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:16.317Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/routes/ai.ts:2:1)
+      at Object.<anonymous> (src/index.ts:17:1)
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:16:1)
+
+    console.log
+      2026-07-11T23:01:19.075Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:19.077Z [INFO] database MongoDB connected successfully { uri: 'mongodb://localhost:27017/ai-agent-platform' }
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.warn
+      2026-07-11T23:01:19.081Z [WARN] database Server will continue without MongoDB (mock mode)
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at connectMongoDB (src/config/database.ts:33:12)
+
+    console.log
+      2026-07-11T23:01:19.096Z [INFO] index Server running on http://localhost:3000 { env: 'test' }
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:19.505Z [INFO] mcp Loaded 0 MCP server config(s) from database
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:19.750Z [INFO] webhook 订阅激活成功: orderNo=AI1783810879735950 plan=pro provider=stripe
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:19.788Z [INFO] webhook 订阅激活成功: orderNo=AI1783810879776748 plan=pro provider=stripe
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:19.801Z [INFO] webhook 事件已处理，跳过: eventId=pi_idempotent_001 status=processed
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.warn
+      2026-07-11T23:01:19.811Z [WARN] webhook 验签失败: provider=stripe
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at src/routes/billing.ts:353:16
+
+    console.warn
+      2026-07-11T23:01:19.823Z [WARN] webhook 验签失败: provider=stripe
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at src/routes/billing.ts:353:16
+
+    console.log
+      2026-07-11T23:01:19.873Z [INFO] webhook 订单已支付，跳过激活: orderNo=AI1783810879839289
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.warn
+      2026-07-11T23:01:19.889Z [WARN] webhook 重放攻击风险: provider=stripe sigTime=1783810279 now=1783810879 diff=600s
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at src/routes/billing.ts:379:14
+
+    console.log
+      2026-07-11T23:01:19.948Z [INFO] webhook 订阅激活成功: orderNo=AI1783810879924485 plan=pro provider=wechat
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.warn
+      2026-07-11T23:01:19.976Z [WARN] webhook 验签失败: provider=wechat
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at src/routes/billing.ts:353:16
+
+    console.log
+      2026-07-11T23:01:20.007Z [INFO] webhook 订阅激活成功: orderNo=AI1783810879984755 plan=pro provider=wechat
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T23:01:20.017Z [INFO] webhook 事件已处理，跳过: eventId=WX_IDEM_1783810879998 status=processed
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.warn
+      2026-07-11T23:01:20.032Z [WARN] webhook 重放攻击风险: provider=wechat sigTime=1783810280 now=1783810880 diff=600s
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at src/routes/billing.ts:379:14
+
+PASS src/routes/auth.integration.test.ts (28.604 s)
+  ● Console
+
+    console.warn
+      2026-07-11T23:01:16.727Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/services/rag.ts:1:1)
+      at Object.<anonymous> (src/routes/rag.ts:2:1)
+      at Object.<anonymous> (src/routes/auth.integration.test.ts:21:1)
+
+    console.log
+      2026-07-11T23:01:16.878Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+
+Test Suites: 46 passed, 46 total
+Tests:       324 passed, 324 total
+Snapshots:   0 total
+Time:        31.088 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
