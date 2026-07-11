@@ -114,11 +114,17 @@ export default apiClient;
 export const billingAPI = {
   getPlans: () => apiClient.get('/billing/plans'),
   getSubscription: () => apiClient.get('/billing/subscription'),
+  getCreditsPackages: () => apiClient.get('/billing/credits-packages'),
   createOrder: (data: { plan: 'free' | 'pro' | 'max'; period: 'monthly' | 'yearly'; provider?: string }) =>
     apiClient.post('/billing/orders', data),
+  createCreditsOrder: (data: { packageId: string; provider?: string }) =>
+    apiClient.post('/billing/credits-packages/order', data),
   mockPay: (orderNo: string) => apiClient.get(`/billing/orders/${orderNo}/pay`),
   cancelSubscription: () => apiClient.post('/billing/subscription/cancel'),
   getOrders: () => apiClient.get('/billing/orders/history'),
+  getPaymentStatus: () => apiClient.get('/billing/payment-status'),
+  getWebhookEvents: (params?: { page?: number; limit?: number; status?: string }) =>
+    apiClient.get('/billing/webhook-events', { params }),
 };
 
 // 模型发布日历 API

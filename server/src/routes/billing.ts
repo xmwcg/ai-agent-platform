@@ -440,6 +440,69 @@ router.post('/subscription/cancel', requireAuth, async (req: AuthRequest, res: R
   }
 });
 
+// 支付状态诊断（Admin 面板用：查看当前支付渠道配置状态）
+router.get('/payment-status', requireAuth, async (_req: AuthRequest, res: Response) => {
+  const mask = (s: string | undefined) => {
+    if (!s) return '未配置';
+    if (s.length <= 8) return '****';
+    return s.slice(0, 4) + '****' + s.slice(-4);
+  };
+  const defaultProvider = process.env.DEFAULT_PAY_PROVIDER || 'mock';
+  res.json({
+    success: true,
+    data: {
+      defaultProvider,
+      isReal: defaultProvider !== 'mock',
+      wechat: {
+        configured: !!(process.env.WECHAT_MCH_ID && process.env.WECHAT_API_V3_KEY && process.env.WECHAT_PRIVATE_KEY),
+        mchId: mask(process.env.WECHAT_MCH_ID),
+        appId: mask(process.env.WECHAT_APP_ID),
+        hasApiKey: !!process.env.WECHAT_API_V3_KEY,
+        hasPlatformCert: !!process.env.WECHAT_PLATFORM_CERT,
+        notifyUrl: process.env.WECHAT_NOTIFY_URL || process.env.PUBLIC_BASE_URL ? `${process.env.PUBLIC_BASE_URL}/api/billing/webhook/wechat` : '未配置',
+      },
+      stripe: {
+        configured: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
+        hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
+        hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+      },
+      publicBaseUrl: process.env.PUBLIC_BASE_URL || '未配置',
+    },
+  });
+});
+
+// Webhook 事件日志（最近 50 条，供诊断面板查看）
+router.get('/webhook-events', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const status = req.query.status as string;
+    const filter: Record<string, any> = {};
+    if (status && ['received', 'processed', 'skipped', 'failed'].includes(status)) {
+      filter.status = status;
+    }
+    const [events, total] = await Promise.all([
+      WebhookEvent.find(filter).sort({ receivedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      WebhookEvent.countDocuments(filter),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        list: events,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        summary: {
+          total,
+          processed: await WebhookEvent.countDocuments({ status: 'processed' }),
+          failed: await WebhookEvent.countDocuments({ status: 'failed' }),
+          skipped: await WebhookEvent.countDocuments({ status: 'skipped' }),
+        },
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
 // 我的订单历史（需登录）
 router.get('/orders/history', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
