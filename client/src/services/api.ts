@@ -304,6 +304,21 @@ export const quickstartAPI = {
   apply: (templateId: string) => apiClient.post('/quickstart/apply', { templateId }),
 };
 
+// 小红书爆款文案生成器 API（整合 ADP 应用包「小红书爆款文案生成器」）
+export const xhsAPI = {
+  // 获取可用专家角色（文案生成专家/系统架构师/前端开发助手/部署运维助手）
+  agents: () => apiClient.get('/xhs/agents'),
+  // 调用指定角色生成内容
+  generate: (data: {
+    role: 'copywriter' | 'architect' | 'frontend' | 'devops';
+    product: string;
+    audience?: string;
+    style?: string;
+    keywords?: string;
+    count?: number;
+  }) => apiClient.post('/xhs/generate', data),
+};
+
 // MCP 插件管理 API（统一封装，避免页面散落裸调；后端 S2 已加 auth+quota 守卫）
 export const mcpAPI = {
   // 服务器列表
