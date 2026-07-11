@@ -25,6 +25,7 @@ import {
   AppstoreOutlined,
   NodeIndexOutlined,
   ApartmentOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import apiClient from '@/services/api';
 
@@ -91,6 +92,7 @@ function App() {
       { key: '/creative', icon: <PictureOutlined />, label: '创作工坊' },
       { key: '/code', icon: <CodeOutlined />, label: '代码解释' },
       { key: '/tools', icon: <ToolOutlined />, label: '智能工具箱' },
+      { key: '/xhs', icon: <EditOutlined />, label: '小红书文案' },
     ]},
     { type: 'group' as const, key: 'g3', label: '平台与账户', children: [
       { key: '/model-config', icon: <ApiOutlined />, label: '模型配置中心' },

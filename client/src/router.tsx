@@ -31,6 +31,7 @@ import SkillsMarketPage from '@/pages/SkillsMarketPage';
 import WorkflowEditor from '@/pages/WorkflowEditor';
 import KnowledgeGraphPage from '@/pages/KnowledgeGraphPage';
 import SandboxPage from '@/pages/SandboxPage';
+import XiaohongshuGenerator from '@/pages/XiaohongshuGenerator';
 
 const router = createBrowserRouter([
   {
@@ -76,6 +77,7 @@ const router = createBrowserRouter([
       { path: 'workflow/:id', element: <WorkflowEditor /> },
       { path: 'knowledge-graph', element: <KnowledgeGraphPage /> },
       { path: 'sandbox', element: <SandboxPage /> },
+      { path: 'xhs', element: <XiaohongshuGenerator /> },
       { path: '*', element: <div>404 - 页面未找到</div> }
     ]
   }
