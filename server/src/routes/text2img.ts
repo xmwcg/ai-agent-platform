@@ -13,6 +13,10 @@ import { text2imgLimiter } from '../middleware/rate-limit';
 import { redisClient } from '../config/database';
 import { sendError } from '../lib/http-error';
 import { logger } from '../lib/logger';
+import { NextFunction } from 'express';
+import { MediaUserKey, MediaByokProvider } from '../models/MediaUserKey';
+import { encryptSecret, decryptSecret } from '../lib/crypto';
+import { MediaCredentials } from '../services/media-gen.service';
 
 const router = Router();
 
@@ -39,6 +43,37 @@ function getClientIp(req: Request): string {
 }
 
 /**
+ * BYOK 解析中间件：登录用户若配置并启用了媒体厂商的自带 Key，本次生成走用户凭据（平台零垫付）。
+ * - 命中后挂 req.byok = { provider, credentials }，并标记 req.byokBypass 让配额/成本阀门放行。
+ * - 用户未显式指定 provider 时，自动选用其第一个启用的 BYOK key 对应厂商。
+ * - 前端传 useByok:false 可强制走平台额度；无 BYOK key 时自动回落平台垫付（不影响既有逻辑）。
+ */
+async function resolveByok(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  const userId = (req as any).user?.id;
+  if (!userId) return next(); // 匿名不支持 BYOK
+  const body = (req as any).body || {};
+  if (body.useByok === false) return next(); // 用户主动选择平台额度
+  const preferred = (body.provider as MediaByokProvider) || undefined;
+  try {
+    const filter: Record<string, any> = { userId, enabled: true };
+    if (preferred) filter.provider = preferred;
+    const keyDoc = await MediaUserKey.findOne(filter).lean();
+    if (!keyDoc) return next(); // 无对应 BYOK key，走平台垫付
+    const credentials: MediaCredentials = {
+      secretId: keyDoc.secretIdEnc ? decryptSecret(keyDoc.secretIdEnc) : undefined,
+      secretKey: decryptSecret(keyDoc.secretKeyEnc),
+    };
+    (req as any).byok = { provider: keyDoc.provider, credentials };
+    (req as any).byokBypass = true;
+    // 未指定 provider 时，自动用 BYOK key 对应厂商
+    if (!preferred) body.provider = keyDoc.provider;
+  } catch (e: any) {
+    logger.warn('text2img', `BYOK 解析失败，回落平台垫付: ${e.message}`);
+  }
+  next();
+}
+
+/**
  * 文生图：真实异步生成
  * 提交请求 → 交由 media-gen 多厂商框架（混元 TC3 / Mock 兜底）→ 返回 taskId（异步任务）
  * 前端轮询 GET /query/:taskId 获取结果；结果图片落对象存储（OSS）后返回稳定 URL。
@@ -47,8 +82,9 @@ router.post(
   '/generate',
   text2imgLimiter, // 防刷第三层：生成调用频率闸门（与匿名限次、登录配额互补）
   optionalAuth,
-  enforceQuota('media_gen'), // 登录用户：当日次数配额前置拦截（超额 402）
-  enforceCostValve(), // 登录用户：当日垫付成本预算前置拦截
+  resolveByok, // BYOK：命中用户自带 Key → 标记零垫付，放行后续配额/成本闸门
+  enforceQuota('media_gen'), // 登录用户：当日次数配额前置拦截（超额 402，BYOK 时 bypass）
+  enforceCostValve(), // 登录用户：当日垫付成本预算前置拦截（BYOK 时 bypass）
   async (req: Request, res: Response) => {
     try {
       const { prompt, negativePrompt, size, n, style, provider } = req.body;
@@ -58,6 +94,9 @@ router.post(
       }
 
       const userId = (req as any).user?.id;
+      // BYOK：登录用户若配置自带媒体 Key，本次走用户凭据（平台零垫付）。
+      // resolveByok 中间件已将其挂到 req.byok，并标记 req.byokBypass 放行配额/成本阀门。
+      const byok = (req as any).byok as { provider: string; credentials: MediaCredentials } | undefined;
 
       // —— 服务端成本封顶：数量与分辨率 ——
       const safeN = Math.min(Math.max(Number(n) || 1, 1), TEXT2IMG_MAX_N);
@@ -65,7 +104,7 @@ router.post(
 
       // —— 匿名用户每日限次真实生成，超出转 Mock（免垫付）——
       let anonRealLeft: number | undefined;
-      let effectiveProvider = provider || undefined;
+      let effectiveProvider = (byok?.provider as any) || provider || undefined;
       let anonKey: string | undefined;
       let anonUsed = 0;
       if (!userId) {
@@ -87,6 +126,7 @@ router.post(
         n: safeN,
         ...(style ? { style } : {}),
         ...(effectiveProvider ? { provider: effectiveProvider as any } : {}),
+        ...(byok?.credentials ? { credentials: byok.credentials } : {}),
       });
 
       // 把 userId 关联回任务，便于按用户隔离历史
@@ -98,9 +138,17 @@ router.post(
         ).catch(() => {/* 可忽略：任务可能尚未落库 */});
       }
 
-      // 仅真实（混元）生成才计费/计配额；Mock 演示不花平台钱
+      // BYOK：把用户凭据加密存入任务，供异步轮询 queryTask 使用（明文不落库，DB 泄露也无法还原）
+      if (byok && result.taskId) {
+        await MediaTask.findOneAndUpdate(
+          { taskId: result.taskId },
+          { $set: { byokEnc: encryptSecret(JSON.stringify(byok.credentials)) } }
+        ).catch(() => {/* 忽略 */});
+      }
+
+      // 仅真实（混元）生成、且非 BYOK 才计费/计配额；BYOK 用用户自己的 Key，平台零垫付
       const isReal = result.provider !== 'mock';
-      if (isReal) {
+      if (isReal && !byok) {
         const fen = TEXT2IMG_COST_FEN_PER_IMAGE * safeN;
         if (userId) {
           quotaIncrement(userId, 'media_gen').catch(() => {/* 配额失败不阻断 */});
@@ -127,6 +175,8 @@ router.post(
           status: result.status,
           provider: result.provider,
           note: result.note,
+          // BYOK：本次使用用户自带 Key，平台零成本、不计配额/垫付
+          byok: !!byok,
           // 提示匿名用户当日剩余真实生成次数（已受限额保护）
           anonRealLeft,
         },
@@ -150,7 +200,16 @@ router.get('/query/:taskId', optionalAuth, async (req: Request, res: Response) =
       return res.status(404).json({ success: false, error: '任务不存在或已过期' });
     }
 
-    const result = await mediaGenService.queryTask(task.provider as any, taskId);
+    // BYOK 任务：从任务中解密用户凭据并注入轮询请求（明文不常驻，用完即弃）
+    let byokCredentials: MediaCredentials | undefined;
+    if ((task as any).byokEnc) {
+      try {
+        byokCredentials = JSON.parse(decryptSecret((task as any).byokEnc));
+      } catch (e: any) {
+        logger.warn('text2img', `BYOK 凭据解密失败，回落平台凭据: ${e.message}`);
+      }
+    }
+    const result = await mediaGenService.queryTask(task.provider as any, taskId, byokCredentials);
 
     // 已完成 → 落对象存储，返回稳定 URL
     if (result.status === 'completed') {
