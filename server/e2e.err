@@ -1,6 +1,0 @@
-(node:17708) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
-(Use `node --trace-deprecation ...` to show where the warning was created)
-   [srv-err] 2026-07-11T13:00:57.004Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
-   [srv-err] ⚠️  Redis 不可用，已降级为内存模式（配额/限流仍可用）
-   [srv-err] 2026-07-11T13:00:59.125Z [ERROR] ai-agent Failed to load sessions from Redis Reached the max retries per request limit (which is 3). Refer to "maxRetriesPerRequest" option for details.
-   [srv-err] 2026-07-11T13:00:59.254Z [WARN] database MongoDB disconnected, trying to reconnect...
