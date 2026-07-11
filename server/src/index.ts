@@ -108,6 +108,8 @@ app.use('/api/skills', skillsRoutes);
 app.use('/api/wf', workflowRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/gateway', aiGatewayRoutes);
+app.use('/api/mcp', mcpRoutes);
+app.use('/api/text2img', text2imgRoutes);
 
 // 基础路由
 app.get('/', (req: Request, res: Response) => {
