@@ -12,6 +12,53 @@ router.get('/servers', (req: Request, res: Response) => {
   res.json({ success: true, data: servers });
 });
 
+// 批量导入 MCP 服务器配置包（安装包）
+router.post('/servers/import', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const b = req.body;
+    let configs: MCPServerConfig[] = [];
+    if (Array.isArray(b)) configs = b;
+    else if (Array.isArray(b?.servers)) configs = b.servers;
+    else if (b && b.id && b.name && b.transport) configs = [b];
+
+    if (configs.length === 0) {
+      return res.status(400).json({ success: false, error: '未识别到 MCP 配置（需要 MCPServerConfig 对象或数组）' });
+    }
+    const imported: string[] = [];
+    for (const cfg of configs) {
+      if (!cfg.id || !cfg.name || !cfg.transport) {
+        return res.status(400).json({ success: false, error: '配置缺少 id/name/transport' });
+      }
+      await mcpService.registerServer({ ...cfg, enabled: cfg.enabled ?? false, status: 'disconnected' });
+      imported.push(cfg.id);
+    }
+    res.json({ success: true, imported: imported.length, ids: imported });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 导出全部 MCP 服务器配置包
+router.get('/servers/export', requireAuth, async (req: Request, res: Response) => {
+  const servers = mcpService.getServers().map((s) => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    transport: s.transport,
+    command: s.command,
+    args: s.args,
+    url: s.url,
+    env: s.env,
+    enabled: s.enabled,
+  }));
+  if (req.query.download === '1') {
+    res.setHeader('Content-Disposition', 'attachment; filename="mcp-servers.json"');
+    res.setHeader('Content-Type', 'application/json');
+    return res.send(JSON.stringify({ schema: 'reasonix.mcp/1.0', servers }, null, 2));
+  }
+  res.json({ success: true, data: { schema: 'reasonix.mcp/1.0', servers } });
+});
+
 // 获取单个服务器详情
 router.get('/servers/:id', (req: Request, res: Response) => {
   const server = mcpService.getServer(req.params.id);

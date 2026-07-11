@@ -19,6 +19,39 @@ router.get('/node-types', (_req, res: Response) => {
   res.json({ success: true, data: NODE_TYPES });
 });
 
+// ── 工作流导入/导出（Agent 工具流包） ────────────────
+
+/** 导入工作流包：单个对象 / 数组 / { workflows: [] } */
+router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const b = req.body;
+    let items: any[] = [];
+    if (Array.isArray(b)) items = b;
+    else if (Array.isArray(b?.workflows)) items = b.workflows;
+    else if (b && b.name) items = [b];
+
+    if (items.length === 0) {
+      return res.status(400).json({ success: false, error: '未识别到工作流包（需要 { name, nodes, edges } 或数组）' });
+    }
+    const created: string[] = [];
+    for (const it of items) {
+      if (!it.name) return res.status(400).json({ success: false, error: '工作流缺少 name' });
+      const wf = await Workflow.create({
+        name: it.name,
+        description: it.description || '',
+        nodes: it.nodes || [],
+        edges: it.edges || [],
+        owner: req.user!.id,
+        isPublic: false,
+        tags: it.tags || [],
+        category: it.category || '通用',
+      });
+      created.push(String(wf._id));
+    }
+    res.status(201).json({ success: true, imported: created.length, ids: created });
+  } catch (err) { sendError(res, err); }
+});
+
 // ── 工作流 CRUD ──────────────────────────────────────
 
 /** 获取当前用户的工作流列表 */
@@ -61,6 +94,32 @@ router.get('/public', async (req, res: Response) => {
     const total = await Workflow.countDocuments(filter);
 
     res.json({ success: true, data: workflows, pagination: { page: +page, limit: +limit, total } });
+  } catch (err) { sendError(res, err); }
+});
+
+/** 导出单个工作流为包（Agent 工具流包） */
+router.get('/:id/export', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const wf = await Workflow.findById(req.params.id);
+    if (!wf) return res.status(404).json({ success: false, error: 'Workflow not found' });
+    if (wf.isPublic !== true && (!req.user || String(wf.owner) !== req.user.id)) {
+      return res.status(403).json({ success: false, error: '无权限导出该工作流' });
+    }
+    const pkg = {
+      schema: 'reasonix.workflow/1.0',
+      name: wf.name,
+      description: wf.description,
+      category: wf.category,
+      tags: wf.tags,
+      nodes: wf.nodes,
+      edges: wf.edges,
+    };
+    if (req.query.download === '1') {
+      res.setHeader('Content-Disposition', `attachment; filename="workflow-${wf._id}.json"`);
+      res.setHeader('Content-Type', 'application/json');
+      return res.send(JSON.stringify(pkg, null, 2));
+    }
+    res.json({ success: true, data: pkg });
   } catch (err) { sendError(res, err); }
 });
 

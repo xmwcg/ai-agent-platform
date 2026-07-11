@@ -289,13 +289,28 @@ export const diagnosticsAPI = {
   check: () => apiClient.get('/diagnostics'),
 };
 
-// 技能市场 API（agency-agents 风格名册 + 调用）
+// 技能市场 API（agency-agents 风格名册 + 调用 + 导入导出 + 外部市场）
 export const skillsAPI = {
   list: () => apiClient.get('/skills'),
   market: () => apiClient.get('/skills/market'),
   detail: (id: string) => apiClient.get(`/skills/${id}`),
   invoke: (id: string, input: Record<string, any>) =>
     apiClient.post(`/skills/${id}/invoke`, input),
+  // 当前用户上传/安装的技能
+  mine: () => apiClient.get('/skills/mine'),
+  // 外部技能市场精选目录（公开）
+  catalog: () => apiClient.get('/skills/catalog'),
+  // 导入声明式技能包（单个对象 / 数组 / {skills:[...]}）
+  importPackage: (pkg: any) => apiClient.post('/skills/import', pkg),
+  // 导出技能为 JSON 包（download=true 触发文件下载）
+  exportPackage: (id: string, download = false) =>
+    apiClient.get(`/skills/export/${id}${download ? '?download=1' : ''}`, {
+      responseType: download ? 'blob' : 'json',
+    }),
+  // 一键安装外部目录条目
+  installCatalog: (id: string) => apiClient.post(`/skills/catalog/${id}/install`, {}),
+  // 删除自己的用户技能
+  remove: (id: string) => apiClient.delete(`/skills/${id}`),
 };
 
 // 快速启动模板 API
@@ -344,5 +359,23 @@ export const mcpAPI = {
     apiClient.post(`/mcp/servers/${id}/call`, { tool, args }),
   // 可用工具清单（供 Agent 使用）
   tools: () => apiClient.get('/mcp/tools'),
+  // 批量导入 MCP 服务器配置包
+  importServers: (pkg: any) => apiClient.post('/mcp/servers/import', pkg),
+  // 导出全部 MCP 服务器配置包
+  exportServers: (download = false) =>
+    apiClient.get(`/mcp/servers/export${download ? '?download=1' : ''}`, {
+      responseType: download ? 'blob' : 'json',
+    }),
+};
+
+// 工作流（Agent 工具流）导入导出 API
+export const workflowAPI = {
+  // 导入工作流包（单个 / 数组 / {workflows:[...]}）
+  importPackage: (pkg: any) => apiClient.post('/wf/import', pkg),
+  // 导出单个工作流为包
+  exportPackage: (id: string, download = false) =>
+    apiClient.get(`/wf/${id}/export${download ? '?download=1' : ''}`, {
+      responseType: download ? 'blob' : 'json',
+    }),
 };
 
