@@ -20,8 +20,18 @@ async function syncGateway(): Promise<void> {
 /** 列表：当前用户配置的模型 */
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    // 安全：绝不把 apiKey 明文回传前端，改为返回是否已配置 + 尾部掩码
     const list = await ModelConfig.find({ createdBy: req.user!.id }).sort({ pinned: -1, createdAt: -1 }).lean();
-    res.json({ success: true, data: list });
+    const masked = list.map((c: any) => {
+      const key: string = c.apiKey || '';
+      const { apiKey, ...rest } = c;
+      return {
+        ...rest,
+        hasApiKey: !!key,
+        apiKeyMask: key ? `****${key.slice(-4)}` : '',
+      };
+    });
+    res.json({ success: true, data: masked });
   } catch (err) {
     sendError(res, err);
   }
@@ -57,7 +67,8 @@ router.post('/', requireAuth, enforceQuota('model_config'), async (req: AuthRequ
     });
     await quotaIncrement(req.user!.id, 'model_config');
     void syncGateway();
-    res.json({ success: true, data: cfg });
+    const { apiKey: _omit, ...safe } = cfg.toObject();
+    res.json({ success: true, data: safe });
   } catch (err) {
     sendError(res, err);
   }
@@ -66,11 +77,22 @@ router.post('/', requireAuth, enforceQuota('model_config'), async (req: AuthRequ
 /** 更新 */
 router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    // 安全：字段白名单，禁止越权覆盖 createdBy / isDefault 等敏感字段
+    const ALLOWED = ['name', 'provider', 'baseURL', 'models', 'defaultModel', 'enabled', 'description', 'pinned'] as const;
+    const update: Record<string, unknown> = {};
+    for (const k of ALLOWED) {
+      if (k in req.body) update[k] = (req.body as Record<string, unknown>)[k];
+    }
+    // apiKey 只有在传入真实新值（非空、非掩码）时才覆盖，避免前端回填掩码把 key 洗掉
+    const nextKey = req.body?.apiKey;
+    if (typeof nextKey === 'string' && nextKey.trim() && !nextKey.includes('****')) {
+      update.apiKey = nextKey.trim();
+    }
     const cfg = await ModelConfig.findOneAndUpdate(
       { _id: req.params.id, createdBy: req.user!.id },
-      req.body,
+      update,
       { new: true }
-    );
+    ).select('-apiKey');
     if (!cfg) return res.status(404).json({ success: false, error: '配置不存在' });
     void syncGateway();
     res.json({ success: true, data: cfg });
