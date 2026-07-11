@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Typography, Tag, Space, Button, Spin, Empty, Select } from 'antd';
+import { Card, Row, Col, Typography, Tag, Space, Button, Select } from 'antd';
 import { BookOutlined, ClockCircleOutlined, TeamOutlined, DollarOutlined } from '@ant-design/icons';
 import apiClient from '@/services/api';
+import { PageContainer } from '@/components/ui-states';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -68,17 +69,17 @@ export default function CourseList() {
 
   useEffect(() => { loadCourses(); }, [filter]);
 
-  if (loading) {
-    return (
-      <Card>
-        <div style={{ textAlign: 'center', padding: 100 }}>
-          <Spin size="large" /><p>加载课程中...</p>
-        </div>
-      </Card>
-    );
-  }
-
   return (
+    <PageContainer
+      loading={loading}
+      empty={!loading && courses.length === 0}
+      skeletonType="cardGrid"
+      emptyConfig={{
+        title: '暂无课程',
+        description: '快来这里创建第一门课程吧',
+        action: { text: 'AI 推荐学习路径', onClick: () => navigate('/ai-chat') },
+      }}
+    >
     <div>
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -115,12 +116,7 @@ export default function CourseList() {
         </Space>
       </Card>
 
-      {courses.length === 0 ? (
-        <Card>
-          <Empty description="暂无课程，快来创建第一门课程吧！" />
-        </Card>
-      ) : (
-        <Row gutter={[16, 16]}>
+      <Row gutter={[16, 16]}>
           {courses.map(course => (
             <Col xs={24} sm={12} lg={8} key={course._id}>
               <Card
@@ -181,7 +177,7 @@ export default function CourseList() {
             </Col>
           ))}
         </Row>
-      )}
     </div>
+    </PageContainer>
   );
 }
