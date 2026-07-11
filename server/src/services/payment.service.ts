@@ -39,12 +39,20 @@ export interface WebhookResult {
   orderNo: string;
   success: boolean;
   transactionId?: string;
+  /** 事件类型，用于区分成功/失败/退款事件（如 payment_intent.succeeded / TRANSACTION.SUCCESS） */
+  eventType?: string;
+}
+
+export interface WebhookExtraHeaders {
+  wechatTimestamp?: string;
+  wechatNonce?: string;
+  wechatSerial?: string;
 }
 
 export interface PaymentGateway {
   readonly name: PaymentProvider;
   createOrder(input: CreateOrderInput): Promise<PaymentOrderResult>;
-  verifyWebhook(rawBody: string, signature: string): Promise<WebhookResult | null>;
+  verifyWebhook(rawBody: string, signature: string, extra?: WebhookExtraHeaders): Promise<WebhookResult | null>;
 }
 
 /* ----------------------- 真实 Webhook 验签工具（可单测） ----------------------- */
@@ -126,6 +134,8 @@ class WeChatPayGateway implements PaymentGateway {
   private apiKey = process.env.WECHAT_API_V3_KEY || '';
   private serialNo = process.env.WECHAT_CERT_SERIAL || '';
   private privateKey = process.env.WECHAT_PRIVATE_KEY || '';
+  /** 微信平台证书公钥（PEM），用于回调验签 */
+  private platformCert = process.env.WECHAT_PLATFORM_CERT || '';
 
   private ensureConfigured() {
     if (!this.mchId || !this.apiKey || !this.privateKey) {
@@ -177,13 +187,30 @@ class WeChatPayGateway implements PaymentGateway {
     };
   }
 
-  async verifyWebhook(rawBody: string, signature: string): Promise<WebhookResult | null> {
+  async verifyWebhook(rawBody: string, signature: string, extra?: WebhookExtraHeaders): Promise<WebhookResult | null> {
     try {
+      // ===== 第一步：签名验证（使用微信平台证书公钥） =====
+      if (this.platformCert && extra?.wechatTimestamp && extra?.wechatNonce) {
+        const sigValid = verifyWeChatSignature(
+          extra.wechatTimestamp,
+          extra.wechatNonce,
+          rawBody,
+          signature,
+          this.platformCert
+        );
+        if (!sigValid) {
+          return null; // 签名验证失败，拒绝伪造回调
+        }
+      }
+      // 注意：未配置 WECHAT_PLATFORM_CERT 时跳过验签（开发/Mock 环境兼容）
+
+      // ===== 第二步：解析回调体并解密（如有必要） =====
       const data = JSON.parse(rawBody);
-      const eventType = data?.event_type || data?.eventType;
+      const eventType = data?.event_type || data?.eventType || '';
       let orderNo: string | undefined;
       let transactionId: string | undefined;
-      // 若回调携带密文 resource，则使用 APIv3 密钥解密（推荐真实路径）
+
+      // 若回调携带密文 resource，则使用 APIv3 密钥解密（微信 v3 标准路径）
       if (data?.resource?.ciphertext && this.apiKey) {
         const res = decryptWeChatResource(
           data.resource.ciphertext,
@@ -197,10 +224,12 @@ class WeChatPayGateway implements PaymentGateway {
         orderNo = data?.out_trade_no || data?.resource?.out_trade_no;
         transactionId = data?.transaction_id;
       }
+
       return {
         orderNo,
         success: eventType === 'TRANSACTION.SUCCESS',
         transactionId,
+        eventType, // 透传事件类型到路由层：TRANSACTION.SUCCESS / REFUND.SUCCESS 等
       };
     } catch {
       return null;
@@ -260,6 +289,7 @@ class StripeGateway implements PaymentGateway {
         orderNo: event?.data?.object?.metadata?.orderNo,
         success,
         transactionId: event?.data?.object?.id,
+        eventType: event?.type, // 将事件类型透传到路由层用于区分处理
       };
     } catch {
       return null;

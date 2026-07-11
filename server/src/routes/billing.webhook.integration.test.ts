@@ -131,8 +131,9 @@ describe('E2E-2: Stripe Webhook 验签与幂等', () => {
     // 发送 Webhook
     const whRes = await request(app)
       .post(`${BASE}/webhook/stripe`)
+      .set('Content-Type', 'application/json')
       .set('stripe-signature', `t=${ts},v1=${sig}`)
-      .send(JSON.parse(eventBody));
+      .send(eventBody);
     expect(whRes.status).toBe(200);
 
     // 验证订阅激活
@@ -164,12 +165,16 @@ describe('E2E-2: Stripe Webhook 验签与幂等', () => {
     const sigHeader = `t=${ts},v1=${sig}`;
 
     // 第一次
-    await request(app).post(`${BASE}/webhook/stripe`).set('stripe-signature', sigHeader).send(JSON.parse(eventBody));
+    await request(app).post(`${BASE}/webhook/stripe`)
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', sigHeader)
+      .send(eventBody);
     // 第二次
     const whRes2 = await request(app)
       .post(`${BASE}/webhook/stripe`)
+      .set('Content-Type', 'application/json')
       .set('stripe-signature', sigHeader)
-      .send(JSON.parse(eventBody));
+      .send(eventBody);
     expect(whRes2.body.idempotent).toBe(true);
 
     // 应只有一个 processed 事件（eventId 唯一索引，重复回调不重复记录）
@@ -191,15 +196,17 @@ describe('E2E-3: Webhook 畸形容错', () => {
   it('缺少签名 → 200，不激活', async () => {
     const res = await request(app)
       .post(`${BASE}/webhook/stripe`)
-      .send({ type: 'payment_intent.succeeded' });
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ type: 'payment_intent.succeeded' }));
     expect(res.status).toBe(200);
   });
 
   it('无效签名 → 200，不激活', async () => {
     const res = await request(app)
       .post(`${BASE}/webhook/stripe`)
+      .set('Content-Type', 'application/json')
       .set('stripe-signature', 't=1000,v1=deadbeef')
-      .send({ type: 'payment_intent.succeeded' });
+      .send(JSON.stringify({ type: 'payment_intent.succeeded' }));
     expect(res.status).toBe(200);
   });
 
@@ -214,8 +221,9 @@ describe('E2E-3: Webhook 畸形容错', () => {
 
     const res = await request(app)
       .post(`${BASE}/webhook/stripe`)
+      .set('Content-Type', 'application/json')
       .set('stripe-signature', `t=${ts},v1=${sig}`)
-      .send(JSON.parse(eventBody));
+      .send(eventBody);
     expect(res.status).toBe(200);
 
     const { WebhookEvent } = require('../models/WebhookEvent');
@@ -243,8 +251,9 @@ describe('E2E-3: Webhook 畸形容错', () => {
 
     const res = await request(app)
       .post(`${BASE}/webhook/stripe`)
+      .set('Content-Type', 'application/json')
       .set('stripe-signature', `t=${ts},v1=${sig}`)
-      .send(JSON.parse(eventBody));
+      .send(eventBody);
     expect(res.status).toBe(200);
     expect(res.body.alreadyPaid).toBe(true);
   });
@@ -275,8 +284,9 @@ describe('E2E-4: 重放攻击防护', () => {
 
     const res = await request(app)
       .post(`${BASE}/webhook/stripe`)
+      .set('Content-Type', 'application/json')
       .set('stripe-signature', `t=${oldTs},v1=${sig}`)
-      .send(JSON.parse(eventBody));
+      .send(eventBody);
     expect(res.status).toBe(200);
 
     // 验证 skipped 事件记录了重放原因

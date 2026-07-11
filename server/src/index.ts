@@ -54,6 +54,11 @@ const PORT = process.env.PORT || 3000;
 app.use(cors(buildCorsOptions(process.env.CLIENT_URL)));
 app.use(helmet(buildHelmetOptions(process.env.NODE_ENV)));
 app.use(compression());
+
+// ⚠️ Webhook 路由必须获取原始请求体做 HMAC 验签，放在 express.json() 之前
+// 支付网关（Stripe/微信）签名是对原始字节流计算的，JSON 二次序列化会破坏签名
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));

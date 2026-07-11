@@ -265,13 +265,31 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
   try {
     const provider = req.params.provider as PaymentProvider;
     const gateway = getPaymentGateway(provider);
-    const signature = (req.headers['stripe-signature'] as string) || (req.headers['x-wechat-signature'] as string) || '';
-    const rawBody = JSON.stringify(req.body);
+
+    // 获取原始请求体（express.raw() 中间件下 req.body 为 Buffer）
+    const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body);
+
+    // Stripe 签名头 vs 微信签名头（微信 v3 使用标准 wechatpay-* 头）
+    const signature = (req.headers['stripe-signature'] as string)
+      || (req.headers['wechatpay-signature'] as string)
+      || (req.headers['x-wechat-signature'] as string)
+      || '';
 
     // ========== 1. 验签（防伪造回调） ==========
-    const result = await gateway.verifyWebhook(rawBody, signature);
+    const wechatHeaders = provider === 'wechat' ? {
+      wechatTimestamp: (req.headers['wechatpay-timestamp'] as string) || '',
+      wechatNonce: (req.headers['wechatpay-nonce'] as string) || '',
+      wechatSerial: (req.headers['wechatpay-serial'] as string) || '',
+    } : undefined;
+
+    const result = await gateway.verifyWebhook(rawBody, signature, wechatHeaders);
     if (!result || !result.success) {
-      logger.warn('webhook', `验签失败或非成功事件: provider=${provider}`);
+      // 区分验签失败与非成功事件（如 payment_failed）
+      if (result && result.eventType) {
+        logger.info('webhook', `非成功事件: provider=${provider} eventType=${result.eventType} orderNo=${result.orderNo}`);
+      } else {
+        logger.warn('webhook', `验签失败: provider=${provider}`);
+      }
       // 永远返回 200，避免支付网关认为回调失败而重试
       return res.status(200).json({ received: true });
     }
@@ -287,23 +305,26 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
     }
 
     // ========== 4. 重放攻击防护：验签时间戳有效期 5 分钟 ==========
+    let sigTime = 0;
     if (provider === 'stripe') {
       const tsMatch = signature.match(/\bt=(\d+)\b/);
-      const sigTime = tsMatch ? Number(tsMatch[1]) : 0;
-      const now = Math.floor(Date.now() / 1000);
-      if (sigTime && Math.abs(now - sigTime) > 300) {
-        logger.warn('webhook', `重放攻击风险: provider=stripe sigTime=${sigTime} now=${now} diff=${Math.abs(now - sigTime)}s`);
-        await WebhookEvent.create({
-          eventId,
-          provider: provider as 'wechat' | 'stripe',
-          orderNo: result.orderNo,
-          transactionId: result.transactionId,
-          status: 'skipped',
-          errorMessage: `重放攻击防护: 签名时间差 ${Math.abs(now - sigTime)}s > 300s`,
-          rawSummary: rawBody.slice(0, 512),
-        });
-        return res.status(200).json({ received: true });
-      }
+      sigTime = tsMatch ? Number(tsMatch[1]) : 0;
+    } else if (provider === 'wechat' && wechatHeaders?.wechatTimestamp) {
+      sigTime = Number(wechatHeaders.wechatTimestamp);
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (sigTime && Math.abs(nowSec - sigTime) > 300) {
+      logger.warn('webhook', `重放攻击风险: provider=${provider} sigTime=${sigTime} now=${nowSec} diff=${Math.abs(nowSec - sigTime)}s`);
+      await WebhookEvent.create({
+        eventId,
+        provider: provider as 'wechat' | 'stripe',
+        orderNo: result.orderNo,
+        transactionId: result.transactionId,
+        status: 'skipped',
+        errorMessage: `重放攻击防护: 签名时间差 ${Math.abs(nowSec - sigTime)}s > 300s`,
+        rawSummary: rawBody.slice(0, 512),
+      });
+      return res.status(200).json({ received: true });
     }
 
     // ========== 5. 查询订单并激活订阅 ==========
