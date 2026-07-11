@@ -2,13 +2,14 @@ import { Router, Request, Response } from 'express';
 import { createAIClient, aiModelManager } from '../config/ai-models';
 import { aiAgentService } from '../services/ai-agent';
 import { AuthRequest, optionalAuth, requireAuth } from '../middleware/auth';
-import { enforceQuota, quotaIncrement } from '../middleware/subscription';
+import { enforceQuota, quotaIncrement, enforceCostValve, quotaCostRecord } from '../middleware/subscription';
+import { estimateCostFen } from '../services/cost-control.service';
 import { sendError } from '../lib/http-error';
 
 const router = Router();
 
 // 聊天接口（使用 Agent 服务）
-router.post('/chat', optionalAuth, enforceQuota('ai_chat'), async (req: AuthRequest, res: Response) => {
+router.post('/chat', optionalAuth, enforceCostValve(), enforceQuota('ai_chat'), async (req: AuthRequest, res: Response) => {
   try {
     const { message, sessionId, config, model, provider } = req.body;
 
@@ -29,9 +30,12 @@ router.post('/chat', optionalAuth, enforceQuota('ai_chat'), async (req: AuthRequ
       provider: provider || undefined,
     });
 
-    // 登录用户累加用量
+    // 登录用户：累加用量 + 记录 AI 成本（驱动成本预警阀门）
     if (req.user?.id) {
       await quotaIncrement(req.user.id, 'ai_chat');
+      const usage = (result as any)?.usage || {};
+      const costFen = estimateCostFen(Number(usage.prompt_tokens) || 0, Number(usage.completion_tokens) || 0);
+      await quotaCostRecord(req.user.id, costFen);
     }
 
     res.json({

@@ -6,6 +6,8 @@ export interface IUser extends Document {
   password: string;
   name: string;
   avatar?: string;
+  phone?: string;
+  wechatOpenid?: string;
   role: 'user' | 'admin';
   provider: string;
   providerId?: string;
@@ -53,6 +55,18 @@ const userSchema = new Schema<IUser>(
     },
     providerId: {
       type: String,
+      default: null,
+    },
+    phone: {
+      type: String,
+      unique: true,
+      sparse: true, // 允许为空，但非空时唯一
+      trim: true,
+    },
+    wechatOpenid: {
+      type: String,
+      unique: true,
+      sparse: true,
       default: null,
     },
     // 商业变现字段

@@ -19,6 +19,8 @@ export type FieldRule = {
   isEmail?: boolean;
   /** 字符串必须为合法 MongoDB ObjectId（24 位十六进制） */
   isObjectId?: boolean;
+  /** 字符串必须匹配的正则（字符串类型时生效） */
+  pattern?: string;
   /** 只能取这些值之一 */
   oneOf?: readonly string[];
 };
@@ -60,6 +62,7 @@ function checkField(value: unknown, rule: FieldRule, path: string): string | nul
       if (typeof value !== 'string') return `${path} 必须为字符串`;
       if (rule.isEmail && !isEmail(value)) return `${path} 邮箱格式不正确`;
       if (rule.isObjectId && !isObjectId(value)) return `${path} 不是合法的 ID`;
+      if (rule.pattern && !new RegExp(rule.pattern).test(value)) return `${path} 格式不正确`;
       if (rule.minLength !== undefined && value.trim().length < rule.minLength)
         return `${path} 长度至少 ${rule.minLength} 个字符`;
       if (rule.maxLength !== undefined && value.length > rule.maxLength)

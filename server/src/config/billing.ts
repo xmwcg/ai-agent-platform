@@ -73,8 +73,8 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'pro',
     name: '专业版',
     tagline: '高频创作者与团队首选',
-    priceMonthly: 3900,
-    priceYearly: 39000,
+    priceMonthly: 2900,
+    priceYearly: 29000,
     credits: 500,
     features: [
       '每日 500 条 AI 对话',
@@ -153,3 +153,40 @@ export function getPlan(id: PlanId): Plan {
 }
 
 export const DEFAULT_PLAN: PlanId = 'free';
+
+/* ============================================================
+ * 按次积分成本（成本转嫁层，避免垫付被击穿）
+ * ------------------------------------------------------------
+ * 聊天/RAG 等低成本资源包在订阅里（方案A 垫付，靠日配额锁成本）；
+ * 文生图/视频/开放API 等"重成本资源"必须按次从积分扣（用户实付成本+加价），
+ * 绝不能包在订阅里白送，否则媒体生成会击穿毛利。
+ * 价格为「分」，按预估厂商成本 + 毛利加价设定。
+ * ============================================================ */
+export type PayPerUseResource = 'media_image' | 'media_video' | 'media_image2video' | 'api_chat';
+
+export const PER_USE_COST: Record<PayPerUseResource, number> = {
+  media_image: 20,        // 文生图：约 ¥0.2/次（成本+加价）
+  media_video: 200,       // 文生视频：约 ¥2/次
+  media_image2video: 200, // 图生视频：约 ¥2/次
+  api_chat: 10,           // 开放API聊天：约 ¥0.1/次
+};
+
+/** 方案B（BYOK）强制场景：这些资源在旗舰/企业版下优先走用户自带 key，平台零边际成本 */
+export const BYOK_PREFERRED_RESOURCES: PayPerUseResource[] = ['media_video', 'media_image2video', 'api_chat'];
+
+/* ============================================================
+ * 单用户「日 AI 成本预算」（fen）——低成本变现的成本阀门
+ * ------------------------------------------------------------
+ * 是垫付模式（方案A）的第二道闸门（第一道是日配额上限）。
+ * 估算逻辑：聊天约 ¥1.5/百万 token 混合成本，单条对话≈1500 token≈0.00225 元≈0.225 分。
+ * 预算按"典型重度使用"而非"用满配额"设定，逼近即告警、超限即限流。
+ * ============================================================ */
+export const PLAN_AI_BUDGET_FEN: Record<PlanId, number> = {
+  free: 50,    // 约 220 条对话/日的成本上限
+  pro: 500,    // 约 2200 条/日
+  max: -1,     // 旗舰无限（但仍受日配额闸门约束）
+};
+
+/** 成本预警阈值：当日成本达到预算的该比例时触发通知告警 */
+export const COST_WARN_RATIO = 0.7;
+

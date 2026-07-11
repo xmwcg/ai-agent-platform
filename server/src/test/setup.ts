@@ -10,15 +10,21 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-do-not-use-in-pr
 process.env.NODE_ENV = 'test';
 process.env.ENABLE_MOCK_MODE = 'true';
 
-// 内存版 ioredis 桩（get/set/incrby/expire 全部 no-op）
+// 内存版 ioredis 桩（真实持久化，支持 get/set/incrby/expire/del，按 key 留存）
+const __store = new Map<string, string>();
 const memoryRedis = {
-  get: jest.fn().mockResolvedValue(null),
-  set: jest.fn().mockResolvedValue('OK'),
-  incrby: jest.fn().mockResolvedValue(1),
-  expire: jest.fn().mockResolvedValue(1),
-  del: jest.fn().mockResolvedValue(1),
+  get: jest.fn((k: string) => Promise.resolve(__store.has(k) ? (__store.get(k) as string) : null)),
+  set: jest.fn((k: string, v: any) => { __store.set(k, String(v)); return Promise.resolve('OK'); }),
+  incrby: jest.fn((k: string, by: number) => {
+    const cur = Number(__store.get(k) || '0');
+    const next = cur + Number(by);
+    __store.set(k, String(next));
+    return Promise.resolve(next);
+  }),
+  expire: jest.fn(() => Promise.resolve(1)),
+  del: jest.fn((k: string) => { __store.delete(k); return Promise.resolve(1); }),
   on: jest.fn(),
-  quit: jest.fn().mockResolvedValue('OK'),
+  quit: jest.fn(() => Promise.resolve('OK')),
 };
 jest.mock('ioredis', () => {
   return {
