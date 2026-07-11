@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   Card, Typography, Button, Space, Tag, Progress, Table, message,
-  Row, Col, Modal, Avatar, Spin, Tabs, Form, Input, QRCode, Statistic,
-  List, Divider, Badge, Tooltip,
+  Row, Col, Modal, Avatar, Spin, Tabs, Form, Input, Select, Switch,
+  QRCode, Statistic, List, Divider, Badge, Tooltip,
 } from 'antd';
 import {
   UserOutlined, CrownOutlined, CreditCardOutlined, HistoryOutlined,
