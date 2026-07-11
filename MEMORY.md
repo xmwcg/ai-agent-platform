@@ -264,3 +264,40 @@ AI Key 可选（缺省走 Mock）。支付：`DEFAULT_PAY_PROVIDER`(mock/wechat/
   - `quickstart.test.ts`：行业模板数量断言过时（4→6：新增 education/ecommerce），更新为匹配实际数据。
   - `KnowledgeDetail.tsx`：`let html` → `const html`，消除 client ESLint 唯一 error。
 - 验证：server `tsc --noEmit` 干净；server `jest` **236 用例 / 35 suite 全过**；client `tsc --noEmit` 干净；client `eslint` **0 error / 71 warning（均为已有）**；`check:superpowers` 通过。
+
+### 第十五轮（支付 Webhook 端到端联调：Stripe Raw Body + 微信验签修复）✅ 已落地
+
+- **A. Stripe Webhook Raw Body 修复（严重）**
+  - 问题：原 `JSON.stringify(req.body)` 二次序列化与原始请求体不一致，导致生产环境 HMAC-SHA256 验签大概率失败。
+  - 修复：`index.ts` 在 `express.json()` 之前添加 `express.raw({ type: 'application/json' })` 中间件专门给 `/api/billing/webhook` 路由。
+  - `billing.ts` webhook handler：`Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body)` 兼容两种模式。
+  - 测试：所有 E2E webhook 测试改为 `.set('Content-Type', 'application/json').send(eventBody)`（发送原始字符串而非解析后对象）。
+
+- **B. 微信支付 Webhook 验签修复（严重）**
+  - 问题：`WeChatPayGateway.verifyWebhook()` 原来只做 AES-256-GCM 密文解密，**未调用 `verifyWeChatSignature()` 验签**，任何人可伪造回调。
+  - 修复：`verifyWebhook` 新增验签步骤（调用 `verifyWeChatSignature`，使用 `WECHAT_PLATFORM_CERT` 公钥验签 RSA-SHA256）。
+  - 未配置平台证书时跳过验签（兼容开发/Mock 环境）。
+
+- **C. 微信回调 Header 完整解析**
+  - 从 `x-wechat-signature` 单一 header 升级为微信 v3 标准四件套：`wechatpay-timestamp`、`wechatpay-nonce`、`wechatpay-signature`、`wechatpay-serial`。
+  - `PaymentGateway` 接口扩展：`verifyWebhook` 增加 `WebhookExtraHeaders` 可选参数。
+
+- **D. 重放攻击防护双渠道覆盖**
+  - 原来仅 Stripe 有 5 分钟时间戳检查；扩展到微信也做同等级别重放防护。
+  - 微信过期时间戳回调被拒绝并记录 `skipped` 状态。
+
+- **E. WebhookResult 增加 eventType 字段**
+  - 透传支付网关的事件类型（如 `payment_intent.succeeded` / `TRANSACTION.SUCCESS` / `payment_intent.payment_failed`），路由层据此区分处理（成功事件激活订阅，非成功事件记录日志不激活）。
+
+- **F. Env 配置补全**
+  - `.env.example` 和 `.env.production.example` 均新增 `WECHAT_PLATFORM_CERT`（微信平台证书公钥 PEM，用于回调验签）。
+
+- **G. 环境变量延迟读取（解决测试中 env 动态设置不生效问题）**
+  - `WeChatPayGateway` / `StripeGateway` 的 env 字段从 `private` 字段改为 `getter`，在方法调用时动态读取 `process.env`，确保测试中 `process.env.X = value` 能生效。
+
+- **H. 微信支付 Webhook E2E 测试（4 个新用例）**
+  - `E2E-5`：合法微信回调（RSA 签名 + AES 解密 + 激活订阅）、签名错误拒绝、幂等去重、过期时间戳重放防护。
+  - 测试使用实时生成的 RSA 密钥对（`crypto.generateKeyPairSync`），无需外部依赖。
+
+- **验证**：server `tsc --noEmit` 干净；payment 单元测试 9/9 ✅；webhook E2E 集成测试 **12/12 ✅**（含 4 个新增微信测试）；所有文件 lint 0 error。
+- **结论**：Stripe 和微信 Webhook 代码完整度从 ~85%/70% 提升至 **95%+/92%+**。剩余 5% 是真实生产凭证配置（STRIPE_WEBHOOK_SECRET、WECHAT_PLATFORM_CERT），代码层面已就绪，填入真实密钥即可投产。

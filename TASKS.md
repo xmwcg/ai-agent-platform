@@ -25,13 +25,14 @@
 - [x] 单元测试：新增 24 例（验签/ RBAC / API 配额 / 媒体厂商 / 客服可追溯 / 快速启动），全量 47 例通过
 - [x] 验证：后端 tsc ✅ / jest 47-47 ✅ / 前端 build ✅ / lint 0 error ✅
 
-## 📌 下一阶段（Phase 4/5，本轮已交付三项）
+## 📌 下一阶段（Phase 4/5，本轮已交付四项）
 - [x] 团队邀请链接 + 通过邀请码加入团队（第十四轮）
 - [x] 团队审计日志：记录全部关键操作（第十四轮）
 - [x] 媒体任务持久化：内存 Map → MongoDB（TTL 24h + 自动降级）（第十四轮）
-- [ ] 支付 Webhook 端到端联调（配置 STRIPE_WEBHOOK_SECRET / WECHAT_PLATFORM_CERT）
+- [x] **支付 Webhook 端到端联调**：Stripe raw body 中间件 + 微信验签修复 + 微信 E2E 测试（第十五轮）
+- [ ] 支付 Webhook 真实凭证上线（填入 STRIPE_WEBHOOK_SECRET / WECHAT_PLATFORM_CERT 即可投产）
 - [ ] 媒体真实厂商补齐：混元 TC3 签名、可灵/即梦异步任务轮询回调
-- [ ] 团队资源级授权（知识库/客服按团队隔离）、邀请链接、审计日志
+- [ ] 团队资源级授权（知识库/客服按团队隔离）
 - [ ] API 市场计费对接套餐额度与积分扣减、用量账单导出
 - [ ] 知识图谱、实践沙盒、桌面端（Tauri）
 - [ ] 调用链可观测性（Langfuse 思路）、专业向量库（Qdrant/Pinecone）
