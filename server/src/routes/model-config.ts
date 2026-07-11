@@ -5,6 +5,7 @@ import { enforceQuota, quotaIncrement } from '../middleware/subscription';
 import { aiModelManager } from '../config/ai-models';
 import { reloadCustomProviders } from '../gateway/ai-gateway.service';
 import { sendError } from '../lib/http-error';
+import { encryptSecret, decryptSecret } from '../lib/crypto';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
       return {
         ...rest,
         hasApiKey: !!key,
-        apiKeyMask: key ? `****${key.slice(-4)}` : '',
+        apiKeyMask: key ? '****' : '',
       };
     });
     res.json({ success: true, data: masked });
@@ -58,12 +59,13 @@ router.post('/', requireAuth, enforceQuota('model_config'), async (req: AuthRequ
       name,
       provider,
       baseURL,
-      apiKey,
       models: models || [defaultModel],
       defaultModel,
       description,
       createdBy: req.user!.id,
       isDefault: false,
+      // 安全：apiKey 加密落库，避免数据库泄露导致明文 key 暴露
+      apiKey: encryptSecret(apiKey),
     });
     await quotaIncrement(req.user!.id, 'model_config');
     void syncGateway();
@@ -86,7 +88,8 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     // apiKey 只有在传入真实新值（非空、非掩码）时才覆盖，避免前端回填掩码把 key 洗掉
     const nextKey = req.body?.apiKey;
     if (typeof nextKey === 'string' && nextKey.trim() && !nextKey.includes('****')) {
-      update.apiKey = nextKey.trim();
+      // 安全：写入前加密
+      update.apiKey = encryptSecret(nextKey.trim());
     }
     const cfg = await ModelConfig.findOneAndUpdate(
       { _id: req.params.id, createdBy: req.user!.id },
@@ -135,10 +138,12 @@ router.post('/:id/test', requireAuth, async (req: AuthRequest, res: Response) =>
     if (!cfg) return res.status(404).json({ success: false, error: '配置不存在' });
     // 允许前端在「测试连接」时指定具体模型（复用统一选择器的值）
     const targetModel: string = req.body?.model || cfg.defaultModel;
-    if (!cfg.apiKey || !cfg.baseURL) {
+    // 安全：apiKey 密文落库，使用前解密
+    const apiKey = decryptSecret(cfg.apiKey || '');
+    if (!apiKey || !cfg.baseURL) {
       return res.json({ success: true, data: { connected: false, provider: cfg.provider, model: targetModel, error: '缺少 apiKey 或 baseURL' } });
     }
-    const client = new (require('openai')).default({ apiKey: cfg.apiKey, baseURL: cfg.baseURL });
+    const client = new (require('openai')).default({ apiKey, baseURL: cfg.baseURL });
     // 指定模型时直接做最小对话校验（最精确，能验证该模型可达）；否则先试 models.list
     if (targetModel && targetModel !== cfg.defaultModel) {
       try {

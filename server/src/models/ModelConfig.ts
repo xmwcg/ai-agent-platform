@@ -5,7 +5,7 @@ export interface IModelConfig extends Document {
   name: string;                 // 配置显示名，如「我的 DeepSeek」
   provider: string;             // openai / anthropic / deepseek / hunyuan / custom / qwen / zhipu ...
   baseURL: string;              // API 基础地址
-  apiKey: string;               // 密钥（加密存储由上层负责，这里明文落库演示）
+  apiKey: string;               // 密钥（AES-256-GCM 加密落库，由 lib/crypto 处理，DB 中仅存密文）
   models: string[];             // 可用模型列表
   defaultModel: string;         // 默认模型
   enabled: boolean;             // 是否启用

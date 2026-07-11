@@ -234,6 +234,7 @@ let PROVIDERS = buildProviders();
  * 会被加载为独立 provider，前缀为 `mc_<configId>`，聊天路由据此寻址。
  */
 import { ModelConfig } from '../models/ModelConfig';
+import { decryptSecret } from '../lib/crypto';
 
 let CUSTOM_PROVIDERS: GatewayProvider[] = [];
 
@@ -253,11 +254,13 @@ export async function reloadCustomProviders(injected?: any[]): Promise<void> {
   CUSTOM_PROVIDERS = (cfgs || []).map((c: any) => {
     const id = String(c._id);
     const prefix = `mc_${id}`;
+    // 安全：apiKey 密文落库，加载到网关时解密为明文使用
+    const apiKey = decryptSecret(c.apiKey || '');
     return new OpenAICompatibleProvider(
       prefix as GatewayProviderName,
       c.name || `自定义(${c.provider})`,
       c.baseURL,
-      c.apiKey,
+      apiKey,
       prefix,
       c.models || [c.defaultModel]
     );
