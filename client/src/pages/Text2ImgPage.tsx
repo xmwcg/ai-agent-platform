@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Card, Typography, Input, Button, Space, Spin, Empty,
-  Radio, Select, Slider, Badge, Tooltip, Divider, Alert
+  Radio, Select, Slider, Badge, Tooltip, Divider, Alert, Switch
 } from 'antd';
 import {
   PictureOutlined, ThunderboltOutlined, DownloadOutlined,
-  ReloadOutlined, EyeOutlined
+  ReloadOutlined, EyeOutlined, KeyOutlined
 } from '@ant-design/icons';
-import apiClient, { extractApiError } from '@/services/api';
+import apiClient, { extractApiError, byokAPI } from '@/services/api';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -43,6 +43,9 @@ export default function Text2ImgPage() {
   const [progress, setProgress] = useState('');
   /** 匿名用户当日剩余真实生成次数（undefined=已登录或无限制提示） */
   const [anonLeft, setAnonLeft] = useState<number | undefined>(undefined);
+  /** BYOK：用户是否有可用的自带 Key（优先使用，平台零垫付） */
+  const [byokAvailable, setByokAvailable] = useState(false);
+  const [useByok, setUseByok] = useState(true);
 
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStart = useRef<number>(0);
@@ -72,6 +75,12 @@ export default function Text2ImgPage() {
   // 进入页面加载历史（真实持久化）
   useEffect(() => {
     loadHistory();
+    // 检查 BYOK 可用性
+    byokAPI.list().then((res: any) => {
+      if (Array.isArray(res?.data) && res.data.some((k: any) => k.enabled)) {
+        setByokAvailable(true);
+      }
+    }).catch(() => {});
   }, []);
 
   const loadHistory = async () => {
@@ -98,7 +107,9 @@ export default function Text2ImgPage() {
         negativePrompt: negativePrompt || undefined,
         size,
         n: count,
-        style
+        style,
+        // BYOK：useByok=false 强制走平台额度，未配置或 useByok=true 自动优先 BYOK
+        ...(byokAvailable ? { useByok } : {}),
       });
       const taskId: string | undefined = res?.data?.taskId;
       if (!taskId) throw new Error('未返回任务 ID');
@@ -245,6 +256,26 @@ export default function Text2ImgPage() {
                 {anonLeft > 0
                   ? `游客模式：今日还可真实生成 ${anonLeft} 次，超出后将自动切换为演示模式（不消耗算力）`
                   : '今日真实生成次数已用尽，本次将使用演示模式（不消耗算力）。登录可解锁完整额度。'}
+              </div>
+            )}
+            {byokAvailable && (
+              <div style={{
+                marginBottom: 12, padding: '8px 12px',
+                background: useByok ? '#f6ffed' : '#fffbe6',
+                border: `1px solid ${useByok ? '#b7eb8f' : '#ffe58f'}`,
+                borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8
+              }}>
+                <KeyOutlined style={{ color: useByok ? '#52c41a' : '#faad14' }} />
+                <Text style={{ fontSize: 12, flex: 1, color: useByok ? '#389e0d' : '#ad6800' }}>
+                  {useByok ? '使用自带 Key（平台零垫付，不消耗配额）' : '走平台额度（消耗配额/垫付成本）'}
+                </Text>
+                <Switch
+                  size="small"
+                  checked={useByok}
+                  onChange={setUseByok}
+                  checkedChildren="BYOK"
+                  unCheckedChildren="平台"
+                />
               </div>
             )}
             <Button

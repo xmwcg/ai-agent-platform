@@ -10,9 +10,10 @@ import {
   QrcodeOutlined, TeamOutlined, WalletOutlined, MobileOutlined,
   MailOutlined, WechatOutlined, CalendarOutlined, TrophyOutlined,
   SendOutlined, DollarOutlined, ExportOutlined,
+  KeyOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { billingAPI, profileAPI, marketplaceAPI, extractApiError } from '@/services/api';
+import { billingAPI, profileAPI, marketplaceAPI, byokAPI, extractApiError, MediaByokKey } from '@/services/api';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -45,6 +46,12 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [signChecked, setSignChecked] = useState(false);
   const [shareModal, setShareModal] = useState(false);
+  // BYOK 媒体 Key 管理
+  const [byokKeys, setByokKeys] = useState<MediaByokKey[]>([]);
+  const [byokLoading, setByokLoading] = useState(false);
+  const [byokModal, setByokModal] = useState(false);
+  const [byokForm, setByokForm] = useState({ provider: 'hunyuan' as string, secretId: '', secretKey: '', enabled: true });
+  const [byokSaving, setByokSaving] = useState(false);
   const dailyPoints = 10;
   const totalPoints = 1850;
 
@@ -57,6 +64,58 @@ export default function ProfilePage() {
       if (s?.data) setSub(s.data);
     }).finally(() => setLoading(false));
   }, []);
+
+  const loadByokKeys = async () => {
+    setByokLoading(true);
+    try {
+      const res: any = await byokAPI.list();
+      if (res?.data) setByokKeys(res.data);
+    } catch { /* 未登录静默 */ }
+    setByokLoading(false);
+  };
+
+  useEffect(() => { loadByokKeys(); }, []);
+
+  const handleSaveByok = async () => {
+    if (!byokForm.secretKey.trim()) { message.warning('请输入 Secret Key / API Token'); return; }
+    setByokSaving(true);
+    try {
+      await byokAPI.upsert({
+        provider: byokForm.provider,
+        secretId: byokForm.secretId || undefined,
+        secretKey: byokForm.secretKey.trim(),
+        enabled: byokForm.enabled,
+      });
+      message.success('保存成功');
+      setByokModal(false);
+      loadByokKeys();
+    } catch (err) {
+      message.error(extractApiError(err, '保存失败'));
+    }
+    setByokSaving(false);
+  };
+
+  const handleDeleteByok = async (provider: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `删除 ${provider} 的 API Key 后，生成将回落至平台垫付。`,
+      okText: '确认删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await byokAPI.remove(provider);
+          message.success('已删除');
+          loadByokKeys();
+        } catch (err) {
+          message.error(extractApiError(err, '删除失败'));
+        }
+      },
+    });
+  };
+
+  const providerName = (p: string) =>
+    ({ hunyuan: '腾讯混元', keling: '可灵 Kling', jimeng: '即梦 Jimeng' } as Record<string, string>)[p] || p;
 
   const handleSignIn = () => {
     if (signChecked) { message.info('今日已签到'); return; }
@@ -245,6 +304,127 @@ export default function ProfilePage() {
               </Space>
             </Col>
           </Row>
+        </Card>
+      ),
+    },
+    {
+      key: 'byok', label: <span><KeyOutlined /> 媒体 API Key</span>,
+      children: (
+        <Card>
+          <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            配置你在厂商获取的 API Key，生成时优先使用自带密钥（平台零垫付、不消耗配额）。
+            支持的厂商：腾讯混元、可灵 Kling、即梦 Jimeng。
+          </Paragraph>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setByokForm({ provider: 'hunyuan', secretId: '', secretKey: '', enabled: true });
+              setByokModal(true);
+            }}
+            style={{ marginBottom: 16 }}
+          >
+            添加 API Key
+          </Button>
+          {byokLoading ? (
+            <Spin />
+          ) : byokKeys.length === 0 ? (
+            <Paragraph type="secondary">暂无配置的 API Key，点击上方按钮添加。</Paragraph>
+          ) : (
+            byokKeys.map((k) => (
+              <Card
+                key={k.provider}
+                size="small"
+                style={{ marginBottom: 12 }}
+                extra={
+                  <Space>
+                    <Tag color={k.enabled ? 'green' : 'default'}>{k.enabled ? '已启用' : '已停用'}</Tag>
+                    <Button
+                      size="small"
+                      icon={<PlusOutlined style={{ transform: 'rotate(45deg)' }} />}
+                      onClick={() => {
+                        setByokForm({ provider: k.provider, secretId: '', secretKey: '', enabled: k.enabled });
+                        setByokModal(true);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteByok(k.provider)}>
+                      删除
+                    </Button>
+                  </Space>
+                }
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Avatar size={32} style={{ background: '#1677ff' }}>{providerName(k.provider).charAt(0)}</Avatar>
+                  <div>
+                    <Text strong>{providerName(k.provider)}</Text>
+                    <br />
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {k.secretIdMask ? `SecretId: ${k.secretIdMask} | ` : ''}SecretKey: {k.secretKeyMask}
+                    </Text>
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+
+          {/* BYOK 添加/编辑弹窗 */}
+          <Modal
+            title="配置厂商 API Key"
+            open={byokModal}
+            onOk={handleSaveByok}
+            onCancel={() => setByokModal(false)}
+            confirmLoading={byokSaving}
+            okText="保存"
+            cancelText="取消"
+            destroyOnClose
+          >
+            <Form layout="vertical">
+              <Form.Item label="厂商" required>
+                <Select
+                  value={byokForm.provider}
+                  onChange={(v) => setByokForm((f) => ({ ...f, provider: v }))}
+                  options={[
+                    { label: '腾讯混元 (Hunyuan)', value: 'hunyuan' },
+                    { label: '可灵 Kling', value: 'keling' },
+                    { label: '即梦 Jimeng', value: 'jimeng' },
+                  ]}
+                />
+              </Form.Item>
+              {byokForm.provider === 'hunyuan' && (
+                <Form.Item
+                  label="Secret ID"
+                  tooltip="腾讯云 API 密钥 SecretId（可灵/即梦无需填写）"
+                >
+                  <Input
+                    value={byokForm.secretId}
+                    onChange={(e) => setByokForm((f) => ({ ...f, secretId: e.target.value }))}
+                    placeholder="AKID..."
+                  />
+                </Form.Item>
+              )}
+              <Form.Item
+                label={byokForm.provider === 'hunyuan' ? 'Secret Key' : 'API Token / Bearer Token'}
+                required
+                tooltip="此密钥将加密存储，明文不落库"
+              >
+                <Input.Password
+                  value={byokForm.secretKey}
+                  onChange={(e) => setByokForm((f) => ({ ...f, secretKey: e.target.value }))}
+                  placeholder={byokForm.provider === 'hunyuan' ? '输入 SecretKey...' : '输入 API Token...'}
+                />
+              </Form.Item>
+              <Form.Item label="启用状态">
+                <Switch
+                  checked={byokForm.enabled}
+                  onChange={(v) => setByokForm((f) => ({ ...f, enabled: v }))}
+                  checkedChildren="启用"
+                  unCheckedChildren="停用"
+                />
+              </Form.Item>
+            </Form>
+          </Modal>
         </Card>
       ),
     },

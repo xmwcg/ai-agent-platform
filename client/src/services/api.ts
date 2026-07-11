@@ -286,6 +286,24 @@ export const marketplaceAPI = {
   toggleCredits: (id: string) => apiClient.patch(`/marketplace/api-keys/${id}/toggle-credits`),
 };
 
+// 媒体生成 BYOK（用户自带 Key 管理）API
+export type MediaByokProvider = 'hunyuan' | 'keling' | 'jimeng';
+export interface MediaByokKey {
+  _id?: string;
+  provider: MediaByokProvider;
+  label: string;
+  secretIdMask?: string;
+  secretKeyMask: string;
+  enabled: boolean;
+  createdAt?: string;
+}
+export const byokAPI = {
+  list: () => apiClient.get('/media-keys'),
+  upsert: (data: { provider: string; secretId?: string; secretKey: string; enabled?: boolean }) =>
+    apiClient.post('/media-keys', data),
+  remove: (provider: string) => apiClient.delete(`/media-keys/${provider}`),
+};
+
 // 部署自检 / 健康看板 API
 export const diagnosticsAPI = {
   check: () => apiClient.get('/diagnostics'),
