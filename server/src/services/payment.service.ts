@@ -129,13 +129,14 @@ class MockGateway implements PaymentGateway {
 
 class WeChatPayGateway implements PaymentGateway {
   readonly name: PaymentProvider = 'wechat';
-  private mchId = process.env.WECHAT_MCH_ID || '';
-  private appId = process.env.WECHAT_APP_ID || '';
-  private apiKey = process.env.WECHAT_API_V3_KEY || '';
-  private serialNo = process.env.WECHAT_CERT_SERIAL || '';
-  private privateKey = process.env.WECHAT_PRIVATE_KEY || '';
+
+  private get mchId() { return process.env.WECHAT_MCH_ID || ''; }
+  private get appId() { return process.env.WECHAT_APP_ID || ''; }
+  private get apiKey() { return process.env.WECHAT_API_V3_KEY || ''; }
+  private get serialNo() { return process.env.WECHAT_CERT_SERIAL || ''; }
+  private get privateKey() { return process.env.WECHAT_PRIVATE_KEY || ''; }
   /** 微信平台证书公钥（PEM），用于回调验签 */
-  private platformCert = process.env.WECHAT_PLATFORM_CERT || '';
+  private get platformCert() { return process.env.WECHAT_PLATFORM_CERT || ''; }
 
   private ensureConfigured() {
     if (!this.mchId || !this.apiKey || !this.privateKey) {
@@ -241,7 +242,7 @@ class WeChatPayGateway implements PaymentGateway {
 
 class StripeGateway implements PaymentGateway {
   readonly name: PaymentProvider = 'stripe';
-  private secretKey = process.env.STRIPE_SECRET_KEY || '';
+  private get secretKey() { return process.env.STRIPE_SECRET_KEY || ''; }
 
   private ensureConfigured() {
     if (!this.secretKey) {
