@@ -91,12 +91,14 @@ export function aggregateGraph(
       tags,
     });
 
-    for (const tag of tags) {
-      if (!tag) continue;
-      links.push({ source: `doc:${docId}`, target: `tag:${tag}`, type: 'doc-tag', weight: 1 });
-      tagDocCount.set(tag, (tagDocCount.get(tag) || 0) + 1);
-      if (!tagToDocs.has(tag)) tagToDocs.set(tag, []);
-      tagToDocs.get(tag)!.push(docId);
+    if (includeTags) {
+      for (const tag of tags) {
+        if (!tag) continue;
+        links.push({ source: `doc:${docId}`, target: `tag:${tag}`, type: 'doc-tag', weight: 1 });
+        tagDocCount.set(tag, (tagDocCount.get(tag) || 0) + 1);
+        if (!tagToDocs.has(tag)) tagToDocs.set(tag, []);
+        tagToDocs.get(tag)!.push(docId);
+      }
     }
 
     if (includeCategories) {
