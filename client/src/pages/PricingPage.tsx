@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Card, Typography, Button, Tag, message, Modal, Divider, Segmented, Row, Col, Spin, Radio, Space, Result,
+  Card, Typography, Button, Tag, message, Modal, Divider, Segmented, Row, Col, Spin, Result,
 } from 'antd';
 import {
   CheckOutlined, CrownOutlined, ThunderboltOutlined, WalletOutlined,
-  WechatOutlined, AlipayCircleOutlined, LoadingOutlined,
+  WechatOutlined, LoadingOutlined,
 } from '@ant-design/icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { billingAPI, extractApiError } from '@/services/api';
@@ -44,8 +44,8 @@ export default function PricingPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<PlanFromServer | CreditsPackage | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'yearly'>('monthly');
-  // 支付方式与支付流程状态
-  const [payProvider, setPayProvider] = useState<'wechat' | 'alipay'>('wechat');
+  // 支付方式与支付流程状态（当前仅启用微信支付）
+  const [payProvider] = useState<'wechat'>('wechat');
   const [payStatus, setPayStatus] = useState<'confirm' | 'creating' | 'waiting' | 'success' | 'expired'>('confirm');
   const [qr, setQr] = useState<{ value: string; orderNo: string; itemName: string } | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -106,7 +106,6 @@ export default function PricingPage() {
     }
     setSelectedItem(item);
     setSelectedPeriod(period || 'monthly');
-    setPayProvider('wechat');
     setPayStatus('confirm');
     setQr(null);
     setConfirmOpen(true);
@@ -373,23 +372,11 @@ export default function PricingPage() {
             </Paragraph>
             <Paragraph><strong>价格：</strong>{getItemPrice(selectedItem)}</Paragraph>
             <Divider style={{ margin: '12px 0' }} />
-            <Paragraph style={{ marginBottom: 8 }}><strong>选择支付方式</strong></Paragraph>
-            <Radio.Group
-              value={payProvider}
-              onChange={(e) => setPayProvider(e.target.value)}
-              style={{ width: '100%' }}
-            >
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Radio value="wechat">
-                  <WechatOutlined style={{ color: '#09bb07', fontSize: 18, marginRight: 6 }} />
-                  微信支付（扫码）
-                </Radio>
-                <Radio value="alipay">
-                  <AlipayCircleOutlined style={{ color: '#1677ff', fontSize: 18, marginRight: 6 }} />
-                  支付宝（扫码）
-                </Radio>
-              </Space>
-            </Radio.Group>
+            <Paragraph style={{ marginBottom: 8 }}><strong>支付方式</strong></Paragraph>
+            <div style={{ padding: '8px 12px', border: '1px solid #d9f7be', borderRadius: 8, background: '#f6ffed' }}>
+              <WechatOutlined style={{ color: '#09bb07', fontSize: 18, marginRight: 6 }} />
+              微信支付（扫码）
+            </div>
             <div style={{ textAlign: 'right', marginTop: 24 }}>
               <Button onClick={closeModal} style={{ marginRight: 8 }}>返回</Button>
               <Button
@@ -408,7 +395,7 @@ export default function PricingPage() {
         {payStatus === 'waiting' && qr && (
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-              请使用{payProvider === 'wechat' ? '微信' : '支付宝'}扫描二维码完成支付
+              请使用微信扫描二维码完成支付
             </Paragraph>
             <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 12, border: '1px solid #eee' }}>
               <QRCodeSVG value={qr.value} size={200} level="M" includeMargin />
