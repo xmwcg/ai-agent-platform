@@ -37,7 +37,7 @@ export interface IUserSkill extends Document {
 
 const userSkillSchema = new Schema<IUserSkill>(
   {
-    skillId: { type: String, required: true, unique: true },
+    skillId: { type: String, required: true, index: true },
     owner: { type: String, required: true, index: true },
     name: { type: String, required: true },
     description: { type: String, default: '' },
@@ -58,5 +58,7 @@ const userSkillSchema = new Schema<IUserSkill>(
   },
   { timestamps: true }
 );
+
+userSkillSchema.index({ skillId: 1, owner: 1 }, { unique: true });
 
 export const UserSkill = mongoose.model<IUserSkill>('UserSkill', userSkillSchema);

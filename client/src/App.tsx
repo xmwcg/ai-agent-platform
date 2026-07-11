@@ -190,6 +190,11 @@ function App() {
         </Content>
         <Footer style={{ textAlign: 'center', color: '#94a3b8' }}>
           Reasonix AI Agent Platform ©2025 · 一站式 AI 学习 / 创作 / 生产力平台
+          <span style={{ marginLeft: 12 }}>
+            <a onClick={() => navigate('/terms')} style={{ color: '#94a3b8' }}>服务条款</a>
+            <span style={{ margin: '0 8px' }}>·</span>
+            <a onClick={() => navigate('/privacy')} style={{ color: '#94a3b8' }}>隐私政策</a>
+          </span>
         </Footer>
       </Layout>
     </Layout>
