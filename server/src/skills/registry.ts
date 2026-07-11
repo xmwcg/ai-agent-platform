@@ -14,6 +14,7 @@ import { translateSkill } from './defs/translate.skill';
 import { videoPipelineSkill } from './defs/video-pipeline.skill';
 import { skillAuthoringSkill } from './defs/skill-authoring.skill';
 import { summarizeSkill } from './defs/summarize.skill';
+import { xhsExpertSkills } from './defs/xhs-experts.skill';
 
 const SKILLS: Skill[] = [
   knowledgeSkill,
@@ -25,6 +26,7 @@ const SKILLS: Skill[] = [
   videoPipelineSkill,
   skillAuthoringSkill,
   summarizeSkill,
+  ...xhsExpertSkills,
 ];
 
 const byId = new Map<string, Skill>(SKILLS.map((s) => [s.manifest.id, s]));
