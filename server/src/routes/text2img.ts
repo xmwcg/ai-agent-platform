@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { mediaGenService } from '../services/media-gen.service';
+import { listMediaProviders } from '../services/media-gen.service';
 import { MediaTask } from '../models/MediaTask';
 import { storeImage, isHttpUrl, getObjectStorage } from '../lib/object-storage';
 import { optionalAuth } from '../middleware/auth';
@@ -320,6 +321,20 @@ router.get('/history', optionalAuth, async (req: Request, res: Response) => {
 router.get('/storage-info', optionalAuth, async (_req: Request, res: Response) => {
   const storage = getObjectStorage();
   res.json({ success: true, data: { storage: storage.name, configured: storage.isConfigured() } });
+});
+
+/** 诊断：各媒体生成厂商配置状态（便于排查 Key 缺失） */
+router.get('/providers', optionalAuth, async (_req: Request, res: Response) => {
+  const providers = listMediaProviders();
+  const configured = providers.filter(p => p.configured).map(p => p.name);
+  res.json({
+    success: true,
+    data: {
+      providers,
+      summary: configured.length ? `已配置厂商: ${configured.join(', ')}` : '无厂商配置，自动回退 Mock 模式',
+      mockFallback: configured.length === 0,
+    },
+  });
 });
 
 export default router;

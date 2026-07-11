@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import {
   CheckOutlined, CrownOutlined, ThunderboltOutlined, WalletOutlined,
-  WechatOutlined, LoadingOutlined,
+  WechatOutlined, AlipayOutlined, LoadingOutlined, CreditCardOutlined,
 } from '@ant-design/icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { billingAPI, extractApiError } from '@/services/api';
@@ -44,8 +44,14 @@ export default function PricingPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<PlanFromServer | CreditsPackage | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'yearly'>('monthly');
-  // 支付方式与支付流程状态（当前仅启用微信支付）
-  const [payProvider] = useState<'wechat'>('wechat');
+  // 支付方式与支付流程状态
+  type PayProvider = 'wechat' | 'alipay' | 'stripe';
+  const PAY_PROVIDERS: { key: PayProvider; label: string; icon: React.ReactNode; color: string; bg: string }[] = [
+    { key: 'wechat', label: '微信支付', icon: <WechatOutlined style={{ color: '#09bb07', fontSize: 18 }} />, color: '#09bb07', bg: '#f6ffed' },
+    { key: 'alipay', label: '支付宝', icon: <AlipayOutlined style={{ color: '#1677ff', fontSize: 18 }} />, color: '#1677ff', bg: '#e6f4ff' },
+    { key: 'stripe', label: 'Stripe', icon: <CreditCardOutlined style={{ color: '#635bff', fontSize: 18 }} />, color: '#635bff', bg: '#f0edff' },
+  ];
+  const [payProvider, setPayProvider] = useState<PayProvider>('wechat');
   const [payStatus, setPayStatus] = useState<'confirm' | 'creating' | 'waiting' | 'success' | 'expired'>('confirm');
   const [qr, setQr] = useState<{ value: string; orderNo: string; itemName: string } | null>(null);
   const pollRef = useRef<number | null>(null);
@@ -373,9 +379,32 @@ export default function PricingPage() {
             <Paragraph><strong>价格：</strong>{getItemPrice(selectedItem)}</Paragraph>
             <Divider style={{ margin: '12px 0' }} />
             <Paragraph style={{ marginBottom: 8 }}><strong>支付方式</strong></Paragraph>
-            <div style={{ padding: '8px 12px', border: '1px solid #d9f7be', borderRadius: 8, background: '#f6ffed' }}>
-              <WechatOutlined style={{ color: '#09bb07', fontSize: 18, marginRight: 6 }} />
-              微信支付（扫码）
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {PAY_PROVIDERS.map((pp) => {
+                const active = payProvider === pp.key;
+                return (
+                  <div
+                    key={pp.key}
+                    onClick={() => setPayProvider(pp.key)}
+                    style={{
+                      padding: '8px 16px',
+                      border: active ? `2px solid ${pp.color}` : '1px solid #e8e8e8',
+                      borderRadius: 8,
+                      background: active ? pp.bg : '#fff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 14,
+                      fontWeight: active ? 600 : 400,
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {pp.icon}
+                    {pp.label}
+                  </div>
+                );
+              })}
             </div>
             <div style={{ textAlign: 'right', marginTop: 24 }}>
               <Button onClick={closeModal} style={{ marginRight: 8 }}>返回</Button>
@@ -395,7 +424,7 @@ export default function PricingPage() {
         {payStatus === 'waiting' && qr && (
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-              请使用微信扫描二维码完成支付
+              请使用{payProvider === 'alipay' ? '支付宝' : payProvider === 'stripe' ? 'Stripe' : '微信'}扫描二维码完成支付
             </Paragraph>
             <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 12, border: '1px solid #eee' }}>
               <QRCodeSVG value={qr.value} size={200} level="M" includeMargin />
