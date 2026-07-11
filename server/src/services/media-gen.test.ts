@@ -27,6 +27,18 @@ describe('媒体生成 - 多厂商 Provider 抽象', () => {
     await expect(mediaGenService.generate({ type: 'image2image', prompt: '' })).rejects.toThrow();
   });
 
+  it('text2img（文生图）在 Mock 下异步返回 processing，轮询后 completed', async () => {
+    const gen = await mediaGenService.generate({ type: 'text2img', prompt: '一只猫', size: '1024x1024', n: 1 });
+    expect(gen.type).toBe('text2img');
+    expect(gen.status).toBe('processing');
+    expect(gen.provider).toBe('mock');
+    // 轮询：Mock 约 2 秒后完成
+    await new Promise((r) => setTimeout(r, 2200));
+    const q = await mediaGenService.queryTask('mock', gen.taskId);
+    expect(q.status).toBe('completed');
+    expect(q.outputUrl).toContain('data:image/svg+xml'); // Mock 占位图
+  });
+
   it('列出 5 个厂商，真实厂商默认未配置、Mock 始终可用', () => {
     const list = listMediaProviders();
     expect(list.length).toBe(5);

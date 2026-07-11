@@ -1,4 +1,5 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
+import path from 'path';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
@@ -120,6 +121,10 @@ app.use('/api/sandbox', sandboxRoutes);
 app.use('/api/xhs', xhsRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/text2img', text2imgRoutes);
+
+// 静态资源：对象存储（OSS）落盘的图片/视频由 /generated 对外提供
+// 与 lib/object-storage.ts 的 LOCAL_STORAGE_DIR 保持一致（默认 server/uploads/generated）
+app.use('/generated', express.static(process.env.OSS_LOCAL_DIR || path.join(__dirname, '..', 'uploads', 'generated')));
 
 // 基础路由
 app.get('/', (req: Request, res: Response) => {

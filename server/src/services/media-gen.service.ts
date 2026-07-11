@@ -13,7 +13,7 @@ import { randomBytes } from 'crypto';
 import { signTencentTC3, type TC3SignOptions } from '../lib/tc3';
 import { MediaTask } from '../models/MediaTask';
 
-export type MediaTaskType = 'image2image' | 'text2video' | 'image2video';
+export type MediaTaskType = 'text2img' | 'image2image' | 'text2video' | 'image2video';
 export type MediaProviderName = 'mock' | 'hunyuan' | 'keling' | 'jimeng' | 'moneyprinterturbo';
 
 export interface MediaGenParams {
@@ -24,6 +24,8 @@ export interface MediaGenParams {
   duration?: number;
   size?: string;
   style?: string;
+  /** 生成数量（文生图，1-4） */
+  n?: number;
   /** 显式指定厂商 */
   provider?: MediaProviderName;
 }
@@ -34,6 +36,8 @@ export interface MediaGenResult {
   status: 'completed' | 'processing';
   prompt: string;
   outputUrl: string;
+  /** 多图结果（如混元一次生成多张），outputUrl 为其中主图 */
+  images?: string[];
   thumbnailUrl?: string;
   duration?: number;
   provider: string;
@@ -122,7 +126,7 @@ async function retrieveTask(taskId: string): Promise<StoredTask | null> {
 class MockProvider implements MediaProvider {
   name = 'mock' as const;
   label = '演示模式（Mock）';
-  supportedTypes: MediaTaskType[] = ['image2image', 'text2video', 'image2video'];
+  supportedTypes: MediaTaskType[] = ['text2img', 'image2image', 'text2video', 'image2video'];
   isConfigured() {
     return true;
   }
@@ -162,7 +166,7 @@ const HUNYUAN_VERSION = '2023-09-01';
 class HunyuanProvider implements MediaProvider {
   name = 'hunyuan' as const;
   label = '腾讯混元 / 智绘';
-  supportedTypes: MediaTaskType[] = ['image2image', 'text2video', 'image2video'];
+  supportedTypes: MediaTaskType[] = ['text2img', 'image2image', 'text2video', 'image2video'];
   private get secretId() {
     return process.env.HUNYUAN_SECRET_ID || '';
   }
@@ -204,6 +208,9 @@ class HunyuanProvider implements MediaProvider {
       ...(params.imageBase64 ? { ImageBase64: params.imageBase64 } : {}),
       ...(params.duration ? { Duration: params.duration } : {}),
       ...(params.style ? { Style: params.style } : {}),
+      // 文生图专用参数：分辨率（1024x1024 → 1024:1024）、生成数量
+      ...(params.size && !isVideo ? { Resolution: params.size.replace('x', ':') } : {}),
+      ...(params.n && !isVideo ? { Num: params.n } : {}),
     };
     const payload = JSON.stringify(body);
     const resp = await axios.post(`https://${HUNYUAN_HOST}/`, payload, { headers: this.buildHeaders(action, payload) });
@@ -232,12 +239,15 @@ class HunyuanProvider implements MediaProvider {
     if (d.Error) throw new Error(`混元查询错误：${d.Error.Code}`);
     const status = (d.Status || d.JobStatus || '').toLowerCase();
     const completed = status === 'succeeded' || status === 'success' || status === 'completed';
+    const images: string[] = d.ResultImages || d.ResultUrls || [];
+    const primary = d.ResultImage || d.ResultVideo || images[0] || d.ResultUrl || '';
     return {
-      type: isVideo ? 'text2video' : 'image2image',
+      type: isVideo ? 'text2video' : (taskId.toLowerCase().includes('image') ? 'image2image' : 'text2img'),
       taskId,
       status: completed ? 'completed' : 'processing',
       prompt: '',
-      outputUrl: completed ? d.ResultImage || d.ResultVideo || '' : '',
+      outputUrl: completed ? primary : '',
+      images: completed && images.length ? images : undefined,
       provider: 'hunyuan',
       note: completed ? '混元任务完成。' : '混元任务处理中……',
     };
