@@ -6,8 +6,18 @@ import { aiModelManager } from '../config/ai-models';
 import { reloadCustomProviders } from '../gateway/ai-gateway.service';
 import { sendError } from '../lib/http-error';
 import { encryptSecret, decryptSecret } from '../lib/crypto';
+import { logSecretAudit, checkTestAbuse } from '../services/secret-audit.service';
 
 const router = Router();
+
+/** 从请求中提取审计所需的操作者上下文 */
+function auditCtx(req: AuthRequest) {
+  return {
+    actorId: req.user!.id,
+    ip: (req.ip || (req.headers['x-forwarded-for'] as string) || '').toString(),
+    userAgent: req.headers['user-agent'] as string | undefined,
+  };
+}
 
 /** 配置变更后刷新网关的第三方模型注册表 */
 async function syncGateway(): Promise<void> {
@@ -69,6 +79,16 @@ router.post('/', requireAuth, enforceQuota('model_config'), async (req: AuthRequ
     });
     await quotaIncrement(req.user!.id, 'model_config');
     void syncGateway();
+    const { actorId, ip, userAgent } = auditCtx(req);
+    void logSecretAudit({
+      ownerId: req.user!.id,
+      actorId,
+      targetId: String(cfg._id),
+      action: 'secret_created',
+      ip,
+      userAgent,
+      detail: { provider, name },
+    });
     const { apiKey: _omit, ...safe } = cfg.toObject();
     res.json({ success: true, data: safe });
   } catch (err) {
@@ -87,9 +107,11 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     }
     // apiKey 只有在传入真实新值（非空、非掩码）时才覆盖，避免前端回填掩码把 key 洗掉
     const nextKey = req.body?.apiKey;
+    let secretRotated = false;
     if (typeof nextKey === 'string' && nextKey.trim() && !nextKey.includes('****')) {
       // 安全：写入前加密
       update.apiKey = encryptSecret(nextKey.trim());
+      secretRotated = true;
     }
     const cfg = await ModelConfig.findOneAndUpdate(
       { _id: req.params.id, createdBy: req.user!.id },
@@ -98,6 +120,18 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     ).select('-apiKey');
     if (!cfg) return res.status(404).json({ success: false, error: '配置不存在' });
     void syncGateway();
+    if (secretRotated) {
+      const { actorId, ip, userAgent } = auditCtx(req);
+      void logSecretAudit({
+        ownerId: req.user!.id,
+        actorId,
+        targetId: req.params.id,
+        action: 'secret_updated',
+        ip,
+        userAgent,
+        detail: { provider: update.provider, name: update.name },
+      });
+    }
     res.json({ success: true, data: cfg });
   } catch (err) {
     sendError(res, err);
@@ -110,6 +144,16 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const cfg = await ModelConfig.findOneAndDelete({ _id: req.params.id, createdBy: req.user!.id });
     if (!cfg) return res.status(404).json({ success: false, error: '配置不存在' });
     void syncGateway();
+    const { actorId, ip, userAgent } = auditCtx(req);
+    void logSecretAudit({
+      ownerId: cfg.createdBy,
+      actorId,
+      targetId: String(cfg._id),
+      action: 'secret_deleted',
+      ip,
+      userAgent,
+      detail: { provider: cfg.provider, name: cfg.name },
+    });
     res.json({ success: true });
   } catch (err) {
     sendError(res, err);
