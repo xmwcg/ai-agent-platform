@@ -86,7 +86,7 @@ export default function PricingPage() {
     if (!selectedItem) return;
     setPaying(('id' in selectedItem ? selectedItem.id : 'package'));
     try {
-      if ('credits' in selectedItem && selectedItem.priceMonthly > 0) {
+      if ('priceMonthly' in selectedItem && (selectedItem as PlanFromServer).priceMonthly > 0) {
         // 订阅套餐
         const res: any = await billingAPI.createOrder({
           plan: selectedItem.id as 'free' | 'pro' | 'max',
