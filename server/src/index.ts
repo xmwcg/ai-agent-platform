@@ -53,6 +53,10 @@ validateStartupEnv();
 const app: Express = express();
 const PORT = process.env.PORT || 3000;
 
+// 应用位于反代（nginx）之后，需信任 X-Forwarded-* 头；否则 express-rate-limit
+// 收到 X-Forwarded-For 会抛错，导致走域名访问的所有受限流路由返回 500。
+app.set('trust proxy', 1);
+
 // 中间件
 app.use(cors(buildCorsOptions(process.env.CLIENT_URL)));
 app.use(helmet(buildHelmetOptions(process.env.NODE_ENV)));

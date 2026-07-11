@@ -161,7 +161,7 @@ router.post('/sms/login', authLimiter, validate(smsLoginSchema), async (req: Aut
     if (!user) {
       // 自动注册：生成随机密码（用户后续可绑定邮箱/改密）
       const rand = crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '');
-      user = await User.create({ phone, password: rand, name: `用户${phone.slice(-4)}`, provider: 'local' });
+      user = await User.create({ phone, password: rand, name: `用户${phone.slice(-4)}`, provider: 'local', email: `${phone}@phone.local` });
     }
     const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
     res.json({ success: true, token, user: user.toJSON() });
@@ -225,6 +225,7 @@ router.get('/wechat/callback', async (req: Request, res: Response) => {
         name: '微信用户',
         provider: 'wechat',
         providerId: openid,
+        email: `${openid}@wechat.local`,
       });
     }
     const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
