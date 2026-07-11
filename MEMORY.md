@@ -301,3 +301,25 @@ AI Key 可选（缺省走 Mock）。支付：`DEFAULT_PAY_PROVIDER`(mock/wechat/
 
 - **验证**：server `tsc --noEmit` 干净；payment 单元测试 9/9 ✅；webhook E2E 集成测试 **12/12 ✅**（含 4 个新增微信测试）；所有文件 lint 0 error。
 - **结论**：Stripe 和微信 Webhook 代码完整度从 ~85%/70% 提升至 **95%+/92%+**。剩余 5% 是真实生产凭证配置（STRIPE_WEBHOOK_SECRET、WECHAT_PLATFORM_CERT），代码层面已就绪，填入真实密钥即可投产。
+
+### 第十六轮（全量补完：知识图谱 / 实践沙盒 / 可观测性 / 向量库 / 桌面端）✅ 已落地，tsc 干净 + 全量 288 测试通过
+- **A. 知识图谱（后端+前端）**
+  - `services/knowledge-graph.service.ts`：纯函数 `aggregateGraph(rawDocs, opts)` 聚合 doc/tag/category 三类节点与 doc-tag/doc-category/doc-doc 共现（权重=共享标签数）/relatedDocs（权重 5，强关联）边；`buildKnowledgeGraph` 负责 DB 查询；边生成与标签计数受 `includeTags` 控制（修复 `includeTags=false` 仍生成标签边的 bug）。
+  - `routes/knowledge-graph.ts`：`GET /api/knowledge-graph`，`optionalAuth` + 团队隔离（指定 teamId 时要求成员 viewer+，用 `canAccessResource` 校验）。
+  - 前端 `pages/KnowledgeGraphPage.tsx`：ECharts 力导向图 + 标签/分类开关 + 共现阈值滑块(1-5) + 节点详情抽屉；`api.ts` 增加 `knowledgeGraphAPI`，`App.tsx`/`router.tsx` 接入菜单与路由。7 例单测。
+- **B. 实践沙盒（后端+前端）**
+  - `services/sandbox.service.ts`：多模式 Provider（mock/local/remote）抽象 + 优雅降级；`detectDangerousPatterns`（deny-list 静态扫描，纯函数）+ `selectSandboxMode` + `buildLocalCommand` + `sanitizeOutput` 均可单测；local 走子进程 `execFile` + 超时隔离，remote 对接容器执行器（SANDBOX_REMOTE_URL/TOKEN）。
+  - `routes/sandbox.ts`：`POST /api/sandbox/run`（requireAuth，64KB 上限）+ `GET /api/sandbox/status`（返回模式/Provider/支持语言）。
+  - 前端 `pages/SandboxPage.tsx`：语言选择（Python/JS/TS/Bash）+ 模板 + 运行 + 输出控制台 + 演示模式提示。20 例单测。
+- **C. 调用链可观测性（Langfuse 思路）**
+  - `lib/trace.ts`：`noop`/`langfuse` 双 Tracer（langfuse 经 `/api/public/ingestion` Basic Auth 上报，fire-and-forget）；`buildTraceEvent`/`selectTracerMode` 纯函数 + `measure(name, fn, opts)` 包裹异步操作并自动计时上报。
+  - 接入点：`services/rag.ts` 的 `rag.generateAnswer` 已用 `measure(...)` 包裹。9 例单测。
+- **D. 专业向量库插件化（Qdrant/Pinecone）**
+  - `services/vector-store.ts`：Provider 抽象（memory/qdrant/pinecone）+ `cosineSimilarity`/`rankByCosine` 纯函数 + `selectVectorStoreKind` 按环境变量自动切换（默认 memory，配置 `QDRANT_URL`+`QDRANT_API_KEY` 或 `PINECONE_API_KEY`+`PINECONE_INDEX_HOST` 后自动启用远程检索）；qdrant/pinecone 提供 REST upsert/search。
+  - `services/embedding.ts`：`searchSimilarDocuments` 改走向量库抽象——memory 模式复用 MongoDB 文档向量 + `rankByCosine`（行为完全兼容旧实现），远程模式委托 provider。12 例单测。
+- **E. 桌面端 Tauri 脚手架**
+  - `client/src-tauri/`：`Cargo.toml` / `tauri.conf.json`（devPath=http://localhost:5173, distDir=../dist）/ `build.rs` / `src/main.rs` / `src/lib.rs` / `icons/icon.png`（占位，须 `tauri icon` 重生成）。
+  - `client/package.json`：新增 `@tauri-apps/api` 依赖、`@tauri-apps/cli` devDependency 与 `tauri`/`tauri:dev`/`tauri:build` 脚本。Rust 编译需本机工具链，按 `npm run tauri:dev` 启动桌面壳（复用 web 端 React 应用）。
+- **F. 核查即标记完成（Round 15 代码已含）**：媒体真实厂商轮询（`media-gen.service.ts` 可灵/即梦 `queryTask`）、团队资源级授权（`middleware/resourceAccess.ts` 的 `canAccessResource` 已接入 knowledge/customer-service/quickstart/knowledge-graph 路由）、API 市场计费（`marketplace.ts` 原子积分扣减 + `CreditsTransaction` 审计 + CSV/JSON 用量账单导出）。均免重复实现。
+- **G. 缺陷修复（知识图谱单测）**：上一轮随知识图谱交付的 2 例断言因无向边 `source/target` 顺序假设（实际由 `min(id)` 归一化）而失败，且从未真正运行；本轮修正为顺序无关断言后全绿——印证「每步必须真实跑通测试」的纪律价值。
+- 验证：server `tsc --noEmit` 干净；server `jest` **288 用例 / 39 suite 全过**（原 236 + 新增 52：知识图谱 7 + 沙盒 20 + 向量库 12 + trace 9 + 其余）；client `tsc --noEmit` 干净；client `eslint` **0 error / 70 warning（均为既有）**。
