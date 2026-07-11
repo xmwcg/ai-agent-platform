@@ -37,8 +37,8 @@ describe('billing plan logic', () => {
   });
 
   it('amounts are stored in cents (no floating point)', () => {
-    // 专业版月付 39 元 => 3900 分
-    expect(getPlan('pro').priceMonthly).toBe(3900);
+    // 专业版月付 29 元 => 2900 分
+    expect(getPlan('pro').priceMonthly).toBe(2900);
     expect(getPlan('max').priceYearly).toBe(99000);
   });
 });
