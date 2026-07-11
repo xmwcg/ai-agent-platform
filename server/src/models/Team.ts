@@ -9,7 +9,6 @@ export interface ITeamMember {
 }
 
 export interface ITeam extends Document {
-  _id: string;
   name: string;
   ownerId: string;
   plan: 'free' | 'pro' | 'max' | 'team';

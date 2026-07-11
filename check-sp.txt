@@ -1,0 +1,11 @@
+
+> ai-agent-platform@0.1.0 check:superpowers
+> node scripts/check-superpowers-sync.cjs
+
+✓ brainstorming (brainstorming)
+✓ test-driven-development (test-driven-development)
+✓ using-superpowers (using-superpowers)
+✓ verification-before-completion (verification-before-completion)
+✓ writing-skills (writing-skills)
+
+✅ superpowers 同步校验通过

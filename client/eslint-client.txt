@@ -1,0 +1,116 @@
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\components\FileConverter.tsx
+  34:66  warning  'content' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\components\KnowledgeImport.tsx
+  36:15  warning  'UploadFile' is defined but never used  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\AiChat.tsx
+   3:52  warning  'Empty' is defined but never used                                                                                                                                                                    @typescript-eslint/no-unused-vars
+   8:33  warning  'ThunderboltOutlined' is defined but never used                                                                                                                                                      @typescript-eslint/no-unused-vars
+   9:3   warning  'BarChartOutlined' is defined but never used                                                                                                                                                         @typescript-eslint/no-unused-vars
+   9:21  warning  'SettingOutlined' is defined but never used                                                                                                                                                          @typescript-eslint/no-unused-vars
+  24:32  warning  'updateMessage' is assigned a value but never used                                                                                                                                                   @typescript-eslint/no-unused-vars
+  25:5   warning  'setMode' is assigned a value but never used                                                                                                                                                         @typescript-eslint/no-unused-vars
+  35:9   warning  The 'messages' logical expression could make the dependencies of useEffect Hook (at line 40) change on every render. To fix this, wrap the initialization of 'messages' in its own useMemo() Hook    react-hooks/exhaustive-deps
+  35:9   warning  The 'messages' logical expression could make the dependencies of useCallback Hook (at line 91) change on every render. To fix this, wrap the initialization of 'messages' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\AiChat\ChatInput.tsx
+  2:49  warning  'Badge' is defined but never used          @typescript-eslint/no-unused-vars
+  5:3   warning  'ClearOutlined' is defined but never used  @typescript-eslint/no-unused-vars
+  8:15  warning  'UploadFile' is defined but never used     @typescript-eslint/no-unused-vars
+  8:27  warning  'RcFile' is defined but never used         @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\AiChat\ChatMessage.tsx
+  2:38  warning  'Space' is defined but never used  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\AiChat\ChatSidebar.tsx
+  2:25  warning  'List' is defined but never used                 @typescript-eslint/no-unused-vars
+  2:50  warning  'Tag' is defined but never used                  @typescript-eslint/no-unused-vars
+  6:24  warning  'FileOutlined' is defined but never used         @typescript-eslint/no-unused-vars
+  6:38  warning  'ClockCircleOutlined' is defined but never used  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\AiChat\PromptOptimizer.tsx
+  2:24  warning  'Select' is defined but never used          @typescript-eslint/no-unused-vars
+  2:40  warning  'Spin' is defined but never used            @typescript-eslint/no-unused-vars
+  3:31  warning  'SwapOutlined' is defined but never used    @typescript-eslint/no-unused-vars
+  7:15  warning  'Title' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\ComparePage.tsx
+  76:6  warning  React Hook useEffect has a missing dependency: 'loadItems'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\CourseDetail.tsx
+  120:38  warning  React Hook useEffect has a missing dependency: 'loadCourse'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\CourseList.tsx
+  97:39  warning  React Hook useEffect has a missing dependency: 'loadCourses'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\Home.tsx
+   1:39  warning  'useCallback' is defined but never used                                  @typescript-eslint/no-unused-vars
+   3:64  warning  'Input' is defined but never used                                        @typescript-eslint/no-unused-vars
+   3:71  warning  'Badge' is defined but never used                                        @typescript-eslint/no-unused-vars
+  66:22  warning  'color' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\KnowledgeDetail.tsx
+   4:38  warning  'Spin' is defined but never used                @typescript-eslint/no-unused-vars
+   4:82  warning  'Dropdown' is defined but never used            @typescript-eslint/no-unused-vars
+  11:10  warning  'knowledgeAPI' is defined but never used        @typescript-eslint/no-unused-vars
+  15:22  warning  'Paragraph' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\KnowledgeEditorPage.tsx
+  57:6  warning  React Hook useEffect has a missing dependency: 'isEdit'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\KnowledgeList.tsx
+    5:19  warning  'Dropdown' is defined but never used                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+    5:56  warning  'Upload' is defined but never used                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+   11:19  warning  'DownloadOutlined' is defined but never used                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+   12:3   warning  'MoreOutlined' is defined but never used                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+   67:6   warning  React Hook useCallback has a missing dependency: 'pagination'. Either include it or remove the dependency array. Mutable values like 'pagination.current' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+  115:9   warning  'toggleSelect' is assigned a value but never used                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\LearningPath.tsx
+  83:43  warning  React Hook useEffect has a missing dependency: 'fetchPaths'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\ModelCalendar.tsx
+  65:38  warning  React Hook useEffect has a missing dependency: 'loadEvents'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\PricingPage.tsx
+   3:29  warning  'Space' is defined but never used            @typescript-eslint/no-unused-vars
+   3:50  warning  'Radio' is defined but never used            @typescript-eslint/no-unused-vars
+  78:11  warning  'planId' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\ProfilePage.tsx
+   3:41  warning  'Progress' is defined but never used              @typescript-eslint/no-unused-vars
+   5:18  warning  'Badge' is defined but never used                 @typescript-eslint/no-unused-vars
+   5:25  warning  'Tooltip' is defined but never used               @typescript-eslint/no-unused-vars
+   8:52  warning  'HistoryOutlined' is defined but never used       @typescript-eslint/no-unused-vars
+   9:30  warning  'ApiOutlined' is defined but never used           @typescript-eslint/no-unused-vars
+  10:33  warning  'WalletOutlined' is defined but never used        @typescript-eslint/no-unused-vars
+  11:51  warning  'TrophyOutlined' is defined but never used        @typescript-eslint/no-unused-vars
+  15:34  warning  'marketplaceAPI' is defined but never used        @typescript-eslint/no-unused-vars
+  15:50  warning  'extractApiError' is defined but never used       @typescript-eslint/no-unused-vars
+  49:9   warning  'totalPoints' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\QuizPage.tsx
+  119:6  warning  React Hook useEffect has a missing dependency: 'handleSubmit'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\ToolsCenterPage.tsx
+  1:38  warning  'useCallback' is defined but never used    @typescript-eslint/no-unused-vars
+  4:62  warning  'Slider' is defined but never used         @typescript-eslint/no-unused-vars
+  5:3   warning  'Result' is defined but never used         @typescript-eslint/no-unused-vars
+  5:11  warning  'List' is defined but never used           @typescript-eslint/no-unused-vars
+  5:17  warning  'Segmented' is defined but never used      @typescript-eslint/no-unused-vars
+  9:43  warning  'RobotOutlined' is defined but never used  @typescript-eslint/no-unused-vars
+
+G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\client\src\pages\WorkflowEditor.tsx
+   26:54  warning  'Tooltip' is defined but never used                                                                                           @typescript-eslint/no-unused-vars
+   27:22  warning  'Empty' is defined but never used                                                                                             @typescript-eslint/no-unused-vars
+   30:37  warning  'PlusOutlined' is defined but never used                                                                                      @typescript-eslint/no-unused-vars
+   31:3   warning  'ShareAltOutlined' is defined but never used                                                                                  @typescript-eslint/no-unused-vars
+   31:21  warning  'CopyOutlined' is defined but never used                                                                                      @typescript-eslint/no-unused-vars
+   34:51  warning  'HistoryOutlined' is defined but never used                                                                                   @typescript-eslint/no-unused-vars
+   38:22  warning  'Paragraph' is assigned a value but never used                                                                                @typescript-eslint/no-unused-vars
+  172:6   warning  React Hook useEffect has missing dependencies: 'setEdges' and 'setNodes'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+✖ 71 problems (0 errors, 71 warnings)
+

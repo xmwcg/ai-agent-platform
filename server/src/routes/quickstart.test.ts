@@ -3,8 +3,8 @@ import { ALL_QUICKSTART_TEMPLATES, INDUSTRY_TEMPLATES, QUICKSTART_TEMPLATES } fr
 describe('快速启动模板目录', () => {
   it('应同时包含通用模板与行业垂直模板', () => {
     expect(QUICKSTART_TEMPLATES.length).toBe(4);
-    expect(INDUSTRY_TEMPLATES.length).toBe(4);
-    expect(ALL_QUICKSTART_TEMPLATES.length).toBe(8);
+    expect(INDUSTRY_TEMPLATES.length).toBe(6);
+    expect(ALL_QUICKSTART_TEMPLATES.length).toBe(10);
   });
 
   it('每个模板字段完整且可应用', () => {
@@ -28,7 +28,7 @@ describe('快速启动模板目录', () => {
 
   it('行业模板均为 industry 分类且含 vertical 与合规触发词', () => {
     const verticals = INDUSTRY_TEMPLATES.map((t) => t.vertical).sort();
-    expect(verticals).toEqual(['clinic', 'factory', 'law', 'training']);
+    expect(verticals).toEqual(['clinic', 'ecommerce', 'education', 'factory', 'law', 'training']);
     for (const t of INDUSTRY_TEMPLATES) {
       expect(t.category).toBe('industry');
       expect(Array.isArray(t.escalationTriggers) && t.escalationTriggers!.length > 0).toBe(true);

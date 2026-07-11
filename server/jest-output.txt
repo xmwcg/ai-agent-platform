@@ -1,0 +1,456 @@
+PASS src/models/ApiUsageLog.test.ts (11.992 s)
+PASS src/services/apikey.service.test.ts
+PASS src/services/media-gen.task.test.ts (12.413 s)
+PASS src/models/ApiKey.test.ts
+PASS src/routes/model-calendar.test.ts (13.094 s)
+PASS src/routes/quickstart.test.ts (13.6 s)
+PASS src/routes/customer-service.enhanced.test.ts (13.676 s)
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:21.104Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.enhanced.test.ts:1:1)
+
+PASS src/skills/skills.test.ts (13.42 s)
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:19.385Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/skills/defs/ai-chat.skill.ts:2:1)
+      at Object.<anonymous> (src/skills/registry.ts:9:1)
+      at Object.<anonymous> (src/skills/skills.test.ts:1:1)
+
+    console.log
+      2026-07-11T09:02:22.207Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/middleware/rbac.test.ts
+PASS src/routes/tools.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:22.480Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/translation.service.ts:1:1)
+      at Object.<anonymous> (src/routes/tools.test.ts:1:1)
+
+PASS src/routes/customer-service.test.ts
+PASS src/routes/customer-service.audit.test.ts (14.262 s)
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:22.575Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.audit.test.ts:9:1)
+
+PASS src/models/ModelConfig.test.ts
+PASS src/gateway/ai-gateway.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:22.580Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/gateway/ai-gateway.service.ts:17:1)
+      at Object.<anonymous> (src/gateway/ai-gateway.test.ts:18:1)
+
+PASS src/config/credits-pricing.test.ts
+PASS src/models/CreditsTransaction.test.ts
+PASS src/config/billing.test.ts
+PASS src/middleware/resourceAccess.test.ts
+PASS src/services/payment.webhook.test.ts
+PASS src/services/ai-agent.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:22.894Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/services/ai-agent.test.ts:1:1)
+
+    console.log
+      2026-07-11T09:02:23.375Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/services/payment.service.test.ts
+PASS src/models/WebhookEvent.test.ts
+PASS src/middleware/rate-limit.test.ts
+PASS src/config/env-check.test.ts
+  ● Console
+
+    console.error
+      ⚠️/❌ JWT_SECRET 为弱占位值或为空，任何人可伪造 Token。
+         请设置强随机密钥：JWT_SECRET=$(openssl rand -base64 48)
+         生产环境拒绝启动。
+
+      29 |     if (isProd) {
+      30 |       // eslint-disable-next-line no-console
+    > 31 |       console.error(msg);
+         |               ^
+      32 |       process.exit(1);
+      33 |     }
+      34 |     // eslint-disable-next-line no-console
+
+      at validateStartupEnv (src/config/env-check.ts:31:15)
+      at Object.<anonymous> (src/config/env-check.test.ts:25:23)
+
+    console.warn
+      ⚠️/❌ JWT_SECRET 为弱占位值或为空，任何人可伪造 Token。
+         请设置强随机密钥：JWT_SECRET=$(openssl rand -base64 48)
+         生产环境拒绝启动。
+
+      33 |     }
+      34 |     // eslint-disable-next-line no-console
+    > 35 |     console.warn(msg);
+         |             ^
+      36 |   }
+      37 | }
+      38 |
+
+      at validateStartupEnv (src/config/env-check.ts:35:13)
+      at Object.<anonymous> (src/config/env-check.test.ts:25:23)
+
+PASS src/services/media-gen.tc3.test.ts
+PASS src/lib/validation.test.ts
+PASS src/services/media-gen.test.ts
+PASS src/lib/http-error.test.ts
+PASS src/middleware/cors-config.test.ts
+PASS src/middleware/security-headers.test.ts
+PASS src/routes/customer-service.escalation.test.ts (14.935 s)
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:22.821Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.escalation.test.ts:1:1)
+
+PASS src/skills/skills-pipeline.test.ts
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:22.415Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/skills/defs/ai-chat.skill.ts:2:1)
+      at Object.<anonymous> (src/skills/registry.ts:9:1)
+      at Object.<anonymous> (src/skills/skills-pipeline.test.ts:1:1)
+
+    console.log
+      2026-07-11T09:02:23.987Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+PASS src/routes/marketplace-credits.integration.test.ts (16.094 s)
+  ● Console
+
+    console.log
+      2026-07-11T09:02:24.756Z [INFO] billing 积分包充值成功: userId=6a5206a02766ce8363ca118b package=credits_500 credits=+500 balance=600
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+[0mPOST /api/billing/orders [32m200[0m 20.586 ms - 242[0m
+[0mGET /api/billing/orders/AI1783760545882544/pay [32m200[0m 22.124 ms - 50[0m
+[0mGET /api/billing/subscription [32m200[0m 12.037 ms - -[0m
+[0mGET /api/billing/orders/AI1783760545882544/pay [32m200[0m 3.067 ms - 44[0m
+[0mPOST /api/billing/orders [32m200[0m 5.983 ms - 242[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 50.417 ms - 17[0m
+[0mGET /api/billing/subscription [32m200[0m 8.201 ms - -[0m
+[0mPOST /api/billing/orders [32m200[0m 6.821 ms - 242[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 18.791 ms - 17[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 2.683 ms - 35[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 0.945 ms - 17[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 0.934 ms - 17[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 8.277 ms - 17[0m
+[0mPOST /api/billing/orders [32m200[0m 5.981 ms - 242[0m
+[0mGET /api/billing/orders/AI1783760546225065/pay [32m200[0m 7.869 ms - 50[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 8.279 ms - 36[0m
+[0mPOST /api/billing/orders [32m200[0m 3.915 ms - 242[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 4.301 ms - 17[0m
+PASS src/routes/billing.webhook.integration.test.ts (17.499 s)
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:23.940Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/routes/ai.ts:2:1)
+      at Object.<anonymous> (src/index.ts:16:1)
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:16:1)
+
+    console.log
+      2026-07-11T09:02:25.165Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T09:02:25.167Z [INFO] database MongoDB connected successfully { uri: 'mongodb://localhost:27017/ai-agent-platform' }
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.warn
+      2026-07-11T09:02:25.169Z [WARN] database Server will continue without MongoDB (mock mode)
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at connectMongoDB (src/config/database.ts:33:12)
+
+    console.log
+      2026-07-11T09:02:25.180Z [INFO] index Server running on http://localhost:3000 { env: 'test' }
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T09:02:25.723Z [INFO] mcp Loaded 0 MCP server config(s) from database
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T09:02:26.022Z [INFO] webhook 订阅激活成功: orderNo=AI1783760545990610 plan=pro provider=stripe
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T09:02:26.131Z [INFO] webhook 订阅激活成功: orderNo=AI1783760546106985 plan=pro provider=stripe
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.log
+      2026-07-11T09:02:26.145Z [INFO] webhook 事件已处理，跳过: eventId=pi_idempotent_001 status=processed
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.warn
+      2026-07-11T09:02:26.175Z [WARN] webhook 验签失败或非成功事件: provider=stripe
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at src/routes/billing.ts:274:14
+
+    console.warn
+      2026-07-11T09:02:26.187Z [WARN] webhook 验签失败或非成功事件: provider=stripe
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at src/routes/billing.ts:274:14
+
+    console.log
+      2026-07-11T09:02:26.250Z [INFO] webhook 订单已支付，跳过激活: orderNo=AI1783760546225065
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+    console.warn
+      2026-07-11T09:02:26.268Z [WARN] webhook 重放攻击风险: provider=stripe sigTime=1783759946 now=1783760546 diff=600s
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at src/routes/billing.ts:295:16
+
+PASS src/routes/auth.integration.test.ts (25.503 s)
+  ● Console
+
+    console.warn
+      2026-07-11T09:02:23.798Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      18 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      19 |   log: (...args: unknown[]) => console.log(...args),
+    > 20 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      21 |   error: (...args: unknown[]) => console.error(...args),
+      22 | };
+      23 |
+
+      at Object.warn (src/lib/logger.ts:20:41)
+      at write (src/lib/logger.ts:29:27)
+      at Object.warn (src/lib/logger.ts:38:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:71:14)
+      at new AIModelManager (src/config/ai-models.ts:60:10)
+      at Object.<anonymous> (src/config/ai-models.ts:313:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/services/rag.ts:1:1)
+      at Object.<anonymous> (src/routes/rag.ts:2:1)
+      at Object.<anonymous> (src/routes/auth.integration.test.ts:21:1)
+
+    console.log
+      2026-07-11T09:02:23.892Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:19:40)
+
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+
+Test Suites: 35 passed, 35 total
+Tests:       236 passed, 236 total
+Snapshots:   0 total
+Time:        27.503 s, estimated 30 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

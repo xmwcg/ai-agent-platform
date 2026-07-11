@@ -44,7 +44,7 @@ function extractHeadings(content: string): { level: number; text: string; id: st
 // 简单的 Markdown to HTML 渲染（无依赖）
 function renderMarkdown(content: string): string {
   if (!content) return '';
-  let html = content
+  const html = content
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/^### (.+)$/gm, '<h4 id="heading-$1">$1</h4>')
     .replace(/^## (.+)$/gm, '<h3 id="heading-$1">$1</h3>')
