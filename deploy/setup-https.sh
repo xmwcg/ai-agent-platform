@@ -42,7 +42,8 @@ fi
 
 echo "==> [2/6] 创建目录并生成 nginx SSL 运行时配置"
 mkdir -p "$CERTS_DIR" "$WEBROOT_DIR"
-sed "s/__DOMAIN__/$DOMAIN/g" "$PROJECT_DIR/client/nginx.ssl.conf" > "$RUNTIME_CONF"
+# ⚠️ 必须用单引号包裹 sed 表达式，防止 bash 将 nginx 变量（$host/$uri/$backend...）展开为空字符串
+sed 's|__DOMAIN__|'"$DOMAIN"'|g' "$PROJECT_DIR/client/nginx.ssl.conf" > "$RUNTIME_CONF"
 echo "    已生成: $RUNTIME_CONF"
 
 echo "==> [3/6] 若证书缺失，先用自签名占位证书让 nginx 可启动"
