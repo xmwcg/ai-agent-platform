@@ -9,10 +9,12 @@ export interface ITeamMember {
 }
 
 export interface ITeam extends Document {
+  _id: string;
   name: string;
   ownerId: string;
   plan: 'free' | 'pro' | 'max' | 'team';
   members: ITeamMember[];
+  inviteCode: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +34,7 @@ const TeamSchema = new Schema<ITeam>(
     ownerId: { type: String, required: true, index: true },
     plan: { type: String, enum: ['free', 'pro', 'max', 'team'], default: 'team' },
     members: { type: [TeamMemberSchema], default: [] },
+    inviteCode: { type: String, default: null, index: true, sparse: true },
   },
   { timestamps: true }
 );

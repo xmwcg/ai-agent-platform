@@ -236,6 +236,11 @@ export const teamAPI = {
   remove: (id: string, userId: string) =>
     apiClient.delete(`/team/${id}/members/${userId}`),
   removeTeam: (id: string) => apiClient.delete(`/team/${id}`),
+  generateInvite: (id: string) => apiClient.post(`/team/${id}/invite`),
+  revokeInvite: (id: string) => apiClient.delete(`/team/${id}/invite`),
+  joinViaInvite: (code: string) => apiClient.post(`/team/join/${code}`),
+  getAudit: (id: string, params?: { page?: number; pageSize?: number; action?: string }) =>
+    apiClient.get(`/team/${id}/audit`, { params }),
 };
 
 // 开放 API 市场（按量计费） API
