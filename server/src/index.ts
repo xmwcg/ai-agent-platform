@@ -45,6 +45,7 @@ import xhsRoutes from './routes/xhs';
 import { mcpService } from './services/mcp.service';
 import { sendError } from './lib/http-error';
 import { logger } from './lib/logger';
+import { apmMiddleware, vitalsHandler } from './middleware/apm';
 
 // 加载环境变量
 dotenv.config();
@@ -71,6 +72,13 @@ app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
+
+// APM 性能监控（请求耗时/错误率/慢查询）
+app.use(apmMiddleware);
+
+// ─── 健康检查 + APM 指标（位于所有中间件之后、路由之前）───
+app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/health/vitals', vitalsHandler);
 
 // 限流（全局 API）
 app.use('/api/', apiLimiter);
