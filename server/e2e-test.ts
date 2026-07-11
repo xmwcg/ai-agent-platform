@@ -39,7 +39,7 @@ async function noDbTests(app: express.Express, auth: Record<string, string>) {
   log('POST /api/skills/xhs-copywriter/invoke 成功', inv.body.ok === true && !!inv.body.result?.data, { ok: inv.body.ok, provider: inv.body.result?.data?.provider });
 
   const inv2 = await request(app).post('/api/skills/xhs-architect/invoke').send({});
-  log('invoke 缺 product 返回错误', inv2.body.ok === false && !!inv2.body.error, inv2.body.error);
+  log('invoke 缺 product 返回错误', inv2.body.result?.ok === false && !!inv2.body.result?.error, inv2.body.result?.error);
 }
 
 async function dbTests(app: express.Express, auth: Record<string, string>) {
@@ -58,7 +58,7 @@ async function dbTests(app: express.Express, auth: Record<string, string>) {
 
   const mine = await request(app).get('/api/skills/mine').set(auth);
   const mineIds = (mine.body.skills || []).map((s: any) => s.id);
-  log('GET /api/skills/mine 含已安装技能', mineIds.includes('translator') || mineIds.includes('skill-translator'), mineIds);
+  log('GET /api/skills/mine 含已安装技能', mineIds.includes('u-translator'), mineIds);
 }
 
 async function finish() {
