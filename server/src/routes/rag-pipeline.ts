@@ -4,9 +4,9 @@
  */
 
 import { Router, Response } from 'express';
-import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { createUploader } from '../middleware/upload-limit';
 import { ragPipelineService } from '../services/rag-pipeline.service';
 import { ragService } from '../services/rag';
 import { embeddingService } from '../services/embedding';
@@ -19,34 +19,12 @@ import { logger } from '../lib/logger';
 
 const router = Router();
 
-// ── Multer 配置 ────────────────────────────────────────
-
-const uploadDir = path.join(process.cwd(), 'uploads', 'rag');
-fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9\u4e00-\u9fff\-_.]/g, '_');
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${uniqueSuffix}-${safeName}`);
-  },
-});
-
-const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedExts = ['.pdf', '.docx', '.doc', '.md', '.txt', '.html', '.htm'];
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (allowedExts.includes(ext)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`Unsupported format: ${ext}. Supported: ${allowedExts.join(', ')}`));
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max
+// ── 上传限制（统一中间件，集中文件大小/类型/数量护栏，防超大文件撑爆磁盘/算力）──
+const upload = createUploader({
+  dir: 'rag',
+  maxSize: 20 * 1024 * 1024, // 20MB
+  allowedExts: ['.pdf', '.docx', '.doc', '.md', '.txt', '.html', '.htm'],
+  maxCount: 10,
 });
 
 // ── 校验 Schema ─────────────────────────────────────────

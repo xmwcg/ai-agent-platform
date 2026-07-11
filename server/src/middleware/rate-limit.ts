@@ -30,3 +30,14 @@ export const authLimiter = rateLimit({
   message: { success: false, error: '登录尝试过于频繁，请 15 分钟后再试', code: 'AUTH_RATE_LIMITED' },
   skip: isTest,
 });
+
+// 文生图生成专属限流：频率闸门，与「匿名每日限次」「登录配额/成本阀门」三层互补。
+// 维度不同：全局 apiLimiter 管总请求量、匿名限次管垫付总量、本中间件管生成调用频率（防刷/DoS）。
+export const text2imgLimiter = rateLimit({
+  windowMs: Number(process.env.TEXT2IMG_RATE_WINDOW_MS) || 60 * 1000,
+  max: Number(process.env.TEXT2IMG_RATE_MAX) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: '生成请求过于频繁，请稍后再试', code: 'TEXT2IMG_RATE_LIMITED' },
+  skip: isTest,
+});

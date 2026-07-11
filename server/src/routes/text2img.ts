@@ -9,6 +9,7 @@ import {
   quotaIncrement,
   quotaCostRecord,
 } from '../middleware/subscription';
+import { text2imgLimiter } from '../middleware/rate-limit';
 import { redisClient } from '../config/database';
 import { sendError } from '../lib/http-error';
 import { logger } from '../lib/logger';
@@ -44,6 +45,7 @@ function getClientIp(req: Request): string {
  */
 router.post(
   '/generate',
+  text2imgLimiter, // 防刷第三层：生成调用频率闸门（与匿名限次、登录配额互补）
   optionalAuth,
   enforceQuota('media_gen'), // 登录用户：当日次数配额前置拦截（超额 402）
   enforceCostValve(), // 登录用户：当日垫付成本预算前置拦截

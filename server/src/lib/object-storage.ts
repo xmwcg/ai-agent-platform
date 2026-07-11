@@ -47,13 +47,26 @@ class LocalStorage implements ObjectStorage {
   }
 }
 
-/* ------------------------------ 云对象存储（生产，按需启用） ------------------------------
- * 下面给出腾讯云 COS 的接入骨架。安装 SDK `cos-nodejs-sdk-v5` 并在 .env 配置
- * COS_SECRET_ID / COS_SECRET_KEY / COS_BUCKET / COS_REGION / COS_BASE_URL 后，
- * 在 getObjectStorage() 中启用即可。当前未安装 SDK，故默认走 LocalStorage。
+/* ------------------------------ 云对象存储（生产，腾讯云 COS） ------------------------------
+ * 接入 cos-nodejs-sdk-v5（已安装）。在 .env 配置 COS_SECRET_ID / COS_SECRET_KEY /
+ * COS_BUCKET / COS_REGION / COS_BASE_URL 后，getObjectStorage() 工厂会自动优先启用本实现。
+ *
+ * 访问 URL：
+ *  - 配置了 COS_BASE_URL（公有读 Bucket 或 CDN 域名）→ 返回 `${BASE_URL}/${key}`，稳定可公开访问；
+ *  - 未配置 → 返回 SDK 生成的签名临时 URL（默认 1 小时有效），适合私有 Bucket。
+ *
+ * 成本相关：
+ *  - 存储费：COS 标准存储约 0.118 元/GB/月（远低于本地磁盘爆满导致的故障成本）。
+ *  - 下行流量：外网约 0.5 元/GB，接入 CDN 后可低至 0.15 元/GB，且提速明显。
+ *  - 自动清理：对象级过期需 Bucket 生命周期规则（控制台/API 配置），COS_OBJECT_TTL 仅作语义约定；
+ *    建议对 text2img/ 前缀设「N 天后删除」规则，把存储成本压到接近 0。
  */
+// @ts-ignore - cos-nodejs-sdk-v5 自带类型较旧，容忍其默认导入
+import COS from 'cos-nodejs-sdk-v5';
+
 class CloudOssStorage implements ObjectStorage {
   name = 'cloud';
+  private cos: any;
   private get configured() {
     return !!(
       process.env.COS_SECRET_ID &&
@@ -65,10 +78,46 @@ class CloudOssStorage implements ObjectStorage {
   isConfigured() {
     return this.configured;
   }
-  async put(key: string, _data: Buffer, _contentType: string): Promise<string> {
+  private client() {
+    if (!this.cos) {
+      this.cos = new COS({
+        SecretId: process.env.COS_SECRET_ID,
+        SecretKey: process.env.COS_SECRET_KEY,
+      });
+    }
+    return this.cos;
+  }
+  async put(key: string, data: Buffer, contentType: string): Promise<string> {
     if (!this.configured) throw new Error('云对象存储未配置：请在 .env 设置 COS_*');
-    // TODO(infra): 接入 cos-nodejs-sdk-v5，调用 putObject 并返回带 CDN 域名的访问 URL。
-    throw new Error('CloudOssStorage 尚未接入 SDK，请先安装 cos-nodejs-sdk-v5 并实现 put()');
+    const cos = this.client();
+    const bucket = process.env.COS_BUCKET!;
+    const region = process.env.COS_REGION!;
+    const baseUrl = process.env.COS_BASE_URL?.replace(/\/$/, '');
+
+    await new Promise<void>((resolve, reject) => {
+      cos.putObject(
+        {
+          Bucket: bucket,
+          Region: region,
+          Key: key,
+          Body: data,
+          ContentType: contentType,
+          // 浏览器侧缓存，减少重复回源流量成本
+          CacheControl: 'max-age=86400',
+        },
+        (err: any) => (err ? reject(err) : resolve())
+      );
+    });
+
+    // 配置了公有读/CDN 域名 → 直接返回稳定 URL；否则返回签名临时 URL（默认 1h）
+    if (baseUrl) return `${baseUrl}/${key}`;
+    const url = await new Promise<string>((resolve, reject) => {
+      cos.getObjectUrl(
+        { Bucket: bucket, Region: region, Key: key, Sign: true, Expires: 3600 },
+        (err: any, data: any) => (err ? reject(err) : resolve(data.Url))
+      );
+    });
+    return url;
   }
 }
 
