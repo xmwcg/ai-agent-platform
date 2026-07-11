@@ -244,3 +244,23 @@ AI Key 可选（缺省走 Mock）。支付：`DEFAULT_PAY_PROVIDER`(mock/wechat/
 - client 运行时 moderate（dompurify/echarts XSS）：待大版本迁移专项评估（非破坏性无法修，force 会击穿构建，且前端源码零直接引用，运行时不可达）。
 - server `tar` 构建期 high：受 bcrypt 编译链约束，运行时不可达，保持观察。
 - 可选后续：client 端各 API 返回类型 interface 补全（响应拦截器已解包为后端返回体，属更深类型工程，非闭环必需）。
+
+### 第十四轮（Phase 4 收尾：团队邀请链接+审计日志+媒体任务持久化）✅ 已落地，tsc 干净 + 全量 236 测试通过
+- **A. 团队邀请链接（解决直接按 userId 拉人痛点）**
+  - `Team` 模型：新增 `inviteCode` 字段（sparse 索引，crypto.randomBytes 生成 24 位安全码）。
+  - 新端点：`POST /:teamId/invite`（admin+ 生成/重新生成邀请码）、`DELETE /:teamId/invite`（撤销）、`POST /join/:inviteCode`（任意登录用户通过邀请码加入）。
+  - 前端：TeamPage 邀请链接卡片（生成/复制/撤销）、`加入团队` 按钮（粘贴邀请码）。
+- **B. 团队审计日志（弥补操作追溯空白）**
+  - 新建 `TeamAuditLog` 模型：teamId/actorId/action/targetId/detail + 复合时间倒序索引。
+  - 新建 `team-audit.service.ts`：`logTeamAudit()` 异步写入、失败不阻塞主业务。
+  - 审计点全覆盖：team_created/deleted、member_joined（含 via:invite_link）、member_removed、role_changed（oldRole→newRole）、invite_generated/revoked。
+  - 新端点：`GET /:teamId/audit`（viewer+ 可查看，分页+action 过滤）。
+  - 前端：团队详情弹窗增加「操作日志」Tab 页。
+- **C. 媒体任务持久化（内存 Map → MongoDB，解决重启丢失）**
+  - 新建 `MediaTask` 模型（taskId 唯一索引 + TTL 24h 自动清理 + 到期索引）。
+  - `media-gen.service.ts`：`persistTask()` 优先写 MongoDB，`.readyState !== 1` 自动降级内存 `fallbackStore`；`retrieveTask()` 同理优先读 MongoDB，不可用时回退内存。
+  - 零依赖新增（无新 npm 包），MongoDB 不可用时自动降级 Mock 全功能不变。
+- **D. 附带修复**
+  - `quickstart.test.ts`：行业模板数量断言过时（4→6：新增 education/ecommerce），更新为匹配实际数据。
+  - `KnowledgeDetail.tsx`：`let html` → `const html`，消除 client ESLint 唯一 error。
+- 验证：server `tsc --noEmit` 干净；server `jest` **236 用例 / 35 suite 全过**；client `tsc --noEmit` 干净；client `eslint` **0 error / 71 warning（均为已有）**；`check:superpowers` 通过。
