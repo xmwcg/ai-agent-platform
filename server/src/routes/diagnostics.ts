@@ -43,6 +43,32 @@ router.get('/', requireAuth, async (_req: Request, res: Response) => {
     webhookStats = null; // MongoDB 不可用时忽略
   }
 
+  // 支付渠道详细状态
+  const defaultProvider = process.env.DEFAULT_PAY_PROVIDER || 'mock';
+  const mask = (s: string | undefined) => {
+    if (!s) return '';
+    if (s.length <= 8) return '***';
+    return s.slice(0, 4) + '****' + s.slice(-4);
+  };
+  const paymentStatus = {
+    defaultProvider,
+    isReal: defaultProvider !== 'mock',
+    notifyUrl: `${process.env.PUBLIC_BASE_URL || ''}/api/billing/webhook/${defaultProvider}`,
+    wechat: {
+      configured: envPresent('WECHAT_MCH_ID', 'WECHAT_API_V3_KEY', 'WECHAT_PRIVATE_KEY'),
+      mchId: mask(process.env.WECHAT_MCH_ID),
+      appId: mask(process.env.WECHAT_APP_ID),
+      hasApiKey: !!process.env.WECHAT_API_V3_KEY,
+      hasPlatformCert: !!process.env.WECHAT_PLATFORM_CERT,
+      hasPrivateKey: !!process.env.WECHAT_PRIVATE_KEY,
+    },
+    stripe: {
+      configured: envPresent('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'),
+      hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
+      hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+    },
+  };
+
   res.json({
     success: true,
     data: {
@@ -52,6 +78,7 @@ router.get('/', requireAuth, async (_req: Request, res: Response) => {
       plans: Object.keys(PLANS),
       allHealthy: checks.every((c) => c.ok),
       webhookStats,
+      paymentStatus,
     },
   });
 });
