@@ -16,6 +16,16 @@ import { MediaTask } from '../models/MediaTask';
 export type MediaTaskType = 'text2img' | 'image2image' | 'text2video' | 'image2video';
 export type MediaProviderName = 'mock' | 'hunyuan' | 'keling' | 'jimeng' | 'moneyprinterturbo';
 
+/**
+ * BYOK 凭据（用户自带 Key）。随调用注入，绝不污染单例 provider 实例，避免并发竞态。
+ * - 混元（TC3）：secretId + secretKey 一对
+ * - 可灵 / 即梦：仅 secretKey（即 Bearer Token）
+ */
+export interface MediaCredentials {
+  secretId?: string;
+  secretKey?: string;
+}
+
 export interface MediaGenParams {
   type: MediaTaskType;
   prompt: string;
@@ -28,6 +38,8 @@ export interface MediaGenParams {
   n?: number;
   /** 显式指定厂商 */
   provider?: MediaProviderName;
+  /** BYOK：随调用传入的用户凭据，优先于环境变量（平台级 Key） */
+  credentials?: MediaCredentials;
 }
 
 export interface MediaGenResult {
@@ -50,7 +62,7 @@ export interface MediaProvider {
   supportedTypes: MediaTaskType[];
   isConfigured(): boolean;
   generate(params: MediaGenParams): Promise<MediaGenResult>;
-  queryTask?(taskId: string): Promise<MediaGenResult>;
+  queryTask?(taskId: string, credentials?: MediaCredentials): Promise<MediaGenResult>;
 }
 
 const PLACEHOLDER_IMAGE =
@@ -147,7 +159,7 @@ class MockProvider implements MediaProvider {
     return result;
   }
   /** 模拟异步：提交 2 秒后转为已完成并返回占位图 */
-  async queryTask(taskId: string): Promise<MediaGenResult> {
+  async queryTask(taskId: string, _credentials?: MediaCredentials): Promise<MediaGenResult> {
     const task = await retrieveTask(taskId);
     if (!task) throw new Error('任务不存在或已过期');
     if (Date.now() - task.createdAt > 2000) {
@@ -163,24 +175,32 @@ class MockProvider implements MediaProvider {
 const HUNYUAN_HOST = 'hunyuan.tencentcloudapi.com';
 const HUNYUAN_VERSION = '2023-09-01';
 
-class HunyuanProvider implements MediaProvider {
+export class HunyuanProvider implements MediaProvider {
   name = 'hunyuan' as const;
   label = '腾讯混元 / 智绘';
   supportedTypes: MediaTaskType[] = ['text2img', 'image2image', 'text2video', 'image2video'];
+  /** 平台级凭据（环境变量），BYOK 时由调用方传入 credentials 覆盖 */
   private get secretId() {
     return process.env.HUNYUAN_SECRET_ID || '';
   }
   private get secretKey() {
     return process.env.HUNYUAN_SECRET_KEY || '';
   }
+  /** 凭据解析：传入的 BYOK 凭据优先，否则回退平台环境变量（避免污染单例、避并发竞态） */
+  private resolveCreds(creds?: MediaCredentials) {
+    return {
+      secretId: creds?.secretId ?? this.secretId,
+      secretKey: creds?.secretKey ?? this.secretKey,
+    };
+  }
   isConfigured() {
     return !!this.secretId && !!this.secretKey;
   }
-  private buildHeaders(action: string, payload: string): Record<string, string> {
+  private buildHeaders(action: string, payload: string, secretId: string, secretKey: string): Record<string, string> {
     const timestamp = Math.floor(Date.now() / 1000);
     const { authorization } = signTencentTC3({
-      secretId: this.secretId,
-      secretKey: this.secretKey,
+      secretId,
+      secretKey,
       service: 'hunyuan',
       host: HUNYUAN_HOST,
       action,
@@ -200,7 +220,9 @@ class HunyuanProvider implements MediaProvider {
     };
   }
   async generate(params: MediaGenParams): Promise<MediaGenResult> {
-    if (!this.isConfigured()) throw new Error('混元未配置：请在 .env 设置 HUNYUAN_SECRET_ID / HUNYUAN_SECRET_KEY');
+    const { secretId, secretKey } = this.resolveCreds(params.credentials);
+    if (!secretId || !secretKey)
+      throw new Error('混元未配置：请在 .env 设置 HUNYUAN_SECRET_ID / HUNYUAN_SECRET_KEY，或配置自带 Key（BYOK）');
     const isVideo = params.type.includes('video');
     const action = isVideo ? 'SubmitVideoGenerationJob' : 'SubmitImageGenerationJob';
     const body: Record<string, any> = {
@@ -213,7 +235,9 @@ class HunyuanProvider implements MediaProvider {
       ...(params.n && !isVideo ? { Num: params.n } : {}),
     };
     const payload = JSON.stringify(body);
-    const resp = await axios.post(`https://${HUNYUAN_HOST}/`, payload, { headers: this.buildHeaders(action, payload) });
+    const resp = await axios.post(`https://${HUNYUAN_HOST}/`, payload, {
+      headers: this.buildHeaders(action, payload, secretId, secretKey),
+    });
     const respData = resp.data?.Response || {};
     if (respData.Error) throw new Error(`混元错误：${respData.Error.Code} ${respData.Error.Message}`);
     const vendorTaskId = String(respData.JobId || respData.TaskId || genTaskId());
@@ -229,12 +253,15 @@ class HunyuanProvider implements MediaProvider {
     await persistTask(vendorTaskId, result);
     return result;
   }
-  async queryTask(taskId: string): Promise<MediaGenResult> {
-    if (!this.isConfigured()) throw new Error('混元未配置');
+  async queryTask(taskId: string, credentials?: MediaCredentials): Promise<MediaGenResult> {
+    const { secretId, secretKey } = this.resolveCreds(credentials);
+    if (!secretId || !secretKey) throw new Error('混元未配置');
     const isVideo = taskId.toLowerCase().includes('video');
     const action = isVideo ? 'DescribeVideoGenerationJob' : 'DescribeImageGenerationJob';
     const payload = JSON.stringify({ JobId: taskId });
-    const resp = await axios.post(`https://${HUNYUAN_HOST}/`, payload, { headers: this.buildHeaders(action, payload) });
+    const resp = await axios.post(`https://${HUNYUAN_HOST}/`, payload, {
+      headers: this.buildHeaders(action, payload, secretId, secretKey),
+    });
     const d = resp.data?.Response || {};
     if (d.Error) throw new Error(`混元查询错误：${d.Error.Code}`);
     const status = (d.Status || d.JobStatus || '').toLowerCase();
@@ -255,18 +282,23 @@ class HunyuanProvider implements MediaProvider {
 }
 
 /* ------------------------------ 可灵 (Kling) ------------------------------ */
-class KelingProvider implements MediaProvider {
+export class KelingProvider implements MediaProvider {
   name = 'keling' as const;
   label = '可灵 Kling（快手）';
   supportedTypes: MediaTaskType[] = ['text2video', 'image2video'];
-  private get apiToken() {
+  private get envToken() {
     return process.env.KELING_API_TOKEN || '';
   }
+  /** BYOK 凭据（secretKey=Bearer Token）优先，否则回退平台环境变量 */
+  private resolveToken(creds?: MediaCredentials) {
+    return creds?.secretKey ?? this.envToken;
+  }
   isConfigured() {
-    return !!this.apiToken;
+    return !!this.envToken;
   }
   async generate(params: MediaGenParams): Promise<MediaGenResult> {
-    if (!this.isConfigured()) throw new Error('可灵未配置：请在 .env 设置 KELING_API_TOKEN');
+    const token = this.resolveToken(params.credentials);
+    if (!token) throw new Error('可灵未配置：请在 .env 设置 KELING_API_TOKEN，或配置自带 Key（BYOK）');
     const endpoint =
       params.type === 'image2video'
         ? 'https://api.klingai.com/v1/images2videos'
@@ -277,7 +309,7 @@ class KelingProvider implements MediaProvider {
       duration: params.duration || 5,
       ...(params.imageBase64 ? { image: params.imageBase64 } : {}),
     };
-    const resp = await axios.post(endpoint, body, { headers: { Authorization: `Bearer ${this.apiToken}` } });
+    const resp = await axios.post(endpoint, body, { headers: { Authorization: `Bearer ${token}` } });
     const vendorTaskId = String(resp.data?.data?.task_id || resp.data?.task_id || genTaskId());
     const result: MediaGenResult = {
       type: params.type,
@@ -291,10 +323,11 @@ class KelingProvider implements MediaProvider {
     await persistTask(vendorTaskId, result);
     return result;
   }
-  async queryTask(taskId: string): Promise<MediaGenResult> {
-    if (!this.isConfigured()) throw new Error('可灵未配置');
+  async queryTask(taskId: string, credentials?: MediaCredentials): Promise<MediaGenResult> {
+    const token = this.resolveToken(credentials);
+    if (!token) throw new Error('可灵未配置');
     const resp = await axios.get(`https://api.klingai.com/v1/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${this.apiToken}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     const d = resp.data?.data || {};
     const completed = d.task_status === 'succeed' || d.task_status === 'completed';
@@ -311,25 +344,30 @@ class KelingProvider implements MediaProvider {
 }
 
 /* ------------------------------ 即梦 (Jimeng) ------------------------------ */
-class JimengProvider implements MediaProvider {
+export class JimengProvider implements MediaProvider {
   name = 'jimeng' as const;
   label = '即梦 Jimeng（字节）';
   supportedTypes: MediaTaskType[] = ['image2image', 'text2video', 'image2video'];
-  private get apiToken() {
+  private get envToken() {
     return process.env.JIMENG_API_TOKEN || '';
   }
+  /** BYOK 凭据（secretKey=Bearer Token）优先，否则回退平台环境变量 */
+  private resolveToken(creds?: MediaCredentials) {
+    return creds?.secretKey ?? this.envToken;
+  }
   isConfigured() {
-    return !!this.apiToken;
+    return !!this.envToken;
   }
   async generate(params: MediaGenParams): Promise<MediaGenResult> {
-    if (!this.isConfigured()) throw new Error('即梦未配置：请在 .env 设置 JIMENG_API_TOKEN');
+    const token = this.resolveToken(params.credentials);
+    if (!token) throw new Error('即梦未配置：请在 .env 设置 JIMENG_API_TOKEN，或配置自带 Key（BYOK）');
     const endpoint = 'https://visual.volcengineapi.com/api/v3/visual/media_generation';
     const body = {
       req_key: params.type === 'image2image' ? 'jimeng_image_edit' : 'jimeng_video_gen',
       prompt: params.prompt,
       ...(params.imageBase64 ? { image_base64: params.imageBase64 } : {}),
     };
-    const resp = await axios.post(endpoint, body, { headers: { Authorization: `Bearer ${this.apiToken}` } });
+    const resp = await axios.post(endpoint, body, { headers: { Authorization: `Bearer ${token}` } });
     const vendorTaskId = String(resp.data?.data?.task_id || resp.data?.task_id || genTaskId());
     const result: MediaGenResult = {
       type: params.type,
@@ -343,13 +381,14 @@ class JimengProvider implements MediaProvider {
     await persistTask(vendorTaskId, result);
     return result;
   }
-  async queryTask(taskId: string): Promise<MediaGenResult> {
-    if (!this.isConfigured()) throw new Error('即梦未配置');
+  async queryTask(taskId: string, credentials?: MediaCredentials): Promise<MediaGenResult> {
+    const token = this.resolveToken(credentials);
+    if (!token) throw new Error('即梦未配置');
     const endpoint = 'https://visual.volcengineapi.com/api/v3/visual/media_generation/tasks';
     const resp = await axios.post(
       endpoint,
       { task_id: taskId },
-      { headers: { Authorization: `Bearer ${this.apiToken}` } }
+      { headers: { Authorization: `Bearer ${token}` } }
     );
     const d = resp.data?.data || {};
     const completed = d.status === 'done' || d.status === 'SUCCESS';
@@ -491,12 +530,12 @@ class MediaGenService {
     return provider.generate(params);
   }
 
-  /** 轮询异步任务状态（视频/图像生成） */
-  async queryTask(providerName: MediaProviderName, taskId: string): Promise<MediaGenResult> {
+  /** 轮询异步任务状态（视频/图像生成）。credentials 用于 BYOK 厂商鉴权。 */
+  async queryTask(providerName: MediaProviderName, taskId: string, credentials?: MediaCredentials): Promise<MediaGenResult> {
     const p = PROVIDERS[providerName];
     if (!p) throw new Error('未知厂商');
     if (!p.queryTask) throw new Error('该厂商不支持任务查询');
-    return p.queryTask(taskId);
+    return p.queryTask(taskId, credentials);
   }
 }
 

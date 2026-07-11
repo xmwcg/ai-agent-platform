@@ -56,6 +56,8 @@ export function requirePlan(min: PlanId) {
 /** 配额强制（在 requireAuth 之后使用） */
 export function enforceQuota(resource: QuotaResource) {
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    // BYOK：用户自带 Key 生成，平台零垫付，直接放行配额闸门
+    if ((req as any).byokBypass) return next();
     if (!req.user) {
       next();
       return;
@@ -120,6 +122,8 @@ export async function getQuotaUsage(userId: string): Promise<Record<QuotaResourc
  */
 export function enforceCostValve(contact = '') {
   return async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    // BYOK：用户自带 Key 生成，平台零垫付，成本阀门直接放行
+    if ((req as any).byokBypass) return next();
     if (!req.user) {
       next();
       return;
