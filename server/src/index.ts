@@ -38,6 +38,7 @@ import workflowRoutes from './routes/workflows';
 import agentRoutes from './routes/agent';
 import aiGatewayRoutes from './routes/ai-gateway';
 import knowledgeGraphRoutes from './routes/knowledge-graph';
+import sandboxRoutes from './routes/sandbox';
 import { mcpService } from './services/mcp.service';
 import { sendError } from './lib/http-error';
 import { logger } from './lib/logger';
@@ -110,6 +111,7 @@ app.use('/api/wf', workflowRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/gateway', aiGatewayRoutes);
 app.use('/api/knowledge-graph', knowledgeGraphRoutes);
+app.use('/api/sandbox', sandboxRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/text2img', text2imgRoutes);
 

@@ -79,6 +79,7 @@ function App() {
       { key: '/quickstart', icon: <RocketOutlined />, label: '快速启动' },
       { key: '/knowledge', icon: <BookOutlined />, label: '知识中枢' },
       { key: '/knowledge-graph', icon: <ApartmentOutlined />, label: '知识图谱' },
+      { key: '/sandbox', icon: <CodeOutlined />, label: '实践沙盒' },
       { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话' },
       { key: '/customer-service', icon: <CustomerServiceOutlined />, label: '智能客服' },
     ]},

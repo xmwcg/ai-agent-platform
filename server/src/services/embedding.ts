@@ -2,6 +2,7 @@ import { createAIClient } from '../config/ai-models';
 import { KnowledgeDocument, IKnowledgeDocument } from '../models/KnowledgeDocument';
 import { FilterQuery } from 'mongoose';
 import { logger } from '../lib/logger';
+import { getVectorStore, cosineSimilarity, rankByCosine, VectorCandidate } from './vector-store';
 
 // 向量维度（根据模型而定）
 const EMBEDDING_DIMENSION = 1536; // OpenAI text-embedding-3-small
@@ -75,23 +76,9 @@ class EmbeddingService {
     return embeddings;
   }
 
-  // 计算余弦相似度
+  // 计算余弦相似度（委托给可单测的纯函数）
   calculateSimilarity(vecA: number[], vecB: number[]): number {
-    if (vecA.length !== vecB.length) {
-      throw new Error('Vectors must have the same dimension');
-    }
-
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < vecA.length; i++) {
-      dotProduct += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
-    }
-
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    return cosineSimilarity(vecA, vecB);
   }
 
   // 为文档生成嵌入向量并保存
@@ -148,24 +135,34 @@ class EmbeddingService {
     try {
       // 生成查询向量
       const queryEmbedding = await this.generateEmbedding(query);
+      const store = getVectorStore();
 
-      // 获取所有有嵌入向量的文档
-      const documents = await KnowledgeDocument.find({
-        ...filter,
-        embedding: { $exists: true, $ne: [] }
-      }).select('+embedding');
+      // memory 模式：复用 MongoDB 中的文档向量，进程内余弦排序（行为保持兼容）
+      if (store.kind === 'memory') {
+        const documents = await KnowledgeDocument.find({
+          ...filter,
+          embedding: { $exists: true, $ne: [] }
+        }).select('+embedding');
 
-      // 计算相似度
-      const results = documents.map(doc => {
-        const similarity = this.calculateSimilarity(queryEmbedding, doc.embedding);
-        return { document: doc, similarity };
-      });
+        const candidates: VectorCandidate[] = documents.map((doc) => ({
+          id: String(doc._id),
+          vector: doc.embedding as number[],
+          payload: { doc: doc.toObject() },
+        }));
 
-      // 过滤和排序
-      return results
-        .filter(r => r.similarity >= minSimilarity)
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, limit);
+        const hits = rankByCosine(queryEmbedding, candidates, { topK: limit, minSimilarity });
+        return hits.map((h) => ({
+          document: h.payload!.doc as IKnowledgeDocument,
+          similarity: h.similarity,
+        }));
+      }
+
+      // 专业向量库（qdrant / pinecone）：远程检索，payload 携带必要字段
+      const hits = await store.search(queryEmbedding, { topK: limit, minSimilarity });
+      return hits.map((h) => ({
+        document: (h.payload?.doc ?? { _id: h.id, title: h.payload?.title ?? '(远程向量)', content: '' }) as IKnowledgeDocument,
+        similarity: h.similarity,
+      }));
     } catch (error) {
       logger.error('embedding', 'Search similar documents error', error instanceof Error ? error.message : error);
       throw error;

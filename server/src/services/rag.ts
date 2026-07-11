@@ -2,6 +2,7 @@ import { embeddingService } from './embedding';
 import { aiAgentService } from './ai-agent';
 import { KnowledgeDocument, IKnowledgeDocument } from '../models/KnowledgeDocument';
 import { logger } from '../lib/logger';
+import { measure } from '../lib/trace';
 
 /** RAG 检索结果的来源文档（已收敛 document: any 为强类型） */
 export interface RAGSource {
@@ -82,9 +83,16 @@ class RAGService {
       }
 
       // 5. 发送消息（使用 RAG 增强的提示词）
-      const result = await aiAgentService.sendMessage(sessionId, ragPrompt, {
-        systemPrompt: this.config.systemPromptTemplate?.replace('{{CONTEXT}}', context).replace('{{QUESTION}}', question)
-      });
+      const result = await measure(
+        'rag.generateAnswer',
+        () =>
+          aiAgentService.sendMessage(sessionId, ragPrompt, {
+            systemPrompt: this.config.systemPromptTemplate
+              ?.replace('{{CONTEXT}}', context)
+              .replace('{{QUESTION}}', question)
+          }),
+        { userId, input: { question, sourceCount: searchResults.length } }
+      );
 
       // 6. 返回结果（包含来源文档）
       const sources = searchResults.map(r => ({

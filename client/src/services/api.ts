@@ -95,6 +95,13 @@ export const knowledgeGraphAPI = {
   }) => apiClient.get('/knowledge-graph', { params })
 };
 
+// 实践沙盒 API
+export const sandboxAPI = {
+  run: (data: { language: string; code: string; mode?: string }) =>
+    apiClient.post('/sandbox/run', data),
+  status: () => apiClient.get('/sandbox/status')
+};
+
 // AI 聊天 API
 export const aiAPI = {
   // 发送聊天消息

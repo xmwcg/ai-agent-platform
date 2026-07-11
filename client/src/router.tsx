@@ -30,6 +30,7 @@ import MarketplacePage from '@/pages/MarketplacePage';
 import SkillsMarketPage from '@/pages/SkillsMarketPage';
 import WorkflowEditor from '@/pages/WorkflowEditor';
 import KnowledgeGraphPage from '@/pages/KnowledgeGraphPage';
+import SandboxPage from '@/pages/SandboxPage';
 
 const router = createBrowserRouter([
   {
@@ -74,6 +75,7 @@ const router = createBrowserRouter([
       { path: 'workflows', element: <WorkflowEditor /> },
       { path: 'workflow/:id', element: <WorkflowEditor /> },
       { path: 'knowledge-graph', element: <KnowledgeGraphPage /> },
+      { path: 'sandbox', element: <SandboxPage /> },
       { path: '*', element: <div>404 - 页面未找到</div> }
     ]
   }
