@@ -63,11 +63,12 @@ const userSchema = new Schema<IUser>(
       sparse: true, // 允许为空，但非空时唯一
       trim: true,
     },
+    // 注意：不能设 default: null。sparse 唯一索引会把显式写入的 null 当作值纳入，
+    // 导致每个新用户互相冲突（E11000 duplicate key），注册必 500。缺失时字段不写入即可被 sparse 排除。
     wechatOpenid: {
       type: String,
       unique: true,
       sparse: true,
-      default: null,
     },
     // 商业变现字段
     plan: {

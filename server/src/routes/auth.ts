@@ -48,6 +48,7 @@ router.post('/register', authLimiter, validate(registerSchema), async (req: Auth
       user: user.toJSON()
     });
   } catch (error) {
+    logger.error('auth', `注册失败: ${(error as Error)?.stack || error}`);
     sendError(res, error);
   }
 });
@@ -75,6 +76,7 @@ router.post('/login', authLimiter, validate(loginSchema), async (req: AuthReques
       user: user.toJSON()
     });
   } catch (error) {
+    logger.error('auth', `登录失败: ${(error as Error)?.stack || error}`);
     sendError(res, error);
   }
 });
