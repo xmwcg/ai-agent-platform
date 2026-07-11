@@ -11,6 +11,7 @@
 import axios from 'axios';
 import { randomBytes } from 'crypto';
 import { signTencentTC3, type TC3SignOptions } from '../lib/tc3';
+import { MediaTask } from '../models/MediaTask';
 
 export type MediaTaskType = 'image2image' | 'text2video' | 'image2video';
 export type MediaProviderName = 'mock' | 'hunyuan' | 'keling' | 'jimeng' | 'moneyprinterturbo';
@@ -58,12 +59,64 @@ function genTaskId(): string {
 /* --------------------------- 腾讯云 TC3-HMAC-SHA256 签名（可单测） --------------------------- */
 // 签名算法已抽到 `lib/tc3.ts` 共用（混元对话 / 媒体生成一致），此处仅引用。
 
-/* ------------------------------ 异步任务存储（用于轮询/演示） ------------------------------ */
+/* ------------------------------ 异步任务存储（MongoDB 持久化，服务重启不丢失） ------------------------------ */
 
 interface StoredTask extends MediaGenResult {
   createdAt: number;
 }
-const taskStore = new Map<string, StoredTask>();
+
+/** 内存降级存储（MongoDB 不可用时使用） */
+const fallbackStore = new Map<string, StoredTask>();
+
+/** 持久化存储任务状态，MongoDB 不可用时自动降级内存 */
+async function persistTask(taskId: string, result: MediaGenResult): Promise<void> {
+  try {
+    if (MediaTask.db.readyState === 1) {
+      await MediaTask.findOneAndUpdate(
+        { taskId },
+        {
+          taskId,
+          type: result.type,
+          status: result.status,
+          prompt: result.prompt,
+          outputUrl: result.outputUrl,
+          thumbnailUrl: result.thumbnailUrl,
+          duration: result.duration,
+          provider: result.provider,
+          note: result.note,
+        },
+        { upsert: true, new: true }
+      );
+      return;
+    }
+  } catch { /* MongoDB 不可用时降级 */ }
+  fallbackStore.set(taskId, { ...result, createdAt: Date.now() });
+}
+
+/** 从持久化存储检索任务，MongoDB 不可用时回退内存 */
+async function retrieveTask(taskId: string): Promise<StoredTask | null> {
+  try {
+    if (MediaTask.db.readyState === 1) {
+      const doc = await MediaTask.findOne({ taskId }).lean();
+      if (doc) {
+        return {
+          type: doc.type,
+          taskId: doc.taskId,
+          status: doc.status,
+          prompt: doc.prompt,
+          outputUrl: doc.outputUrl,
+          thumbnailUrl: doc.thumbnailUrl,
+          duration: doc.duration,
+          provider: doc.provider,
+          note: doc.note,
+          createdAt: doc.createdAt ? new Date(doc.createdAt).getTime() : Date.now(),
+        };
+      }
+      return null;
+    }
+  } catch { /* MongoDB 不可用时降级 */ }
+  return fallbackStore.get(taskId) || null;
+}
 
 /* ------------------------------ Mock ------------------------------ */
 class MockProvider implements MediaProvider {
@@ -86,12 +139,12 @@ class MockProvider implements MediaProvider {
       provider: 'mock',
       note: 'Mock 模式：任务已提交，约 2 秒后完成（演示异步轮询）。配置对应厂商 API Key 后将生成真实媒体文件。',
     };
-    taskStore.set(taskId, { ...result, createdAt: Date.now() });
+    await persistTask(taskId, result);
     return result;
   }
   /** 模拟异步：提交 2 秒后转为已完成并返回占位图 */
   async queryTask(taskId: string): Promise<MediaGenResult> {
-    const task = taskStore.get(taskId);
+    const task = await retrieveTask(taskId);
     if (!task) throw new Error('任务不存在或已过期');
     if (Date.now() - task.createdAt > 2000) {
       task.status = 'completed';
@@ -166,7 +219,7 @@ class HunyuanProvider implements MediaProvider {
       provider: 'hunyuan',
       note: `已提交混元任务（Action=${action}），可调用 queryTask 轮询结果。`,
     };
-    taskStore.set(vendorTaskId, { ...result, createdAt: Date.now() });
+    await persistTask(vendorTaskId, result);
     return result;
   }
   async queryTask(taskId: string): Promise<MediaGenResult> {
@@ -225,7 +278,7 @@ class KelingProvider implements MediaProvider {
       provider: 'keling',
       note: '已提交可灵任务，可调用 queryTask 轮询结果。',
     };
-    taskStore.set(vendorTaskId, { ...result, createdAt: Date.now() });
+    await persistTask(vendorTaskId, result);
     return result;
   }
   async queryTask(taskId: string): Promise<MediaGenResult> {
@@ -277,7 +330,7 @@ class JimengProvider implements MediaProvider {
       provider: 'jimeng',
       note: '已提交即梦任务，可调用 queryTask 轮询结果。',
     };
-    taskStore.set(vendorTaskId, { ...result, createdAt: Date.now() });
+    await persistTask(vendorTaskId, result);
     return result;
   }
   async queryTask(taskId: string): Promise<MediaGenResult> {
@@ -349,7 +402,7 @@ class MoneyPrinterTurboProvider implements MediaProvider {
         provider: 'moneyprinterturbo',
         note: '已提交 MoneyPrinterTurbo（整片生成：文案→素材→配音→字幕→合成）。轮询 queryTask 获取成片。',
       };
-      taskStore.set(jobId, { ...result, createdAt: Date.now() });
+      await persistTask(jobId, result);
       return result;
     } catch (e: any) {
       // 外部服务不可用：回退为本地 processing 占位，仍走 Mock 式轮询告知用户
@@ -362,7 +415,7 @@ class MoneyPrinterTurboProvider implements MediaProvider {
         provider: 'moneyprinterturbo',
         note: `MoneyPrinterTurbo 未连接（${this.baseURL}）：${e.message}。请确认其 FastAPI 服务已启动。`,
       };
-      taskStore.set(taskId, { ...result, createdAt: Date.now() });
+      await persistTask(taskId, result);
       return result;
     }
   }
