@@ -16,7 +16,7 @@ const router = Router();
 
 // 创建订单输入校验（plan 限定已知套餐，period 限定月/年）
 const createOrderSchema: ValidationSchema = {
-  plan: { type: 'string', oneOf: ['free', 'pro', 'enterprise', 'team'] },
+  plan: { type: 'string', oneOf: ['free', 'pro', 'max'] },
   period: { type: 'string', oneOf: ['monthly', 'yearly'] },
   provider: { type: 'string', oneOf: ['mock', 'wechat', 'stripe'] },
 };
@@ -407,13 +407,34 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
   }
 });
 
-// 取消订阅（到期降级为 free；不立即失效，保留已付费周期）
+// 取消订阅（到期后降级为 free；保留已付费周期权益直到到期日）
 router.post('/subscription/cancel', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const user = await User.findById(req.user!.id).select('plan membershipExpiresAt');
+    if (!user) {
+      return res.status(404).json({ success: false, error: '用户不存在' });
+    }
+    if (user.plan === 'free') {
+      return res.json({ success: true, message: '当前已是免费版' });
+    }
+    const expires = user.membershipExpiresAt ? new Date(user.membershipExpiresAt).getTime() : 0;
+    if (expires <= Date.now()) {
+      // 已到期：立即降级
+      await User.findByIdAndUpdate(req.user!.id, {
+        $set: { plan: 'free' },
+      });
+      return res.json({ success: true, message: '订阅已过期，已降级为免费版' });
+    }
+    // 未到期：设置 membershipExpiresAt 为当前时间，但不清除 plan
+    // plan 由会员到期检查中间件自动降级
     await User.findByIdAndUpdate(req.user!.id, {
       $set: { membershipExpiresAt: new Date() },
     });
-    res.json({ success: true, message: '订阅已取消，当前周期结束后将降级为免费版' });
+    res.json({
+      success: true,
+      data: { originalExpiresAt: user.membershipExpiresAt },
+      message: '订阅已取消，当前周期权益将被保留。到期后自动降级为免费版',
+    });
   } catch (err) {
     sendError(res, err);
   }
