@@ -24,6 +24,7 @@ import {
   DashboardOutlined,
   AppstoreOutlined,
   NodeIndexOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 import apiClient from '@/services/api';
 
@@ -77,6 +78,7 @@ function App() {
       { key: '/', icon: <HomeOutlined />, label: '首页' },
       { key: '/quickstart', icon: <RocketOutlined />, label: '快速启动' },
       { key: '/knowledge', icon: <BookOutlined />, label: '知识中枢' },
+      { key: '/knowledge-graph', icon: <ApartmentOutlined />, label: '知识图谱' },
       { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话' },
       { key: '/customer-service', icon: <CustomerServiceOutlined />, label: '智能客服' },
     ]},

@@ -29,6 +29,7 @@ import TeamPage from '@/pages/TeamPage';
 import MarketplacePage from '@/pages/MarketplacePage';
 import SkillsMarketPage from '@/pages/SkillsMarketPage';
 import WorkflowEditor from '@/pages/WorkflowEditor';
+import KnowledgeGraphPage from '@/pages/KnowledgeGraphPage';
 
 const router = createBrowserRouter([
   {
@@ -72,6 +73,7 @@ const router = createBrowserRouter([
       { path: 'ai-chat', element: <AiChat /> },
       { path: 'workflows', element: <WorkflowEditor /> },
       { path: 'workflow/:id', element: <WorkflowEditor /> },
+      { path: 'knowledge-graph', element: <KnowledgeGraphPage /> },
       { path: '*', element: <div>404 - 页面未找到</div> }
     ]
   }
