@@ -9,10 +9,14 @@
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src --ext .ts,.tsx",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
+    "@tauri-apps/api": "^1.5.0",
     "@monaco-editor/react": "^4.6.0",
     "@tiptap/extension-placeholder": "^2.1.13",
     "@tiptap/react": "^2.1.13",
@@ -39,6 +43,7 @@
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "@tauri-apps/cli": "^1.5.0",
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",

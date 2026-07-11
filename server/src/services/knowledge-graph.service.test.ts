@@ -38,8 +38,12 @@ describe('知识图谱聚合（aggregateGraph 纯函数）', () => {
 
   it('relatedDocs 生成强关联 doc-doc 边（权重更高）', () => {
     const g = aggregateGraph(docs);
+    // doc-doc 边为无向，source/target 顺序由 min(id) 归一化，断言需顺序无关
     const edge = g.links.find(
-      (l) => l.type === 'doc-doc' && l.source === 'doc:3' && l.target === 'doc:1'
+      (l) =>
+        l.type === 'doc-doc' &&
+        ((l.source === 'doc:3' && l.target === 'doc:1') ||
+          (l.source === 'doc:1' && l.target === 'doc:3'))
     );
     expect(edge).toBeTruthy();
     expect(edge!.weight).toBe(5);
@@ -58,8 +62,15 @@ describe('知识图谱聚合（aggregateGraph 纯函数）', () => {
     expect(g.nodes.filter((n) => n.type === 'tag').length).toBe(0);
     expect(g.links.filter((l) => l.type === 'doc-tag').length).toBe(0);
     expect(g.links.filter((l) => l.type === 'doc-doc' && l.source === 'doc:1' && l.target === 'doc:2').length).toBe(0);
-    // relatedDocs 边仍保留
-    expect(g.links.filter((l) => l.type === 'doc-doc' && l.source === 'doc:3' && l.target === 'doc:1').length).toBe(1);
+    // relatedDocs 边仍保留（无向边，顺序无关）
+    expect(
+      g.links.filter(
+        (l) =>
+          l.type === 'doc-doc' &&
+          ((l.source === 'doc:3' && l.target === 'doc:1') ||
+            (l.source === 'doc:1' && l.target === 'doc:3'))
+      ).length
+    ).toBe(1);
   });
 
   it('空文档列表返回空图谱', () => {
