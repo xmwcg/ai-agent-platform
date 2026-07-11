@@ -317,7 +317,12 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
     const provider = req.params.provider as PaymentProvider;
     const gateway = getPaymentGateway(provider);
 
-    // 获取原始请求体（express.raw() 中间件下 req.body 为 Buffer）
+    // 回执：支付宝要求返回纯文本 "success"，否则会持续重推；其余渠道返回 JSON 即可
+    const ack = () => (provider === 'alipay'
+      ? res.status(200).send('success')
+      : res.status(200).json({ received: true }));
+
+    // 获取原始请求体（express.raw() 中间件下 req.body 为 Buffer；支付宝为解析后的表单对象）
     const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body);
 
     // Stripe 签名头 vs 微信签名头（微信 v3 使用标准 wechatpay-* 头）
@@ -333,7 +338,12 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
       wechatSerial: (req.headers['wechatpay-serial'] as string) || '',
     } : undefined;
 
-    const result = await gateway.verifyWebhook(rawBody, signature, wechatHeaders);
+    // 支付宝异步通知：body 已被 express.urlencoded 解析为表单对象，交给网关验签
+    const extra = provider === 'alipay'
+      ? { alipayParams: (req.body && !Buffer.isBuffer(req.body) ? req.body : {}) as Record<string, string> }
+      : wechatHeaders;
+
+    const result = await gateway.verifyWebhook(rawBody, signature, extra);
     if (!result || !result.success) {
       // 区分验签失败与非成功事件（如 payment_failed）
       if (result && result.eventType) {
@@ -342,7 +352,7 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
         logger.warn('webhook', `验签失败: provider=${provider}`);
       }
       // 永远返回 200，避免支付网关认为回调失败而重试
-      return res.status(200).json({ received: true });
+      return ack();
     }
 
     // ========== 2. 提取事件 ID（幂等性标识） ==========
@@ -352,7 +362,7 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
     const existing = await WebhookEvent.findOne({ eventId });
     if (existing) {
       logger.info('webhook', `事件已处理，跳过: eventId=${eventId} status=${existing.status}`);
-      return res.status(200).json({ received: true, idempotent: true });
+      return ack();
     }
 
     // ========== 4. 重放攻击防护：验签时间戳有效期 5 分钟 ==========
@@ -368,14 +378,14 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
       logger.warn('webhook', `重放攻击风险: provider=${provider} sigTime=${sigTime} now=${nowSec} diff=${Math.abs(nowSec - sigTime)}s`);
       await WebhookEvent.create({
         eventId,
-        provider: provider as 'wechat' | 'stripe',
+        provider: provider as 'wechat' | 'stripe' | 'alipay',
         orderNo: result.orderNo,
         transactionId: result.transactionId,
         status: 'skipped',
         errorMessage: `重放攻击防护: 签名时间差 ${Math.abs(nowSec - sigTime)}s > 300s`,
         rawSummary: rawBody.slice(0, 512),
       });
-      return res.status(200).json({ received: true });
+      return ack();
     }
 
     // ========== 5. 查询订单并激活订阅 ==========
@@ -398,14 +408,14 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
       logger.error('webhook', `找不到对应订单: eventId=${eventId} orderNo=${result.orderNo} txId=${result.transactionId}`);
       await WebhookEvent.create({
         eventId,
-        provider: provider as 'wechat' | 'stripe',
+        provider: provider as 'wechat' | 'stripe' | 'alipay',
         orderNo: result.orderNo,
         transactionId: result.transactionId,
         status: 'failed',
         errorMessage: '找不到对应订单',
         rawSummary: rawBody.slice(0, 512),
       });
-      return res.status(200).json({ received: true });
+      return ack();
     }
 
     // ========== 6. 幂等激活：已支付订单不重复激活 ==========
@@ -413,13 +423,13 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
       logger.info('webhook', `订单已支付，跳过激活: orderNo=${order.orderNo}`);
       await WebhookEvent.create({
         eventId,
-        provider: provider as 'wechat' | 'stripe',
+        provider: provider as 'wechat' | 'stripe' | 'alipay',
         orderNo: order.orderNo,
         transactionId: result.transactionId,
         status: 'skipped',
         rawSummary: rawBody.slice(0, 512),
       });
-      return res.status(200).json({ received: true, alreadyPaid: true });
+      return ack();
     }
 
     // ========== 7. 更新订单状态 + 激活订阅/充值积分 ==========
@@ -442,7 +452,7 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
     // ========== 8. 记录成功事件 ==========
     await WebhookEvent.create({
       eventId,
-      provider: provider as 'wechat' | 'stripe',
+      provider: provider as 'wechat' | 'stripe' | 'alipay',
       orderNo: order.orderNo,
       transactionId: result.transactionId,
       status: 'processed',
@@ -450,11 +460,14 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
       processedAt: new Date(),
     });
 
-    res.status(200).json({ received: true });
+    return ack();
   } catch (err) {
     logger.error('webhook', `处理失败: provider=${req.params.provider}`, err);
     // 永远返回 200，避免支付网关认为回调失败而无限重试
-    res.status(200).json({ received: true });
+    if (req.params.provider === 'alipay') {
+      return res.status(200).send('success');
+    }
+    return res.status(200).json({ received: true });
   }
 });
 
@@ -511,6 +524,13 @@ router.get('/payment-status', requireAuth, async (_req: AuthRequest, res: Respon
         hasApiKey: !!process.env.WECHAT_API_V3_KEY,
         hasPlatformCert: !!process.env.WECHAT_PLATFORM_CERT,
         notifyUrl: process.env.WECHAT_NOTIFY_URL || process.env.PUBLIC_BASE_URL ? `${process.env.PUBLIC_BASE_URL}/api/billing/webhook/wechat` : '未配置',
+      },
+      alipay: {
+        configured: !!(process.env.ALIPAY_APP_ID && process.env.ALIPAY_PRIVATE_KEY),
+        appId: mask(process.env.ALIPAY_APP_ID),
+        hasPrivateKey: !!process.env.ALIPAY_PRIVATE_KEY,
+        hasPublicKey: !!process.env.ALIPAY_PUBLIC_KEY,
+        notifyUrl: process.env.PUBLIC_BASE_URL ? `${process.env.PUBLIC_BASE_URL}/api/billing/webhook/alipay` : '未配置',
       },
       stripe: {
         configured: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
