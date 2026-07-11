@@ -96,17 +96,21 @@ class MemoryVectorStore implements VectorStoreProvider {
 
 class QdrantVectorStore implements VectorStoreProvider {
   kind = 'qdrant' as const;
+  private env: Record<string, string | undefined>;
+  constructor(env: Record<string, string | undefined> = process.env) {
+    this.env = env;
+  }
   private get url() {
-    return (process.env.QDRANT_URL || '').replace(/\/$/, '');
+    return (this.env.QDRANT_URL || '').replace(/\/$/, '');
   }
   private get apiKey() {
-    return process.env.QDRANT_API_KEY || '';
+    return this.env.QDRANT_API_KEY || '';
   }
   private get collection() {
-    return process.env.QDRANT_COLLECTION || 'reasonix';
+    return this.env.QDRANT_COLLECTION || 'reasonix';
   }
   isConfigured() {
-    return !!process.env.QDRANT_URL && !!process.env.QDRANT_API_KEY;
+    return !!this.env.QDRANT_URL && !!this.env.QDRANT_API_KEY;
   }
   async upsert(points: VectorCandidate[], payloads: Record<string, any>[] = []): Promise<void> {
     if (!this.isConfigured()) return;
@@ -137,14 +141,18 @@ class QdrantVectorStore implements VectorStoreProvider {
 
 class PineconeVectorStore implements VectorStoreProvider {
   kind = 'pinecone' as const;
+  private env: Record<string, string | undefined>;
+  constructor(env: Record<string, string | undefined> = process.env) {
+    this.env = env;
+  }
   private get indexHost() {
-    return (process.env.PINECONE_INDEX_HOST || '').replace(/\/$/, '');
+    return (this.env.PINECONE_INDEX_HOST || '').replace(/\/$/, '');
   }
   private get apiKey() {
-    return process.env.PINECONE_API_KEY || '';
+    return this.env.PINECONE_API_KEY || '';
   }
   isConfigured() {
-    return !!process.env.PINECONE_API_KEY && !!process.env.PINECONE_INDEX_HOST;
+    return !!this.env.PINECONE_API_KEY && !!this.env.PINECONE_INDEX_HOST;
   }
   async upsert(points: VectorCandidate[], payloads: Record<string, any>[] = []): Promise<void> {
     if (!this.isConfigured()) return;
@@ -173,14 +181,13 @@ class PineconeVectorStore implements VectorStoreProvider {
   }
 }
 
-const PROVIDERS: Record<VectorStoreKind, VectorStoreProvider> = {
-  memory: new MemoryVectorStore(),
-  qdrant: new QdrantVectorStore(),
-  pinecone: new PineconeVectorStore(),
-};
+const MEMORY_STORE: VectorStoreProvider = new MemoryVectorStore();
 
 export function getVectorStore(env: Record<string, string | undefined> = process.env): VectorStoreProvider {
-  return PROVIDERS[selectVectorStoreKind(env)];
+  const kind = selectVectorStoreKind(env);
+  if (kind === 'qdrant') return new QdrantVectorStore(env);
+  if (kind === 'pinecone') return new PineconeVectorStore(env);
+  return MEMORY_STORE;
 }
 
 export default getVectorStore;

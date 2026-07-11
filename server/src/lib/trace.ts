@@ -72,14 +72,18 @@ class NoopTracer implements Tracer {
 
 class LangfuseTracer implements Tracer {
   mode = 'langfuse' as const;
+  private env: Record<string, string | undefined>;
+  constructor(env: Record<string, string | undefined> = process.env) {
+    this.env = env;
+  }
   private get host() {
-    return (process.env.LANGFUSE_HOST || '').replace(/\/$/, '');
+    return (this.env.LANGFUSE_HOST || '').replace(/\/$/, '');
   }
   private get publicKey() {
-    return process.env.LANGFUSE_PUBLIC_KEY || '';
+    return this.env.LANGFUSE_PUBLIC_KEY || '';
   }
   private get secretKey() {
-    return process.env.LANGFUSE_SECRET_KEY || '';
+    return this.env.LANGFUSE_SECRET_KEY || '';
   }
   isConfigured() {
     return !!this.publicKey && !!this.secretKey && !!this.host;
@@ -112,13 +116,10 @@ class LangfuseTracer implements Tracer {
   }
 }
 
-const TRACERS: Record<TracerMode, Tracer> = {
-  noop: new NoopTracer(),
-  langfuse: new LangfuseTracer(),
-};
+const NOOP_TRACER: Tracer = new NoopTracer();
 
 export function getTracer(env: Record<string, string | undefined> = process.env): Tracer {
-  return TRACERS[selectTracerMode(env)];
+  return selectTracerMode(env) === 'langfuse' ? new LangfuseTracer(env) : NOOP_TRACER;
 }
 
 /**
