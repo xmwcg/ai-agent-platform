@@ -318,9 +318,10 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
     const gateway = getPaymentGateway(provider);
 
     // 回执：支付宝要求返回纯文本 "success"，否则会持续重推；其余渠道返回 JSON 即可
-    const ack = () => (provider === 'alipay'
+    // extra 用于回带幂等/已支付等契约字段（支付宝纯文本回执不受影响）
+    const ack = (extra?: Record<string, unknown>) => (provider === 'alipay'
       ? res.status(200).send('success')
-      : res.status(200).json({ received: true }));
+      : res.status(200).json({ received: true, ...extra }));
 
     // 获取原始请求体（express.raw() 中间件下 req.body 为 Buffer；支付宝为解析后的表单对象）
     const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body);
@@ -362,7 +363,7 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
     const existing = await WebhookEvent.findOne({ eventId });
     if (existing) {
       logger.info('webhook', `事件已处理，跳过: eventId=${eventId} status=${existing.status}`);
-      return ack();
+      return ack({ idempotent: true });
     }
 
     // ========== 4. 重放攻击防护：验签时间戳有效期 5 分钟 ==========
@@ -429,7 +430,7 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
         status: 'skipped',
         rawSummary: rawBody.slice(0, 512),
       });
-      return ack();
+      return ack({ alreadyPaid: true });
     }
 
     // ========== 7. 更新订单状态 + 激活订阅/充值积分 ==========
