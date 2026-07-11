@@ -301,3 +301,272 @@ describe('E2E-4: 重放攻击防护', () => {
     expect(order?.status).toBe('pending');
   });
 });
+
+// ═══════════════════════════════════════════════════════
+// E2E-5: 微信支付 Webhook 验签 + 解密 + 激活（端到端）
+// ═══════════════════════════════════════════════════════
+
+describe('E2E-5: 微信支付 Webhook 验签与幂等', () => {
+  jest.setTimeout(15000);
+
+  let wechatKeyPair: { publicKey: string; privateKey: string };
+  const API_V3_KEY = 'A'.repeat(32); // 32 字节 APIv3 密钥
+  const MCH_ID = '1900000001';
+
+  beforeAll(() => {
+    // 生成 RSA 密钥对用于签名/验签
+    wechatKeyPair = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+  });
+
+  /** 构造微信支付 v3 回调的密文 resource */
+  function encryptWeChatResource(plaintext: string, nonce: string, associated: string): string {
+    const cipher = crypto.createCipheriv(
+      'aes-256-gcm',
+      Buffer.from(API_V3_KEY, 'utf8'),
+      Buffer.from(nonce, 'utf8')
+    );
+    if (associated) cipher.setAAD(Buffer.from(associated, 'utf8'));
+    const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return Buffer.concat([enc, tag]).toString('base64');
+  }
+
+  /** 生成微信支付 v3 回调签名 */
+  function signWeChatPayload(rawBody: string, timestamp: string, nonce: string): string {
+    const signer = crypto.createSign('RSA-SHA256');
+    signer.update(`${timestamp}\n${nonce}\n${rawBody}\n`);
+    return signer.sign(wechatKeyPair.privateKey, 'base64');
+  }
+
+  it('合法微信 Webhook → 验签通过 + 解密成功 → 激活订阅', async () => {
+    // 配置平台证书用于验签
+    process.env.WECHAT_PLATFORM_CERT = wechatKeyPair.publicKey;
+    process.env.WECHAT_API_V3_KEY = API_V3_KEY;
+
+    // 用 mock 创建订单
+    const orderRes = await request(app)
+      .post(`${BASE}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ plan: 'pro', period: 'monthly', provider: 'mock' });
+    const { orderNo } = orderRes.body.data;
+
+    // 构造微信回调密文
+    const innerJson = JSON.stringify({
+      out_trade_no: orderNo,
+      transaction_id: `WX_TXN_${Date.now()}`,
+      trade_state: 'SUCCESS',
+    });
+    const resourceNonce = crypto.randomBytes(12).toString('base64').substring(0, 12);
+    const associated = 'transaction';
+    const ciphertext = encryptWeChatResource(innerJson, resourceNonce, associated);
+
+    const callbackBody = JSON.stringify({
+      id: `evt_${Date.now()}`,
+      create_time: new Date().toISOString(),
+      resource_type: 'encrypt-resource',
+      event_type: 'TRANSACTION.SUCCESS',
+      summary: '支付成功',
+      resource: {
+        original_type: 'transaction',
+        algorithm: 'AEAD_AES_256_GCM',
+        ciphertext,
+        associated_data: associated,
+        nonce: resourceNonce,
+      },
+    });
+
+    // 生成微信签名
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = crypto.randomUUID().replace(/-/g, '').substring(0, 32);
+    const wechatSig = signWeChatPayload(callbackBody, ts, nonceStr);
+
+    // 发送 Webhook
+    const whRes = await request(app)
+      .post(`${BASE}/webhook/wechat`)
+      .set('Content-Type', 'application/json')
+      .set('wechatpay-timestamp', ts)
+      .set('wechatpay-nonce', nonceStr)
+      .set('wechatpay-signature', wechatSig)
+      .set('wechatpay-serial', 'SERIAL_001')
+      .send(callbackBody);
+    expect(whRes.status).toBe(200);
+
+    // 验证订阅激活
+    const subRes = await request(app)
+      .get(`${BASE}/subscription`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(subRes.body.data.plan).toBe('pro');
+
+    // 验证 WebhookEvent 已记录
+    const { WebhookEvent } = require('../models/WebhookEvent');
+    const events = await WebhookEvent.find({ orderNo });
+    expect(events.some((e: any) => e.status === 'processed')).toBe(true);
+
+    // 清理环境
+    delete process.env.WECHAT_PLATFORM_CERT;
+    delete process.env.WECHAT_API_V3_KEY;
+  });
+
+  it('微信签名错误 → 拒绝，不激活', async () => {
+    // 设置公钥使验签会执行
+    process.env.WECHAT_PLATFORM_CERT = wechatKeyPair.publicKey;
+    process.env.WECHAT_API_V3_KEY = API_V3_KEY;
+
+    const orderRes = await request(app)
+      .post(`${BASE}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ plan: 'pro', period: 'monthly', provider: 'mock' });
+    const { orderNo } = orderRes.body.data;
+
+    const innerJson = JSON.stringify({
+      out_trade_no: orderNo,
+      transaction_id: `WX_FAKE_${Date.now()}`,
+    });
+    const resourceNonce = crypto.randomBytes(12).toString('base64').substring(0, 12);
+    const ciphertext = encryptWeChatResource(innerJson, resourceNonce, 'transaction');
+
+    const callbackBody = JSON.stringify({
+      id: `evt_bad_${Date.now()}`,
+      event_type: 'TRANSACTION.SUCCESS',
+      resource: { ciphertext, associated_data: 'transaction', nonce: resourceNonce },
+    });
+
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = crypto.randomUUID().replace(/-/g, '');
+    // 使用错误签名
+    const badSig = signWeChatPayload('{"fake":true}', ts, nonceStr);
+
+    const whRes = await request(app)
+      .post(`${BASE}/webhook/wechat`)
+      .set('Content-Type', 'application/json')
+      .set('wechatpay-timestamp', ts)
+      .set('wechatpay-nonce', nonceStr)
+      .set('wechatpay-signature', badSig)
+      .set('wechatpay-serial', 'SERIAL_FAKE')
+      .send(callbackBody);
+    expect(whRes.status).toBe(200);
+
+    // 订单仍为 pending
+    const { Order } = require('../models/Order');
+    const order = await Order.findOne({ orderNo });
+    expect(order?.status).toBe('pending');
+
+    delete process.env.WECHAT_PLATFORM_CERT;
+    delete process.env.WECHAT_API_V3_KEY;
+  });
+
+  it('微信重复回调同一事件 → 幂等跳过', async () => {
+    process.env.WECHAT_PLATFORM_CERT = wechatKeyPair.publicKey;
+    process.env.WECHAT_API_V3_KEY = API_V3_KEY;
+
+    const orderRes = await request(app)
+      .post(`${BASE}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ plan: 'pro', period: 'monthly', provider: 'mock' });
+    const { orderNo } = orderRes.body.data;
+    const txnId = `WX_IDEM_${Date.now()}`;
+
+    const innerJson = JSON.stringify({
+      out_trade_no: orderNo,
+      transaction_id: txnId,
+    });
+    const resourceNonce = crypto.randomBytes(12).toString('base64').substring(0, 12);
+    const ciphertext = encryptWeChatResource(innerJson, resourceNonce, 'transaction');
+
+    const callbackBody = JSON.stringify({
+      id: `evt_${Date.now()}`,
+      event_type: 'TRANSACTION.SUCCESS',
+      resource: { ciphertext, associated_data: 'transaction', nonce: resourceNonce },
+    });
+
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const nonceStr = crypto.randomUUID().replace(/-/g, '').substring(0, 32);
+    const wechatSig = signWeChatPayload(callbackBody, ts, nonceStr);
+
+    // 第一次
+    await request(app)
+      .post(`${BASE}/webhook/wechat`)
+      .set('Content-Type', 'application/json')
+      .set('wechatpay-timestamp', ts)
+      .set('wechatpay-nonce', nonceStr)
+      .set('wechatpay-signature', wechatSig)
+      .set('wechatpay-serial', 'SERIAL_001')
+      .send(callbackBody);
+
+    // 第二次（幂等）
+    const whRes2 = await request(app)
+      .post(`${BASE}/webhook/wechat`)
+      .set('Content-Type', 'application/json')
+      .set('wechatpay-timestamp', ts)
+      .set('wechatpay-nonce', nonceStr)
+      .set('wechatpay-signature', wechatSig)
+      .set('wechatpay-serial', 'SERIAL_001')
+      .send(callbackBody);
+    expect(whRes2.body.idempotent).toBe(true);
+
+    // 应只有一个 processed
+    const { WebhookEvent } = require('../models/WebhookEvent');
+    const events = await WebhookEvent.find({ orderNo });
+    expect(events.filter((e: any) => e.status === 'processed').length).toBe(1);
+
+    delete process.env.WECHAT_PLATFORM_CERT;
+    delete process.env.WECHAT_API_V3_KEY;
+  });
+
+  it('微信过期时间戳 → 重放攻击防护跳过', async () => {
+    process.env.WECHAT_PLATFORM_CERT = wechatKeyPair.publicKey;
+    process.env.WECHAT_API_V3_KEY = API_V3_KEY;
+
+    const orderRes = await request(app)
+      .post(`${BASE}/orders`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ plan: 'pro', period: 'monthly', provider: 'mock' });
+    const { orderNo } = orderRes.body.data;
+
+    const innerJson = JSON.stringify({
+      out_trade_no: orderNo,
+      transaction_id: `WX_OLD_${Date.now()}`,
+    });
+    const resourceNonce = crypto.randomBytes(12).toString('base64').substring(0, 12);
+    const ciphertext = encryptWeChatResource(innerJson, resourceNonce, 'transaction');
+
+    const callbackBody = JSON.stringify({
+      id: `evt_old_${Date.now()}`,
+      event_type: 'TRANSACTION.SUCCESS',
+      resource: { ciphertext, associated_data: 'transaction', nonce: resourceNonce },
+    });
+
+    // 10 分钟前的时间戳
+    const oldTs = String(Math.floor(Date.now() / 1000) - 600);
+    const nonceStr = crypto.randomUUID().replace(/-/g, '').substring(0, 32);
+    const wechatSig = signWeChatPayload(callbackBody, oldTs, nonceStr);
+
+    const whRes = await request(app)
+      .post(`${BASE}/webhook/wechat`)
+      .set('Content-Type', 'application/json')
+      .set('wechatpay-timestamp', oldTs)
+      .set('wechatpay-nonce', nonceStr)
+      .set('wechatpay-signature', wechatSig)
+      .set('wechatpay-serial', 'SERIAL_001')
+      .send(callbackBody);
+    expect(whRes.status).toBe(200);
+
+    // 订单仍为 pending
+    const { Order } = require('../models/Order');
+    const order = await Order.findOne({ orderNo });
+    expect(order?.status).toBe('pending');
+
+    // 验证 skipped 事件
+    const { WebhookEvent } = require('../models/WebhookEvent');
+    const events = await WebhookEvent.find({ orderNo });
+    const skipped = events.filter((e: any) => e.status === 'skipped' && e.errorMessage?.includes('重放攻击'));
+    expect(skipped.length).toBeGreaterThanOrEqual(1);
+
+    delete process.env.WECHAT_PLATFORM_CERT;
+    delete process.env.WECHAT_API_V3_KEY;
+  });
+});
