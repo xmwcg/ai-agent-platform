@@ -11,6 +11,7 @@ import { resolveUserPlan, getQuotaUsage } from '../middleware/subscription';
 import { sendError } from '../lib/http-error';
 import { validate, ValidationSchema } from '../lib/validation';
 import { logger } from '../lib/logger';
+import { activateReferralOnPayment } from '../services/referral.service';
 
 const router = Router();
 
@@ -47,6 +48,12 @@ async function activateSubscription(userId: string, plan: PlanId, period: Billin
       balanceAfter: user.credits,
       orderNo,
       description: `${p.name}订阅赠送 ${p.credits} 积分`,
+    });
+  }
+  // 异步处理推荐佣金激活（不阻塞订阅激活响应）
+  if (user && plan !== 'free') {
+    void activateReferralOnPayment(userId, period === 'yearly' ? p.priceYearly : p.priceMonthly, orderNo).catch((err) => {
+      logger.error('billing', `推荐佣金激活失败: ${err.message}`);
     });
   }
 }

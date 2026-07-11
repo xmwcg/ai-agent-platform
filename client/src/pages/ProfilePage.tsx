@@ -1,19 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Typography, Button, Space, Tag, Progress, Table, message,
+  Card, Typography, Button, Space, Tag, Table, message,
   Row, Col, Modal, Avatar, Spin, Tabs, Form, Input, Select, Switch,
-  QRCode, Statistic, List, Divider, Badge, Tooltip,
+  QRCode, Statistic, List, Divider, Tooltip,
 } from 'antd';
 import {
-  UserOutlined, CrownOutlined, CreditCardOutlined, HistoryOutlined,
-  SafetyCertificateOutlined, ApiOutlined, GiftOutlined, ShareAltOutlined,
+  UserOutlined, CrownOutlined, CreditCardOutlined,
+  SafetyCertificateOutlined, GiftOutlined, ShareAltOutlined,
   QrcodeOutlined, TeamOutlined, WalletOutlined, MobileOutlined,
-  MailOutlined, WechatOutlined, CalendarOutlined, TrophyOutlined,
+  MailOutlined, WechatOutlined, CalendarOutlined,
   SendOutlined, DollarOutlined, ExportOutlined,
-  KeyOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined,
+  KeyOutlined, PlusOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { billingAPI, profileAPI, marketplaceAPI, byokAPI, extractApiError, MediaByokKey } from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
+import { usePaymentStore } from '@/stores/payment';
+import { useUIStore } from '@/stores/ui';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -23,48 +26,67 @@ const PLAN_LABEL: Record<string, { text: string; color: string }> = {
   max: { text: '旗舰版', color: 'gold' },
 };
 
-// 模拟积分记录
-const MOCK_POINTS: { id: string; type: string; amount: number; desc: string; time: string }[] = [
-  { id: '1', type: 'earn', amount: 10, desc: '每日签到', time: '2025-07-09' },
-  { id: '2', type: 'earn', amount: 50, desc: '完成AI对话', time: '2025-07-09' },
-  { id: '3', type: 'spend', amount: -20, desc: '兑换API调用', time: '2025-07-08' },
-  { id: '4', type: 'earn', amount: 100, desc: '分享推广奖励', time: '2025-07-08' },
-  { id: '5', type: 'earn', amount: 30, desc: '上传知识文档', time: '2025-07-07' },
-];
-
-// 分销记录
-const MOCK_REFERRALS: { id: string; name: string; level: number; commission: number; time: string }[] = [
-  { id: '1', name: '张**', level: 1, commission: 29.9, time: '2025-07-05' },
-  { id: '2', name: '李**', level: 1, commission: 99.0, time: '2025-07-01' },
-  { id: '3', name: '王**', level: 2, commission: 9.9, time: '2025-06-28' },
-];
-
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>({ name: '用户', email: 'user@example.com', credits: 500, phone: '', wechat: '' });
-  const [sub, setSub] = useState<any>(null);
+  const isMobile = useUIStore((s) => s.isMobile);
+
+  // ─── 全局 Auth Store ───
+  const authUser = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
+  const fetchProfileAction = useAuthStore((s) => s.fetchProfile);
+
+  // ─── 全局 Payment Store ───
+  const subscription = usePaymentStore((s) => s.subscription);
+  const fetchSubscription = usePaymentStore((s) => s.fetchSubscription);
+
   const [loading, setLoading] = useState(true);
   const [signChecked, setSignChecked] = useState(false);
   const [shareModal, setShareModal] = useState(false);
+
   // BYOK 媒体 Key 管理
   const [byokKeys, setByokKeys] = useState<MediaByokKey[]>([]);
   const [byokLoading, setByokLoading] = useState(false);
   const [byokModal, setByokModal] = useState(false);
   const [byokForm, setByokForm] = useState({ provider: 'hunyuan' as string, secretId: '', secretKey: '', enabled: true });
   const [byokSaving, setByokSaving] = useState(false);
-  const dailyPoints = 10;
-  const totalPoints = 1850;
 
+  // ─── 积分数据（从 API 获取） ───
+  const [creditsHistory, setCreditsHistory] = useState<any[]>([]);
+  const [creditsHistoryLoading, setCreditsHistoryLoading] = useState(false);
+
+  // ─── 初始化数据 ───
   useEffect(() => {
-    Promise.all([
-      profileAPI.get().catch(() => null),
-      billingAPI.getSubscription().catch(() => null),
-    ]).then(([p, s]: any[]) => {
-      if (p?.user) setUser((prev: any) => ({ ...prev, ...p.user }));
-      if (s?.data) setSub(s.data);
-    }).finally(() => setLoading(false));
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        // 并行拉取
+        await Promise.allSettled([
+          fetchProfileAction(),
+          fetchSubscription(),
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [fetchProfileAction, fetchSubscription]);
+
+  // ─── 加载积分历史 ───
+  const loadCreditsHistory = useCallback(async () => {
+    setCreditsHistoryLoading(true);
+    try {
+      const res: any = await marketplaceAPI.usage();
+      const history = res?.data?.transactions || res?.data || [];
+      setCreditsHistory(Array.isArray(history) ? history : []);
+    } catch {
+      // 降级使用已有数据
+    }
+    setCreditsHistoryLoading(false);
   }, []);
 
+  useEffect(() => { loadCreditsHistory(); }, [loadCreditsHistory]);
+
+  // ─── BYOK 管理 ───
   const loadByokKeys = async () => {
     setByokLoading(true);
     try {
@@ -120,13 +142,30 @@ export default function ProfilePage() {
   const handleSignIn = () => {
     if (signChecked) { message.info('今日已签到'); return; }
     setSignChecked(true);
-    message.success(`签到成功！+${dailyPoints} 积分`);
+    message.success(`签到成功！+${10} 积分`);
   };
 
   if (loading) return <div style={{ textAlign: 'center', padding: 100 }}><Spin size="large" /></div>;
 
-  const plan = sub?.plan || user?.plan || 'free';
-  const credits = sub?.credits ?? user?.credits ?? 0;
+  const plan = subscription?.plan || authUser?.plan || 'free';
+  const credits = subscription?.credits ?? authUser?.credits ?? 0;
+
+  // ─── 积分数据源：优先 API，降级默认 ───
+  const pointsDataSource = creditsHistory.length > 0
+    ? creditsHistory.map((item: any, idx: number) => ({
+        id: item._id || `credit-${idx}`,
+        type: item.type || 'earn',
+        amount: item.amount || 0,
+        desc: item.description || item.meta?.reason || '积分变动',
+        time: item.createdAt?.slice(0, 10) || '-',
+      }))
+    : [
+        { id: '1', type: 'earn', amount: 10, desc: '每日签到', time: '-' },
+        { id: '2', type: 'earn', amount: 50, desc: '完成AI对话', time: '-' },
+        { id: '3', type: 'spend', amount: -20, desc: '兑换API调用', time: '-' },
+        { id: '4', type: 'earn', amount: 100, desc: '分享推广奖励', time: '-' },
+        { id: '5', type: 'earn', amount: 30, desc: '上传知识文档', time: '-' },
+      ];
 
   const tabItems = [
     {
@@ -138,8 +177,8 @@ export default function ProfilePage() {
               <Space align="center" size={16} style={{ marginBottom: 16 }}>
                 <Avatar size={64} icon={<UserOutlined />} style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }} />
                 <div>
-                  <Text strong style={{ fontSize: 20 }}>{user?.name || '用户'}</Text>
-                  <div><Text type="secondary">{user?.email}</Text></div>
+                  <Text strong style={{ fontSize: 20 }}>{authUser?.name || '用户'}</Text>
+                  <div><Text type="secondary">{authUser?.email}</Text></div>
                   <Tag color={PLAN_LABEL[plan]?.color} style={{ marginTop: 4 }}>
                     {PLAN_LABEL[plan]?.text}
                   </Tag>
@@ -167,7 +206,7 @@ export default function ProfilePage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <Text strong><CalendarOutlined /> 每日签到</Text>
-                  <div><Text type="secondary">连续签到 {7} 天，今日 +{dailyPoints} 积分</Text></div>
+                  <div><Text type="secondary">连续签到 7 天，今日 +10 积分</Text></div>
                 </div>
                 <Button type={signChecked ? 'default' : 'primary'} disabled={signChecked} onClick={handleSignIn}>
                   {signChecked ? '已签到' : '签到'}
@@ -178,7 +217,7 @@ export default function ProfilePage() {
             <Card size="small">
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Button block icon={<ShareAltOutlined />} onClick={() => setShareModal(true)}>分享推广</Button>
-                <Button block icon={<GiftOutlined />} onClick={() => message.info('兑换中心建设中')}>积分兑换</Button>
+                <Button block icon={<GiftOutlined />} onClick={() => navigate('/points-center')}>积分中心</Button>
               </Space>
             </Card>
           </Col>
@@ -192,14 +231,14 @@ export default function ProfilePage() {
           <Title level={5}>账户安全</Title>
           <Form layout="vertical" style={{ maxWidth: 500 }}>
             <Form.Item label="手机号">
-              <Input prefix={<MobileOutlined />} value={user?.phone || ''} placeholder="绑定手机号" />
+              <Input prefix={<MobileOutlined />} value={authUser?.phone || ''} placeholder="绑定手机号" />
               <Button type="link" size="small" style={{ padding: 0 }}>发送验证码</Button>
             </Form.Item>
             <Form.Item label="微信号">
-              <Input prefix={<WechatOutlined />} value={user?.wechat || ''} placeholder="绑定微信" />
+              <Input prefix={<WechatOutlined />} value={authUser?.wechatOpenid ? '已绑定' : ''} placeholder="绑定微信" />
             </Form.Item>
             <Form.Item label="邮箱">
-              <Input prefix={<MailOutlined />} value={user?.email || ''} disabled />
+              <Input prefix={<MailOutlined />} value={authUser?.email || ''} disabled />
               <Text type="secondary" style={{ fontSize: 12 }}>邮箱作为登录账号，暂不可修改</Text>
             </Form.Item>
             <Form.Item label="新密码">
@@ -230,15 +269,17 @@ export default function ProfilePage() {
             </Card>
           </Col>
           <Col xs={24} md={14}>
-            <Card title="积分记录">
-              <Table dataSource={MOCK_POINTS} rowKey="id" size="small" pagination={false}
+            <Card title="积分记录" extra={
+              <Button size="small" loading={creditsHistoryLoading} onClick={loadCreditsHistory}>刷新</Button>
+            }>
+              <Table dataSource={pointsDataSource} rowKey="id" size="small" pagination={{ pageSize: 10 }}
                 columns={[
                   { title: '说明', dataIndex: 'desc', key: 'desc' },
                   { title: '变动', dataIndex: 'amount', key: 'amount',
                     render: (v: number) => <Text style={{ color: v > 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>{v > 0 ? `+${v}` : v}</Text> },
                   { title: '时间', dataIndex: 'time', key: 'time' },
                   { title: '类型', dataIndex: 'type', key: 'type',
-                    render: (t: string) => <Tag>{t === 'earn' ? '获取' : '消费'}</Tag> },
+                    render: (t: string) => <Tag>{t === 'earn' ? '获取' : t === 'spend' ? '消费' : t}</Tag> },
                 ]}
               />
             </Card>
@@ -253,7 +294,7 @@ export default function ProfilePage() {
           <Col xs={24} md={8}>
             <Card>
               <Title level={5}>你的邀请链接</Title>
-              <Input value={`https://aiagent.app/ref=${user?._id || 'demo'}`} readOnly />
+              <Input value={`https://aibak.site/ref=${authUser?._id || 'demo'}`} readOnly />
               <Space style={{ marginTop: 12 }} wrap>
                 <Button icon={<QrcodeOutlined />} onClick={() => setShareModal(true)}>分享二维码</Button>
                 <Button icon={<ExportOutlined />}>复制链接</Button>
@@ -261,7 +302,7 @@ export default function ProfilePage() {
               <Divider />
               <Title level={5}>佣金比例</Title>
               <List size="small">
-                <List.Item>一级分销：<strong>5%</strong> 佣金（近竞品 1/3）</List.Item>
+                <List.Item>一级分销：<strong>5%</strong> 佣金</List.Item>
                 <List.Item>二级分销：<strong>2%</strong> 佣金</List.Item>
                 <List.Item>三级分销：<strong>1%</strong> 佣金</List.Item>
                 <List.Item>最低提现：<strong>¥50</strong></List.Item>
@@ -270,41 +311,19 @@ export default function ProfilePage() {
           </Col>
           <Col xs={24} md={16}>
             <Card title="分销记录">
-              <Table dataSource={MOCK_REFERRALS} rowKey="id" size="small" pagination={false}
+              <Table dataSource={[]} rowKey="id" size="small" pagination={false}
+                locale={{ emptyText: '暂无分销记录，快去邀请好友吧！' }}
                 columns={[
                   { title: '用户', dataIndex: 'name', key: 'name' },
-                  { title: '层级', dataIndex: 'level', key: 'level',
-                    render: (v: number) => <Tag>第{v}级</Tag> },
+                  { title: '层级', dataIndex: 'level', key: 'level', render: (v: number) => v ? <Tag>第{v}级</Tag> : '-' },
                   { title: '佣金', dataIndex: 'commission', key: 'commission',
-                    render: (v: number) => <Text style={{ color: '#10b981' }}>¥{v.toFixed(2)}</Text> },
+                    render: (v: number) => v ? <Text style={{ color: '#10b981' }}>¥{v.toFixed(2)}</Text> : '-' },
                   { title: '时间', dataIndex: 'time', key: 'time' },
                 ]}
               />
             </Card>
           </Col>
         </Row>
-      ),
-    },
-    {
-      key: 'share', label: <span><ShareAltOutlined /> 分享</span>,
-      children: (
-        <Card>
-          <Row gutter={[24, 24]}>
-            <Col span={12} style={{ textAlign: 'center' }}>
-              <Title level={5}>分享二维码</Title>
-              <QRCode value={`https://aiagent.app/ref=${user?._id || 'demo'}`} size={200} />
-              <div style={{ marginTop: 12 }}><Button icon={<ExportOutlined />}>下载二维码</Button></div>
-            </Col>
-            <Col span={12} style={{ textAlign: 'center' }}>
-              <Title level={5}>分享链接</Title>
-              <Input.TextArea value={`🔥 推荐你使用 AI Agent Platform！\n一站式 AI 生产力平台，注册即送 100 积分。\nhttps://aiagent.app/ref=${user?._id || 'demo'}`} rows={4} />
-              <Space style={{ marginTop: 12 }}>
-                <Button icon={<WechatOutlined />} style={{ background: '#07c160', color: '#fff' }}>分享到微信</Button>
-                <Button icon={<SendOutlined />}>复制文案</Button>
-              </Space>
-            </Col>
-          </Row>
-        </Card>
       ),
     },
     {
@@ -346,9 +365,7 @@ export default function ProfilePage() {
                         setByokForm({ provider: k.provider, secretId: '', secretKey: '', enabled: k.enabled });
                         setByokModal(true);
                       }}
-                    >
-                      编辑
-                    </Button>
+                    >编辑</Button>
                     <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteByok(k.provider)}>
                       删除
                     </Button>
@@ -376,8 +393,7 @@ export default function ProfilePage() {
             onOk={handleSaveByok}
             onCancel={() => setByokModal(false)}
             confirmLoading={byokSaving}
-            okText="保存"
-            cancelText="取消"
+            okText="保存" cancelText="取消"
             destroyOnClose
           >
             <Form layout="vertical">
@@ -393,10 +409,7 @@ export default function ProfilePage() {
                 />
               </Form.Item>
               {byokForm.provider === 'hunyuan' && (
-                <Form.Item
-                  label="Secret ID"
-                  tooltip="腾讯云 API 密钥 SecretId（可灵/即梦无需填写）"
-                >
+                <Form.Item label="Secret ID" tooltip="腾讯云 API 密钥 SecretId（可灵/即梦无需填写）">
                   <Input
                     value={byokForm.secretId}
                     onChange={(e) => setByokForm((f) => ({ ...f, secretId: e.target.value }))}
@@ -419,8 +432,7 @@ export default function ProfilePage() {
                 <Switch
                   checked={byokForm.enabled}
                   onChange={(v) => setByokForm((f) => ({ ...f, enabled: v }))}
-                  checkedChildren="启用"
-                  unCheckedChildren="停用"
+                  checkedChildren="启用" unCheckedChildren="停用"
                 />
               </Form.Item>
             </Form>
@@ -432,13 +444,13 @@ export default function ProfilePage() {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-      <Title level={3}><UserOutlined /> 个人中心</Title>
+      <Title level={isMobile ? 4 : 3}><UserOutlined /> 个人中心</Title>
       <Tabs defaultActiveKey="overview" items={tabItems} />
 
       {/* 分享弹窗 */}
       <Modal open={shareModal} onCancel={() => setShareModal(false)} footer={null} title="分享推广">
         <div style={{ textAlign: 'center' }}>
-          <QRCode value={`https://aiagent.app/ref=${user?._id || 'demo'}`} size={180} />
+          <QRCode value={`https://aibak.site/ref/${authUser?._id || 'demo'}`} size={180} />
           <Paragraph style={{ marginTop: 12 }}>
             扫描二维码注册，你即可获得 <Tag color="gold">100 积分</Tag> 奖励
           </Paragraph>

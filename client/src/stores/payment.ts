@@ -28,6 +28,7 @@ interface Subscription {
   expiresAt?: string;
   autoRenew?: boolean;
   startedAt?: string;
+  credits?: number;
 }
 
 interface Order {

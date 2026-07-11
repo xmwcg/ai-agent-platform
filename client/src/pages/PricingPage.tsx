@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { billingAPI, extractApiError } from '@/services/api';
+import { useResponsive } from '@/hooks/useResponsive';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -38,6 +39,7 @@ function centsToYuan(cents: number): string {
 }
 
 export default function PricingPage() {
+  const { isMobile } = useResponsive();
   const [priceType, setPriceType] = useState<PriceType>('month');
   const [currentPlan, setCurrentPlan] = useState('free');
   const [paying, setPaying] = useState<string | null>(null);
@@ -256,10 +258,10 @@ export default function PricingPage() {
   };
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '12px 4px' : '24px 16px' }}>
       {/* 标题 */}
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <Title level={2}>灵活的付费方案</Title>
+      <div style={{ textAlign: 'center', marginBottom: isMobile ? 20 : 32 }}>
+        <Title level={isMobile ? 3 : 2}>灵活的付费方案</Title>
         <Paragraph type="secondary" style={{ fontSize: 16 }}>
           积分按需购买 · 按月订阅 · 包年优惠 —— 想用就付，不用不扣费
         </Paragraph>
@@ -267,10 +269,10 @@ export default function PricingPage() {
         <Segmented
           value={priceType}
           onChange={(v) => setPriceType(v as PriceType)}
-          size="large"
+          size={isMobile ? 'middle' : 'large'}
           style={{ marginTop: 16 }}
           options={[
-            { value: 'credits', label: '⚡ 积分包', icon: <ThunderboltOutlined /> },
+            { value: 'credits', label: '⚡ 积分', icon: <ThunderboltOutlined /> },
             { value: 'month', label: '💳 按月', icon: <WalletOutlined /> },
             { value: 'year', label: '🏆 包年', icon: <CrownOutlined /> },
           ]}
@@ -471,6 +473,14 @@ export default function PricingPage() {
         .plan-badge {
           position: absolute; top: 12px; right: 12px;
           border-radius: 10px; padding: 2px 12px;
+        }
+        /* ─── 移动端适配 ─── */
+        @media (max-width: 768px) {
+          .pricing-card { border-radius: 12px; }
+          .pricing-card .ant-card-body { padding: 16px !important; }
+        }
+        @media (max-width: 480px) {
+          .pricing-card .ant-card-actions > li { margin: 0 !important; }
         }
       `}</style>
     </div>

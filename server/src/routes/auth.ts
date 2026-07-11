@@ -8,6 +8,7 @@ import { sendError } from '../lib/http-error';
 import { validate, ValidationSchema } from '../lib/validation';
 import { redisClient } from '../config/database';
 import { logger } from '../lib/logger';
+import { processReferralOnRegister } from '../services/referral.service';
 
 const router = Router();
 
@@ -32,20 +33,42 @@ const loginSchema: ValidationSchema = {
 // 注册
 router.post('/register', authLimiter, validate(registerSchema), async (req: AuthRequest, res: Response) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, referralCode } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(409).json({ error: '该邮箱已被注册' });
     }
 
-    const user = await User.create({ email, password, name });
+    // 处理推荐码
+    let referredBy: string | undefined;
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode });
+      if (referrer) {
+        referredBy = referrer._id.toString();
+      }
+    }
+
+    const user = await User.create({
+      email,
+      password,
+      name,
+      ...(referredBy ? { referredBy: referredBy } : {}),
+    });
+
     const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
+
+    // 异步处理推荐关系（不阻塞注册响应）
+    if (referralCode) {
+      processReferralOnRegister(user._id.toString(), referralCode).catch((err) => {
+        logger.error('auth', `推荐处理失败: ${err.message}`);
+      });
+    }
 
     res.status(201).json({
       success: true,
       token,
-      user: user.toJSON()
+      user: user.toJSON(),
     });
   } catch (error) {
     logger.error('auth', `注册失败: ${(error as Error)?.stack || error}`);

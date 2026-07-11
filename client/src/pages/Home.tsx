@@ -11,6 +11,7 @@ import {
   SafetyOutlined, StarFilled
 } from '@ant-design/icons';
 import apiClient from '@/services/api';
+import { useResponsive } from '@/hooks/useResponsive';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -93,6 +94,7 @@ function FeatureCard({
 
 export default function Home() {
   const navigate = useNavigate();
+  const { isMobile } = useResponsive();
   const [stats, setStats] = useState({ documents: 0, courses: 0, models: 0, users: 0, apiCalls: 0 });
   const [loading, setLoading] = useState(true);
   const [activeCat, setActiveCat] = useState('all');
@@ -491,12 +493,26 @@ export default function Home() {
 
         /* === 响应式 === */
         @media (max-width: 768px) {
-          .hero-section { border-radius: 12px; min-height: 340px; }
-          .hero-nav { padding: 12px 16px; }
-          .hero-content { padding: 0 16px 32px; }
-          .hero-actions { flex-direction: column; align-items: center; }
-          .trust-badges { gap: 8px; }
-          .cta-inner { padding: 32px 16px; }
+          .hero-section { border-radius: 12px; min-height: 300px; }
+          .hero-nav { padding: 10px 14px; }
+          .hero-content { padding: 0 14px 28px; }
+          .hero-actions { flex-direction: column; align-items: center; gap: 10px !important; }
+          .hero-actions .ant-btn { width: 200px; }
+          .trust-badges { gap: 6px; }
+          .trust-badge { font-size: 10px; padding: 2px 6px; }
+          .cta-inner { padding: 28px 14px; }
+          .stats-section { margin-bottom: 20px; }
+          .stat-card { padding: 12px 8px; }
+          .feature-card { padding: 14px; }
+          .feature-card .ant-typography h5 { font-size: 15px !important; }
+          .section-header h3 { font-size: 20px !important; }
+        }
+        @media (max-width: 480px) {
+          .hero-section { min-height: 260px; border-radius: 8px; }
+          .hero-title { font-size: 26px !important; }
+          .hero-subtitle { font-size: 13px !important; }
+          .hero-desc { font-size: 12px !important; }
+          .section-header { margin-bottom: 12px; }
         }
       `}</style>
     </div>

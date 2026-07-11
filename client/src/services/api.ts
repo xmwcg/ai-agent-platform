@@ -388,6 +388,23 @@ export const mcpAPI = {
     }),
 };
 
+// 推荐/分销 API
+export const referralAPI = {
+  stats: () => apiClient.get('/referral/stats'),
+  list: (params?: { page?: number; pageSize?: number }) => apiClient.get('/referral/list', { params }),
+  commissions: (params?: { page?: number; pageSize?: number }) => apiClient.get('/referral/commissions', { params }),
+  code: () => apiClient.get('/referral/code'),
+};
+
+// 积分/签到 API
+export const pointsAPI = {
+  checkin: () => apiClient.post('/points/checkin'),
+  checkinStatus: () => apiClient.get('/points/checkin/status'),
+  checkinHistory: (params?: { page?: number; pageSize?: number }) => apiClient.get('/points/checkin/history', { params }),
+  tasks: () => apiClient.get('/points/tasks'),
+  awardTask: (taskType: string) => apiClient.post('/points/task', { taskType }),
+};
+
 // 工作流（Agent 工具流）导入导出 API
 export const workflowAPI = {
   // 导入工作流包（单个 / 数组 / {workflows:[...]}）

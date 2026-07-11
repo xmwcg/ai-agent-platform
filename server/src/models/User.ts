@@ -15,9 +15,24 @@ export interface IUser extends Document {
   plan: 'free' | 'pro' | 'max';
   membershipExpiresAt?: Date;
   credits: number; // 剩余 AI 积分
+  // 推荐/分销字段
+  referralCode: string;        // 唯一推荐码
+  referredBy?: mongoose.Types.ObjectId; // 推荐人 ID
+  commissionBalance: number;   // 佣金余额（分）
+  totalCommissionEarned: number; // 累计佣金（分）
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
+}
+
+// 生成 8 位随机推荐码
+function generateReferralCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
 const userSchema = new Schema<IUser>(
@@ -60,11 +75,9 @@ const userSchema = new Schema<IUser>(
     phone: {
       type: String,
       unique: true,
-      sparse: true, // 允许为空，但非空时唯一
+      sparse: true,
       trim: true,
     },
-    // 注意：不能设 default: null。sparse 唯一索引会把显式写入的 null 当作值纳入，
-    // 导致每个新用户互相冲突（E11000 duplicate key），注册必 500。缺失时字段不写入即可被 sparse 排除。
     wechatOpenid: {
       type: String,
       unique: true,
@@ -84,9 +97,55 @@ const userSchema = new Schema<IUser>(
       type: Number,
       default: 0,
     },
+    // 推荐/分销字段
+    referralCode: {
+      type: String,
+      unique: true,
+    },
+    referredBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      sparse: true,
+      default: null,
+    },
+    commissionBalance: {
+      type: Number,
+      default: 0,
+    },
+    totalCommissionEarned: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
+
+// 注册时自动生成推荐码
+userSchema.pre('save', async function (next) {
+  if (!this.referralCode) {
+    let code = generateReferralCode();
+    // 碰撞重试（最多 5 次）
+    let attempts = 0;
+    while (attempts < 5) {
+      const existing = await mongoose.model('User').findOne({ referralCode: code });
+      if (!existing) break;
+      code = generateReferralCode();
+      attempts++;
+    }
+    this.referralCode = code;
+  }
+
+  // 注册时处理推荐关系
+  if (this.isNew && this.referredBy) {
+    // 验证 referrer 存在
+    const referrer = await mongoose.model('User').findById(this.referredBy);
+    if (!referrer) {
+      this.referredBy = undefined;
+    }
+  }
+
+  next();
+});
 
 // 保存前加密密码
 userSchema.pre('save', async function (next) {
