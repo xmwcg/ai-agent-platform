@@ -84,6 +84,17 @@ export const knowledgeAPI = {
   getMeta: () => apiClient.get('/knowledge/meta/tags-and-categories')
 };
 
+// 知识图谱 API
+export const knowledgeGraphAPI = {
+  get: (params?: {
+    teamId?: string;
+    includeTags?: boolean;
+    includeCategories?: boolean;
+    minSharedTags?: number;
+    limit?: number;
+  }) => apiClient.get('/knowledge-graph', { params })
+};
+
 // AI 聊天 API
 export const aiAPI = {
   // 发送聊天消息
