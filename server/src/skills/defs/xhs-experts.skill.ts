@@ -90,6 +90,7 @@ function buildXhsSkill(agent: (typeof XHS_AGENTS)[number]): Skill {
           style: typeof input.style === 'string' ? input.style.trim() : undefined,
           keywords: typeof input.keywords === 'string' ? input.keywords.trim() : undefined,
           count: typeof input.count === 'number' ? input.count : undefined,
+          model: typeof input.model === 'string' ? input.model.trim() : undefined,
         });
         return { ok: true, data: result };
       } catch (e: any) {

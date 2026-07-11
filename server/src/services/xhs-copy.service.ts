@@ -34,6 +34,8 @@ export interface XhsGenerateInput {
   keywords?: string;
   /** 生成条数（仅 copywriter 角色生效，默认 1） */
   count?: number;
+  /** 指定模型（前缀寻址，如 "openai/gpt-4o"），缺省走网关默认 provider */
+  model?: string;
 }
 
 export interface XhsStructured {
@@ -241,6 +243,7 @@ export async function generateXhsCopy(input: XhsGenerateInput): Promise<XhsGener
     ],
     temperature: agent.temperature,
     maxTokens: agent.maxTokens,
+    ...(input.model ? { model: input.model } : {}),
   });
 
   const result: XhsGenerateResult = {
