@@ -677,8 +677,9 @@ const ConvertTool: React.FC = () => {
 
 const MediaTool: React.FC = () => {
   const [types, setTypes] = useState<any[]>([]);
-  const [type, setType] = useState('text2video');
+  const [type, setType] = useState('text2img');
   const [prompt, setPrompt] = useState('');
+  const [refImage, setRefImage] = useState<string>('');
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -686,8 +687,16 @@ const MediaTool: React.FC = () => {
 
   const onGenerate = async () => {
     if (!prompt.trim()) return message.warning('请输入提示词');
+    if (type === 'image2image' && !refImage) return message.warning('图生图请先上传参考图');
     setLoading(true);
-    try { const res: any = await toolsAPI.mediaGenerate({ type: type as any, prompt }); setResult(res.data); }
+    try {
+      const res: any = await toolsAPI.mediaGenerate(
+        type === 'image2image'
+          ? { type: type as any, prompt, imageBase64: refImage }
+          : { type: type as any, prompt }
+      );
+      setResult(res.data);
+    }
     catch (e) { message.error(extractApiError(e, '生成失败')); }
     setLoading(false);
   };
@@ -697,11 +706,27 @@ const MediaTool: React.FC = () => {
       <Col span={10}>
         <Card size="small" title="生产参数">
           <Text>类型</Text>
-          <Select style={{ width: '100%', marginBottom: 12 }} value={type} onChange={setType}
+          <Select style={{ width: '100%', marginBottom: 12 }} value={type} onChange={(v) => { setType(v); setResult(null); }}
             options={types.map((t: any) => ({ value: t.type, label: `${t.label} - ${t.desc}` }))} />
+          {type === 'image2image' && (
+            <>
+              <Text>参考图（图生图）</Text>
+              <Upload beforeUpload={(f: any) => {
+                const reader = new FileReader();
+                reader.onload = () => setRefImage(String(reader.result));
+                reader.readAsDataURL(f);
+                return false;
+              }} maxCount={1} accept="image/*" style={{ marginBottom: 12 }}>
+                <Button icon={<PictureOutlined />}>上传参考图</Button>
+              </Upload>
+            </>
+          )}
           <Text>提示词</Text>
           <TextArea rows={6} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="描述你想要生成的内容..." style={{ marginBottom: 12 }} />
           <Button type="primary" block icon={<VideoCameraOutlined />} loading={loading} onClick={onGenerate}>生成</Button>
+          <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 10 }}>
+            文生图 / 图生图由 AIbak 免费额度（HY-Image）真实生成；视频类需配置对应厂商 Key。
+          </Paragraph>
         </Card>
       </Col>
       <Col span={14}>
@@ -710,8 +735,13 @@ const MediaTool: React.FC = () => {
             {loading ? <Spin size="large" /> : result ? (
               <div style={{ textAlign: 'center' }}>
                 {result.outputUrl && <img src={result.outputUrl} alt="result" style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }} />}
-                <Tag color="blue" style={{ marginTop: 8 }}>{result.type}</Tag>
-                <Tag>{result.provider}</Tag>
+                {result.images?.map((u: string, i: number) => (
+                  <img key={i} src={u} alt={`img-${i}`} style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 8, margin: 4 }} />
+                ))}
+                <div style={{ marginTop: 8 }}>
+                  <Tag color="blue">{result.type}</Tag>
+                  <Tag>{result.provider}</Tag>
+                </div>
               </div>
             ) : <Empty description="填写参数后生成" />}
           </div>
