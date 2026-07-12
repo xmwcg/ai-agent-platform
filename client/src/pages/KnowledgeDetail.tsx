@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Typography, Button, message, Spin, Tag, Space, Divider, Anchor, Tooltip, Dropdown, Skeleton,
+  Card, Typography, Button, message, Spin, Tag, Space, Divider, Anchor, Tooltip, Dropdown, Skeleton, Alert,
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, DownloadOutlined, SwapOutlined,
   RobotOutlined, ClockCircleOutlined, UserOutlined, EyeOutlined,
-  HeartOutlined, ShareAltOutlined,
+  HeartOutlined, ShareAltOutlined, CrownOutlined, LockOutlined,
 } from '@ant-design/icons';
 import { knowledgeAPI } from '@/services/api';
 import apiClient from '@/services/api';
@@ -17,7 +17,15 @@ const { Title, Text, Paragraph } = Typography;
 interface KnowledgeDocument {
   _id: string;
   title: string;
-  content: string;
+  content?: string;
+  previewContent?: string;
+  access?: string;
+  requiredPlan?: string;
+  creditsCost?: number;
+  creditsNeeded?: number;
+  creditsHave?: number;
+  freePreviewPages?: number;
+  price?: number;
   tags: string[];
   categories: string[];
   viewCount: number;
@@ -68,9 +76,33 @@ export default function KnowledgeDetail() {
   const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
   const [converterOpen, setConverterOpen] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
 
-  const headings = useMemo(() => (document?.content ? extractHeadings(document.content) : []), [document]);
-  const htmlContent = useMemo(() => (document?.content ? renderMarkdown(document.content) : ''), [document]);
+  // 是否可阅读全文（免费 / 已解锁）
+  const isFull = !document || document.access === 'full' || document.access === undefined;
+  // 实际展示正文：全文优先，否则用试看内容
+  const shownContent = isFull ? (document?.content || '') : (document?.previewContent || '');
+
+  const headings = useMemo(() => (shownContent ? extractHeadings(shownContent) : []), [shownContent]);
+  const htmlContent = useMemo(() => (shownContent ? renderMarkdown(shownContent) : ''), [shownContent]);
+
+  // 解锁全文：重新拉取（服务端按积分扣减并记录，二次返回 full）
+  const unlock = async () => {
+    if (!id) return;
+    setUnlocking(true);
+    try {
+      const res: any = await apiClient.get(`/knowledge/${id}`);
+      if (res?.data) {
+        setDocument(res.data);
+        if (res.data.access !== 'full') {
+          message.warning('积分不足，请先充值积分或升级会员');
+        } else {
+          message.success('已解锁全文');
+        }
+      }
+    } catch { message.error('解锁失败'); }
+    setUnlocking(false);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -163,6 +195,35 @@ export default function KnowledgeDetail() {
 
           <Divider style={{ margin: '0 0 20px' }} />
 
+          {/* 权限门控：试看 / 积分 / 会员专享 */}
+          {!isFull && (
+            <Alert
+              type={document?.access === 'plan_locked' ? 'warning' : 'info'}
+              showIcon
+              icon={document?.access === 'plan_locked' ? <CrownOutlined /> : <LockOutlined />}
+              style={{ marginBottom: 20, borderRadius: 12 }}
+              message={
+                document?.access === 'plan_locked'
+                  ? `本文档为${document.requiredPlan === 'max' ? '旗舰' : '专业'}会员专享`
+                  : document?.access === 'credit_locked'
+                    ? `解锁全文需消耗 ${document.creditsNeeded ?? document.creditsCost} 积分（当前 ${document.creditsHave ?? 0} 积分）`
+                    : `免费试看${document?.freePreviewPages ? ` ${document.freePreviewPages} 页` : ''}，解锁查看全文`
+              }
+              description={
+                <Space wrap style={{ marginTop: 4 }}>
+                  {document?.access === 'plan_locked' ? (
+                    <Button type="primary" size="small" icon={<CrownOutlined />} onClick={() => navigate('/pricing')}>升级会员</Button>
+                  ) : (
+                    <Button type="primary" size="small" loading={unlocking} icon={<LockOutlined />} onClick={unlock}>解锁全文</Button>
+                  )}
+                  {document?.access !== 'plan_locked' && (
+                    <Button size="small" onClick={() => navigate('/points-center')}>获取积分</Button>
+                  )}
+                </Space>
+              }
+            />
+          )}
+
           {/* 文档内容 */}
           <div className="kd-content" dangerouslySetInnerHTML={{ __html: htmlContent }} />
 
@@ -212,7 +273,7 @@ export default function KnowledgeDetail() {
         open={converterOpen}
         onClose={() => setConverterOpen(false)}
         fileName={`${document.title || 'document'}.md`}
-        content={document.content}
+        content={shownContent}
         onConvert={() => message.info('格式转换功能已在开发中')}
       />
 

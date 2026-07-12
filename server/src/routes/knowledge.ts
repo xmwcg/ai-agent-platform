@@ -3,6 +3,8 @@ import { KnowledgeDocument } from '../models/KnowledgeDocument';
 import { Team } from '../models/Team';
 import { AuthRequest, optionalAuth, requireAuth } from '../middleware/auth';
 import { canAccessResource } from '../middleware/resourceAccess';
+import { resolveKbAccess, applyKbAccess } from '../middleware/kb-access';
+import { KNOWLEDGE_CATEGORY_TREE } from '../config/knowledge-categories';
 import { sendError } from '../lib/http-error';
 import { TeamRole } from '../models/Team';
 
@@ -20,7 +22,7 @@ async function resolveDocMemberRole(doc: any, userId?: string): Promise<TeamRole
 // 创建知识文档（支持归属团队，团队资源级隔离）
 router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, content, tags, categories, isPublic, teamId } = req.body;
+    const { title, content, tags, categories, isPublic, teamId, categoryTree, price, requiredPlan, creditsCost, freePreviewPages } = req.body;
 
     if (!title || !content) {
       return res.status(400).json({ error: 'Title and content are required' });
@@ -46,6 +48,11 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       content,
       tags: tags || [],
       categories: categories || [],
+      categoryTree: categoryTree || undefined,
+      price: price !== undefined ? price : undefined,
+      requiredPlan: requiredPlan || 'free',
+      creditsCost: creditsCost !== undefined ? creditsCost : undefined,
+      freePreviewPages: freePreviewPages !== undefined ? freePreviewPages : undefined,
       isPublic: isPublic !== undefined ? isPublic : true,
       author: req.user.id,
       teamId: teamId || undefined,
@@ -63,7 +70,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // 获取文档列表（支持分页、搜索、过滤）
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const {
       page = '1',
@@ -99,6 +106,12 @@ router.get('/', async (req: Request, res: Response) => {
       query.categories = { $in: categoryArray };
     }
 
+    // 业务分类树过滤（知识库 v2 固定业务分类）
+    if (req.query.categoryTree) {
+      const treeArray = (req.query.categoryTree as string).split(',').map(c => c.trim());
+      query.categoryTree = { $in: treeArray };
+    }
+
     // 排序
     const sort: any = {};
     sort[sortBy as string] = order === 'asc' ? 1 : -1;
@@ -114,9 +127,16 @@ router.get('/', async (req: Request, res: Response) => {
       KnowledgeDocument.countDocuments(query)
     ]);
 
+    // 附加访问级别标签（供前端展示 免费/专享/付费/积分 徽章）
+    const enriched = docs.map((d: any) => {
+      const obj = d.toObject ? d.toObject() : d;
+      obj.access = resolveKbAccess(obj, req.user).level;
+      return obj;
+    });
+
     res.json({
       success: true,
-      data: docs,
+      data: enriched,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -129,7 +149,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// 获取单个文档详情（私有文档需鉴权与访问权限）
+// 获取单个文档详情（私有文档需鉴权；知识库 v2 接入会员/付费/试看/积分权限）
 router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const doc = await KnowledgeDocument.findById(req.params.id)
@@ -140,7 +160,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    // 私有文档：校验当前用户访问权限
+    // 私有文档：校验当前用户访问权限（团队/作者）
     if (!doc.isPublic) {
       const memberRole = await resolveDocMemberRole(doc, req.user?.id);
       const allowed = canAccessResource({
@@ -154,14 +174,51 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // 增加浏览次数
+    // 知识库 v2：会员 / 付费 / 试看 / 积分 权限判定
+    const verdict = resolveKbAccess(doc, req.user);
+    const { content, deducted } = await applyKbAccess(doc, req.user, verdict);
+
+    // 增加浏览次数（仅已可见时计数）
     doc.viewCount += 1;
     await doc.save();
 
-    res.json({
-      success: true,
-      data: doc
-    });
+    // 构造下发对象：默认不含全文，按需附加
+    const out: any = {
+      _id: doc._id,
+      title: doc.title,
+      summary: doc.summary,
+      tags: doc.tags,
+      categories: doc.categories,
+      categoryTree: doc.categoryTree,
+      isPublic: doc.isPublic,
+      requiredPlan: doc.requiredPlan,
+      price: doc.price,
+      creditsCost: doc.creditsCost,
+      freePreviewPages: doc.freePreviewPages,
+      viewCount: doc.viewCount,
+      likeCount: doc.likeCount,
+      author: doc.author,
+      relatedDocs: doc.relatedDocs,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+      access: verdict.level,
+    };
+
+    if (verdict.level === 'full') {
+      out.content = content;
+      out.htmlContent = doc.htmlContent;
+      if (deducted) out.creditsDeducted = deducted;
+    } else if (verdict.level === 'preview' || verdict.level === 'credit_locked') {
+      out.previewContent = content;
+      if (verdict.level === 'credit_locked') {
+        out.creditsNeeded = (verdict as any).creditsNeeded;
+        out.creditsHave = (verdict as any).creditsHave;
+      }
+    } else if (verdict.level === 'plan_locked') {
+      out.requiredPlan = (verdict as any).requiredPlan;
+    }
+
+    res.json({ success: true, data: out });
   } catch (error) {
     sendError(res, error);
   }
@@ -244,6 +301,11 @@ router.get('/meta/tags-and-categories', async (req: Request, res: Response) => {
   } catch (error) {
     sendError(res, error);
   }
+});
+
+// 知识库 v2：固定业务分类树（参考飞书/乐享/IMA 设计）
+router.get('/meta/category-tree', (_req: Request, res: Response) => {
+  res.json({ success: true, data: KNOWLEDGE_CATEGORY_TREE });
 });
 
 export default router;

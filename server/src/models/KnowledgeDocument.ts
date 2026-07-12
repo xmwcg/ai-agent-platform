@@ -17,6 +17,7 @@ export interface IKnowledgeDocument extends Document {
   requiredPlan?: 'free' | 'pro' | 'max'; // 查看所需最低会员等级
   creditsCost?: number;        // 查看/下载消耗积分
   freePreviewPages?: number;   // 免费试看页数（文档类）
+  unlockedBy?: string[];       // 已用积分/付费解锁的用户 ID（避免重复扣减）
   viewCount: number; // 浏览次数
   likeCount: number; // 点赞次数
   createdAt: Date;
@@ -98,6 +99,10 @@ const KnowledgeDocumentSchema = new Schema<IKnowledgeDocument>(
     },
     freePreviewPages: {
       type: Number,
+      default: undefined
+    },
+    unlockedBy: {
+      type: [String],
       default: undefined
     },
     viewCount: {

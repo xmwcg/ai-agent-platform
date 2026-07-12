@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Row, Col, Tag, Button, Input, Space, Select, Typography,
-  message, Modal, Dropdown, Tooltip, Badge, Segmented, Upload,
+  message, Modal, Dropdown, Tooltip, Badge, Segmented, Upload, TreeSelect,
   Empty, Skeleton,
 } from 'antd';
 import {
@@ -32,6 +32,11 @@ interface KnowledgeDocument {
   createdAt: string;
   updatedAt: string;
   author: { username: string };
+  access?: string;
+  requiredPlan?: string;
+  creditsCost?: number;
+  price?: number;
+  freePreviewPages?: number;
 }
 
 const COLOR_LIST = ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#f97316', '#3b82f6'];
@@ -42,9 +47,11 @@ export default function KnowledgeList() {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 12, total: 0 });
-  const [searchParams, setSearchParams] = useState({ search: '', tags: '', categories: '', sortBy: 'updatedAt', order: 'desc' });
+  const [searchParams, setSearchParams] = useState({ search: '', tags: '', categories: '', categoryTree: '', sortBy: 'updatedAt', order: 'desc' });
   const [tags, setTags] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [categoryTreeOptions, setCategoryTreeOptions] = useState<any[]>([]);
+  const [accessFilter, setAccessFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [converterOpen, setConverterOpen] = useState(false);
   const [convertingFile, setConvertingFile] = useState<{ name: string; content?: string }>({ name: '' });
@@ -74,9 +81,32 @@ export default function KnowledgeList() {
         setCategories(response.data.categories || []);
       }
     } catch { /* ignore */ }
+    try {
+      const treeRes: any = await knowledgeAPI.getCategoryTree();
+      if (treeRes?.data) setCategoryTreeOptions(treeRes.data);
+    } catch { /* ignore */ }
   };
 
   useEffect(() => { loadDocuments(); loadMeta(); }, [loadDocuments]);
+
+  // 访问级别徽章：免费 / 会员专享 / 积分解锁
+  const accessBadge = (doc: KnowledgeDocument): { text: string; color: string } | null => {
+    if (doc.access === 'plan_locked') return { text: `${doc.requiredPlan === 'max' ? '旗舰' : '专业'}专享`, color: 'gold' };
+    if (doc.access === 'credit_locked' || doc.creditsCost) return { text: `积分 ${doc.creditsCost || ''}`, color: 'purple' };
+    if (doc.price) return { text: `¥${doc.price}`, color: 'green' };
+    if (doc.access === 'preview' || doc.freePreviewPages) return { text: '免费试看', color: 'cyan' };
+    return null;
+  };
+
+  const displayDocs = useMemo(() => {
+    if (accessFilter === 'all') return documents;
+    return documents.filter((d) => {
+      if (accessFilter === 'free') return d.access === 'full' || d.access === undefined;
+      if (accessFilter === 'plan') return d.access === 'plan_locked';
+      if (accessFilter === 'credit') return d.access === 'credit_locked' || !!d.creditsCost;
+      return true;
+    });
+  }, [documents, accessFilter]);
 
   const handleDelete = (id: string) => {
     Modal.confirm({
@@ -178,6 +208,32 @@ export default function KnowledgeList() {
             options={categories.map((c) => ({ label: c, value: c }))}
             maxTagCount={2}
           />
+          <TreeSelect
+            placeholder="业务分类树"
+            allowClear
+            multiple
+            treeCheckable
+            treeDefaultExpandAll
+            style={{ minWidth: 200 }}
+            value={searchParams.categoryTree ? searchParams.categoryTree.split(',').filter(Boolean) : []}
+            onChange={(v: any) => setSearchParams((p) => ({ ...p, categoryTree: (v || []).join(',') }))}
+            treeData={categoryTreeOptions}
+            maxTagCount={2}
+          />
+        </Space>
+
+        <Space>
+          <Segmented
+            size="small"
+            value={accessFilter}
+            onChange={(v) => setAccessFilter(v as string)}
+            options={[
+              { value: 'all', label: '全部' },
+              { value: 'free', label: '免费' },
+              { value: 'plan', label: '会员专享' },
+              { value: 'credit', label: '积分' },
+            ]}
+          />
         </Space>
 
         <Space>
@@ -199,13 +255,13 @@ export default function KnowledgeList() {
       </div>
 
       {/* 内容区 */}
-      {documents.length === 0 ? (
+      {displayDocs.length === 0 ? (
         <div style={{ padding: '60px 0', textAlign: 'center' }}>
-          <Empty description="暂无文档，开始创建或上传吧" />
+          <Empty description={documents.length === 0 ? '暂无文档，开始创建或上传吧' : '该筛选条件下暂无文档'} />
         </div>
       ) : viewMode === 'card' ? (
         <Row gutter={[16, 16]}>
-          {documents.map((doc, i) => (
+          {displayDocs.map((doc, i) => (
             <Col xs={24} sm={12} md={8} lg={6} key={doc._id}>
               <Card
                 className={`knowledge-card ${selectedIds.includes(doc._id) ? 'selected' : ''}`}
@@ -235,6 +291,7 @@ export default function KnowledgeList() {
                       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {doc.title}
                       </span>
+                      {accessBadge(doc) && <Tag color={accessBadge(doc)!.color} style={{ marginInlineEnd: 0 }}>{accessBadge(doc)!.text}</Tag>}
                       {doc.viewCount > 100 && <Badge count="热" size="small" style={{ backgroundColor: '#f59e0b' }} />}
                     </div>
                   }
@@ -263,7 +320,7 @@ export default function KnowledgeList() {
         </Row>
       ) : (
         <div className="knowledge-list-view">
-          {documents.map((doc, i) => (
+          {displayDocs.map((doc, i) => (
             <div
               key={doc._id}
               className={`knowledge-list-item ${selectedIds.includes(doc._id) ? 'selected' : ''}`}

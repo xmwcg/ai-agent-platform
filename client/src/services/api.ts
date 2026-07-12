@@ -81,7 +81,9 @@ export const knowledgeAPI = {
   delete: (id: string) => apiClient.delete(`/knowledge/${id}`),
 
   // 获取标签和分类
-  getMeta: () => apiClient.get('/knowledge/meta/tags-and-categories')
+  getMeta: () => apiClient.get('/knowledge/meta/tags-and-categories'),
+  // 业务分类树（知识库 v2 固定分类）
+  getCategoryTree: () => apiClient.get('/knowledge/meta/category-tree'),
 };
 
 // 知识图谱 API
