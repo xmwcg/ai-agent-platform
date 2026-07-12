@@ -4,13 +4,14 @@
  */
 import express from 'express';
 import request from 'supertest';
+import { phoneHash } from '../lib/field-crypto';
 
 // mock User 模型，避免真实 DB 连接
 jest.mock('../models/User', () => {
   const fakeUser = {
     _id: 'uid-1',
     email: 'phoneuser@example.com',
-    toJSON: () => ({ id: 'uid-1', email: 'phoneuser@example.com', phone: '13800000000' }),
+    toJSON: () => ({ id: 'uid-1', email: 'phoneuser@example.com', phone: '138****0000' }),
   };
   return {
     __esModule: true,
@@ -30,11 +31,12 @@ app.use(express.json());
 app.use(authRouter);
 
 const PHONE = '13800000000';
+const PHONE_HASH = phoneHash(PHONE);
 
-// 清理短信限频/验证码 key，避免用例间串扰
+// 清理短信限频/验证码 key（使用 phoneHash 而非明文），避免用例间串扰
 beforeEach(async () => {
-  await redisClient.del(`sms:limit:${PHONE}`);
-  await redisClient.del(`sms:code:${PHONE}`);
+  await redisClient.del(`sms:limit:${PHONE_HASH}`);
+  await redisClient.del(`sms:code:${PHONE_HASH}`);
 });
 
 describe('微信扫码登录（Mock）', () => {
@@ -69,7 +71,7 @@ describe('手机号验证码登录', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.devCode).toMatch(/^\d{6}$/);
-    const stored = await redisClient.get(`sms:code:${PHONE}`);
+    const stored = await redisClient.get(`sms:code:${PHONE_HASH}`);
     expect(stored).toBe(res.body.devCode);
   });
 

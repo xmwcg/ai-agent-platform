@@ -20,18 +20,23 @@ export interface IModelConfig extends Document {
 const ModelConfigSchema = new Schema<IModelConfig>(
   {
     name: { type: String, required: true, trim: true },
-    provider: { type: String, required: true },
+    provider: { type: String, required: true, index: true },
     baseURL: { type: String, required: true },
     apiKey: { type: String, required: true },
     models: { type: [String], default: [] },
     defaultModel: { type: String, required: true },
-    enabled: { type: Boolean, default: true },
+    enabled: { type: Boolean, default: true, index: true },
     isDefault: { type: Boolean, default: false },
     pinned: { type: Boolean, default: false },
     description: { type: String },
-    createdBy: { type: String, required: true },
+    createdBy: { type: String, required: true, index: true },
   },
   { timestamps: true }
 );
+
+// 复合索引：按 createdBy + enabled 查询（用户列出自己的启用模型配置）
+ModelConfigSchema.index({ createdBy: 1, enabled: 1 });
+// 复合索引：启用的模型配置按 provider 分组（运行时动态加载）
+ModelConfigSchema.index({ enabled: 1, provider: 1 });
 
 export const ModelConfig = mongoose.model<IModelConfig>('ModelConfig', ModelConfigSchema);

@@ -20,7 +20,7 @@ export interface ITeam extends Document {
 
 const TeamMemberSchema = new Schema<ITeamMember>(
   {
-    userId: { type: String, required: true },
+    userId: { type: String, required: true, index: true },
     role: { type: String, enum: ['owner', 'admin', 'member', 'viewer'], default: 'member' },
     joinedAt: { type: Date, default: Date.now },
   },
@@ -37,5 +37,8 @@ const TeamSchema = new Schema<ITeam>(
   },
   { timestamps: true }
 );
+
+// 复合索引：按创建者 + 计划查询（用户的团队列表）
+TeamSchema.index({ ownerId: 1, plan: 1 });
 
 export const Team = mongoose.model<ITeam>('Team', TeamSchema);

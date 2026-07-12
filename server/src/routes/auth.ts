@@ -9,6 +9,7 @@ import { validate, ValidationSchema } from '../lib/validation';
 import { redisClient } from '../config/database';
 import { logger } from '../lib/logger';
 import { processReferralOnRegister } from '../services/referral.service';
+import { phoneHash, normalizePhone, maskPhone, encryptField } from '../lib/field-crypto';
 
 const router = Router();
 
@@ -148,21 +149,23 @@ const smsLoginSchema: ValidationSchema = {
 router.post('/sms/send', authLimiter, validate(smsSendSchema), async (req: AuthRequest, res: Response) => {
   try {
     const { phone } = req.body as { phone: string };
-    // 同手机号 60s 限频
-    const limitKey = `sms:limit:${phone}`;
+    const rawPhone = normalizePhone(phone);
+    const hash = phoneHash(phone); // 用 hash 做 Redis key，保护隐私
+    // 同手机号 60s 限频（key 使用 hash 而非明文）
+    const limitKey = `sms:limit:${hash}`;
     if (await redisClient.get(limitKey)) {
       return res.status(429).json({ error: '验证码发送过于频繁，请稍后再试' });
     }
     const code = crypto.randomInt(100000, 999999).toString();
-    await redisClient.set(`sms:code:${phone}`, code, 'EX', 300);
+    await redisClient.set(`sms:code:${hash}`, code, 'EX', 300);
     await redisClient.set(limitKey, '1', 'EX', 60);
 
     const isMock = (process.env.SMS_MOCK || process.env.NODE_ENV !== 'production') === 'true' || process.env.NODE_ENV !== 'production';
     if (isMock || !process.env.SMS_PROVIDER) {
-      logger.info('auth', `[SMS Mock] 向 ${phone} 发送验证码: ${code}`);
+      logger.info('auth', `[SMS Mock] 向 ${maskPhone(rawPhone)} 发送验证码: ${code}`);
     } else {
       // 真实短信服务商接入点（阿里云/腾讯云）：在此调用对应 SDK 发送 code
-      logger.info('auth', `[SMS ${process.env.SMS_PROVIDER}] 向 ${phone} 发送验证码(真实)`);
+      logger.info('auth', `[SMS ${process.env.SMS_PROVIDER}] 向 ${maskPhone(rawPhone)} 发送验证码(真实)`);
     }
     const payload: any = { success: true, message: '验证码已发送' };
     if (isMock) payload.devCode = code; // 仅开发态回显，便于联调/测试
@@ -176,17 +179,27 @@ router.post('/sms/send', authLimiter, validate(smsSendSchema), async (req: AuthR
 router.post('/sms/login', authLimiter, validate(smsLoginSchema), async (req: AuthRequest, res: Response) => {
   try {
     const { phone, code } = req.body as { phone: string; code: string };
-    const stored = await redisClient.get(`sms:code:${phone}`);
+    const rawPhone = normalizePhone(phone);
+    const hash = phoneHash(phone);
+    const stored = await redisClient.get(`sms:code:${hash}`);
     if (!stored || stored !== code) {
-      return res.status(400).json({ error: '验证码错误 or 已过期' });
+      return res.status(400).json({ error: '验证码错误或已过期' });
     }
-    await redisClient.del(`sms:code:${phone}`);
+    await redisClient.del(`sms:code:${hash}`);
 
-    let user = await User.findOne({ phone });
+    // 通过 phoneHash 查找用户（隐私保护：不存明文手机号）
+    let user = await User.findOne({ phoneHash: hash });
     if (!user) {
-      // 自动注册：生成随机密码（用户后续可绑定邮箱/改密）
+      // 自动注册：加密手机号落库，生成随机密码
       const rand = crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '');
-      user = await User.create({ phone, password: rand, name: `用户${phone.slice(-4)}`, provider: 'local', email: `${phone}@phone.local` });
+      user = await User.create({
+        phone: encryptField(rawPhone), // 预加密（避免被 pre-save 二次加密）
+        phoneHash: hash,
+        password: rand,
+        name: `用户${rawPhone.slice(-4)}`,
+        provider: 'local',
+        email: `phone_${Date.now()}@phone.local`,
+      });
     }
     const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
     res.json({ success: true, token, user: user.toJSON() });
