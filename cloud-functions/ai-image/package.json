@@ -1,9 +1,9 @@
 {
   "name": "ai-image",
   "version": "1.0.0",
-  "description": "CloudBase AI 免费额度图像生成（文生图/图生图）云函数",
+  "description": "CloudBase AI 图像生成（文生图 / 图生图）免费额度云函数",
   "main": "index.js",
   "dependencies": {
-    "wx-server-sdk": "~2.6.3"
+    "@cloudbase/node-sdk": "latest"
   }
 }
