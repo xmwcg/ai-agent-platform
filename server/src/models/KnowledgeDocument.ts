@@ -11,6 +11,12 @@ export interface IKnowledgeDocument extends Document {
   author: string; // 作者 ID
   teamId?: string; // 归属团队（团队资源级隔离，可选）
   isPublic: boolean; // 是否公开
+  // 商业化与权限字段（知识库 v2）
+  categoryTree?: string[];     // 业务分类路径，如 ['法律咨询','合同范本']
+  price?: number;              // 付费解锁价格（元），缺省 = 免费
+  requiredPlan?: 'free' | 'pro' | 'max'; // 查看所需最低会员等级
+  creditsCost?: number;        // 查看/下载消耗积分
+  freePreviewPages?: number;   // 免费试看页数（文档类）
   viewCount: number; // 浏览次数
   likeCount: number; // 点赞次数
   createdAt: Date;
@@ -73,6 +79,27 @@ const KnowledgeDocumentSchema = new Schema<IKnowledgeDocument>(
       type: Boolean,
       default: true
     },
+    categoryTree: {
+      type: [String],
+      default: undefined
+    },
+    price: {
+      type: Number,
+      default: undefined
+    },
+    requiredPlan: {
+      type: String,
+      enum: ['free', 'pro', 'max'],
+      default: 'free'
+    },
+    creditsCost: {
+      type: Number,
+      default: undefined
+    },
+    freePreviewPages: {
+      type: Number,
+      default: undefined
+    },
     viewCount: {
       type: Number,
       default: 0
@@ -108,6 +135,7 @@ const KnowledgeDocumentSchema = new Schema<IKnowledgeDocument>(
 KnowledgeDocumentSchema.index({ title: 'text', content: 'text' }); // 全文搜索
 KnowledgeDocumentSchema.index({ tags: 1 });
 KnowledgeDocumentSchema.index({ categories: 1 });
+KnowledgeDocumentSchema.index({ categoryTree: 1 });
 KnowledgeDocumentSchema.index({ author: 1 });
 KnowledgeDocumentSchema.index({ createdAt: -1 });
 

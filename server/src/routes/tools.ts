@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { translationService } from '../services/translation.service';
 import { planGeneratorService } from '../services/plan-generator.service';
-import { fileConvertService, getSupportedConversionList } from '../services/file-convert.service';
+import { fileConvertService, getSupportedConversionList, getStoredConversion } from '../services/file-convert.service';
 import { mediaGenService, MediaTaskType, MediaProviderName, listMediaProviders } from '../services/media-gen.service';
 import { optionalAuth, AuthRequest } from '../middleware/auth';
 import { enforceQuota, quotaIncrement } from '../middleware/subscription';
@@ -107,13 +107,18 @@ router.get('/media/task/:provider/:taskId', optionalAuth, async (req: AuthReques
   }
 });
 
-// ============ 演示用：下载转换结果占位 ============
+// ============ 下载真实转换产物 ============
 router.get('/convert/download', (req: Request, res: Response) => {
-  const file = (req.query.file as string) || 'result';
-  // 返回最小占位文件（生产环境返回真实转换产物）
-  res.setHeader('Content-Disposition', `attachment; filename="${file}"`);
-  res.setHeader('Content-Type', 'application/octet-stream');
-  res.send(Buffer.from(`Converted file placeholder for ${file}. Production will return real output.`));
+  const id = req.query.id as string;
+  const fallbackName = (req.query.name as string) || 'result';
+  const item = id ? getStoredConversion(id) : undefined;
+  if (!item) {
+    return res.status(404).json({ success: false, error: '转换产物不存在或已过期（10 分钟有效期）' });
+  }
+  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(item.name)}"`);
+  res.setHeader('Content-Type', item.ctype || 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(Buffer.from(item.content, 'utf8'));
 });
 
 export default router;

@@ -51,6 +51,17 @@ import { sendError } from './lib/http-error';
 import { logger } from './lib/logger';
 import { apmMiddleware, vitalsHandler } from './middleware/apm';
 
+// ─── 进程级崩溃兜底（稳定性基线，适配 0→1→100 扩容）───
+// 未捕获异常：记录后退出，交由 Docker restart / healthcheck 自动拉起，避免僵尸进程。
+process.on('uncaughtException', (err: Error) => {
+  logger.error('index', `💥 未捕获异常，进程退出（容器将自动重启）: ${err?.stack || err?.message}`);
+  process.exit(1);
+});
+// 未处理的 Promise 拒绝：仅记录，不退出，避免单次异常拖垮整站。
+process.on('unhandledRejection', (reason: unknown) => {
+  logger.error('index', `⚠ 未处理的 Promise 拒绝: ${reason instanceof Error ? reason.stack : String(reason)}`);
+});
+
 // 加载环境变量
 dotenv.config();
 
@@ -81,7 +92,12 @@ app.use(morgan('dev'));
 app.use(apmMiddleware);
 
 // ─── 健康检查 + APM 指标（位于所有中间件之后、路由之前）───
-app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/health', (_req, res) => res.json({
+  status: 'ok',
+  uptime: process.uptime(),
+  memory: process.memoryUsage(),
+  timestamp: new Date().toISOString(),
+}));
 app.get('/health/vitals', vitalsHandler);
 
 // 限流（全局 API）

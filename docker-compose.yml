@@ -28,13 +28,20 @@ services:
   server:
     build: ./server
     container_name: ai-platform-server
-    restart: unless-stopped
+    restart: always
     # 仅本机回环可访问，便于健康检查；公网不可直达（由前端 nginx 反代）
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
       - mongodb
       - redis
+    # 进程级崩溃兜底 + 健康探针：异常退出后 Docker 自动重启；连续不健康则强杀重建
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     # 仅保留基础设施变量；密钥与业务开关一律来自挂载的 server/.env
     # （Docker environment 会作为 process.env 注入且 dotenv 默认不覆盖，
     #   故切勿在此写 JWT_SECRET / ENABLE_MOCK_MODE / DEFAULT_PAY_PROVIDER，

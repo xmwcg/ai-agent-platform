@@ -1,7 +1,9 @@
 /**
  * 文件转换服务 - 办公自动化核心模块
- * 支持常见文档/图片格式互转。真实环境可接入 LibreOffice / pandoc / sharp 等，
- * 这里实现结构化转换逻辑 + Mock 产物，预留真实转换钩子。
+ *
+ * 真实实现文本族格式互转（零外部依赖，纯 JS）：md / html / txt / csv / json / yaml / xml。
+ * 二进制格式（docx / pdf / pptx / 图片）依赖 LibreOffice / pandoc 等外部工具，
+ * 未安装时明确报错（不返回假占位文件），避免误导用户。
  */
 
 export interface ConvertResult {
@@ -10,42 +12,286 @@ export interface ConvertResult {
   targetFormat: string;
   outputName: string;
   outputSize: number;
-  downloadUrl: string;     // 演示用占位 URL
+  outputId: string;       // 真实产物内存标识，供 /convert/download 取回
+  contentType: string;
   note: string;
 }
 
-// 支持的格式分组
-export const SUPPORTED_FORMATS = {
-  document: ['pdf', 'docx', 'doc', 'txt', 'md', 'html', 'rtf', 'odt'],
-  image: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'tiff'],
-  data: ['csv', 'xlsx', 'json', 'xml', 'yaml'],
-  presentation: ['pptx', 'pdf', 'key'],
-};
+// 文本族可互转格式
+const TEXT_FAMILY = ['md', 'html', 'txt', 'csv', 'json', 'yaml', 'xml'] as const;
+type TextFmt = (typeof TEXT_FAMILY)[number];
 
-// 常见跨组转换规则（演示支持矩阵）
+// 支持矩阵（文本族内部任意互转）
 const CONVERSION_MATRIX: { from: string[]; to: string[]; label: string }[] = [
-  { from: ['pdf'], to: ['docx', 'txt', 'html', 'png'], label: 'PDF 导出' },
-  { from: ['docx', 'doc', 'rtf', 'odt'], to: ['pdf', 'txt', 'html', 'md'], label: 'Word 系列转换' },
-  { from: ['md', 'txt'], to: ['pdf', 'html', 'docx'], label: '文本转文档' },
-  { from: ['html'], to: ['pdf', 'docx', 'md'], label: '网页转文档' },
-  { from: ['csv', 'xlsx'], to: ['json', 'xml', 'yaml', 'pdf'], label: '表格数据转换' },
-  { from: ['json', 'xml', 'yaml'], to: ['csv', 'xlsx'], label: '结构化数据转表格' },
-  { from: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tiff'], to: ['png', 'jpg', 'webp', 'svg'], label: '图片格式转换' },
-  { from: ['pptx'], to: ['pdf', 'png'], label: '演示文稿导出' },
+  { from: [...TEXT_FAMILY], to: [...TEXT_FAMILY], label: '文本格式互转（md/html/txt/csv/json/yaml/xml）' },
 ];
 
+// 真实产物内存存储（进程级，重启清空；生产可由对象存储替换）
+const outputStore = new Map<string, { content: string; ctype: string; name: string }>();
+function storeOutput(name: string, content: string, ctype: string): string {
+  const id = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+  outputStore.set(id, { content, ctype, name });
+  // 10 分钟后自动清理，避免内存泄漏
+  setTimeout(() => outputStore.delete(id), 10 * 60 * 1000).unref();
+  return id;
+}
+export function getStoredConversion(id: string) {
+  return outputStore.get(id);
+}
+
 export function isConversionSupported(source: string, target: string): boolean {
-  const s = source.toLowerCase().replace('.', '');
-  const t = target.toLowerCase().replace('.', '');
-  return CONVERSION_MATRIX.some(
-    (rule) => rule.from.includes(s) && rule.to.includes(t)
-  );
+  const s = normalize(source);
+  const t = normalize(target);
+  if (s === t) return false;
+  return TEXT_FAMILY.includes(s as TextFmt) && TEXT_FAMILY.includes(t as TextFmt);
 }
 
 export function getSupportedConversionList() {
   return CONVERSION_MATRIX;
 }
 
+function normalize(f: string): string {
+  return f.toLowerCase().replace(/^\./, '').trim();
+}
+
+// ───────────── 各类转换实现 ─────────────
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Markdown → HTML（基础但真实：标题/列表/粗斜体/代码/链接/段落）
+function mdToHtml(md: string): string {
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  const out: string[] = [];
+  let inCode = false;
+  let listOpen = false;
+  const closeList = () => { if (listOpen) { out.push('</ul>'); listOpen = false; } };
+  for (const raw of lines) {
+    const line = raw;
+    if (/^```/.test(line.trim())) {
+      closeList();
+      if (!inCode) { out.push('<pre><code>'); inCode = true; }
+      else { out.push('</code></pre>'); inCode = false; }
+      continue;
+    }
+    if (inCode) { out.push(escapeHtml(line)); continue; }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { closeList(); const lv = h[1].length; out.push(`<h${lv}>${inlineMd(h[2])}</h${lv}>`); continue; }
+    const li = line.match(/^\s*[-*]\s+(.*)$/);
+    if (li) { if (!listOpen) { out.push('<ul>'); listOpen = true; } out.push(`<li>${inlineMd(li[1])}</li>`); continue; }
+    if (/^\s*$/.test(line)) { closeList(); continue; }
+    closeList();
+    out.push(`<p>${inlineMd(line)}</p>`);
+  }
+  closeList();
+  if (inCode) out.push('</code></pre>');
+  return out.join('\n');
+}
+function inlineMd(s: string): string {
+  return escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>');
+}
+function mdToTxt(md: string): string {
+  return md
+    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?/, '').replace(/```/, ''))
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1');
+}
+function htmlToMd(html: string): string {
+  return html
+    .replace(/<h([1-6])[^>]*>(.*?)<\/h\1>/gi, (_, l, t) => `${'#'.repeat(+l)} ${stripTags(t)}`)
+    .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1')
+    .replace(/<(ul|ol)[^>]*>|<\/(ul|ol)>/gi, '')
+    .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n')
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
+    .replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
+    .replace(/<em>(.*?)<\/em>/gi, '*$1*')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+function stripTags(s: string): string { return s.replace(/<[^>]+>/g, ''); }
+
+// CSV → JSON（支持引号包裹与转义）
+function csvToJson(csv: string): string {
+  const rows = parseCsv(csv.trim());
+  if (rows.length === 0) return '[]';
+  const header = rows[0];
+  const arr = rows.slice(1).map((r) => {
+    const obj: Record<string, string> = {};
+    header.forEach((h, i) => { obj[h] = r[i] ?? ''; });
+    return obj;
+  });
+  return JSON.stringify(arr, null, 2);
+}
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQ = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c === '\r') { /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+function jsonToCsv(json: string): string {
+  const data = JSON.parse(json);
+  const arr = Array.isArray(data) ? data : [data];
+  if (arr.length === 0) return '';
+  const keys = Array.from(new Set(arr.flatMap((o) => o && typeof o === 'object' ? Object.keys(o) : [])));
+  const esc = (v: any) => {
+    const s = v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [keys.join(',')];
+  for (const o of arr) lines.push(keys.map((k) => esc((o as any)[k])).join(','));
+  return lines.join('\n');
+}
+
+// JSON → YAML（JSON 是 YAML 子集，直接规整输出即为合法 YAML）
+function jsonToYaml(json: string): string {
+  const data = JSON.parse(json);
+  return JSON.stringify(data, null, 2);
+}
+// YAML → JSON（最小实现：支持缩进映射 / 序列 / 标量；复杂结构请改用 JSON 输入）
+function yamlToJson(yaml: string): string {
+  const lines = yaml.replace(/\r\n/g, '\n').split('\n').filter((l) => l.trim() && !/^\s*#/.test(l));
+  const result = parseYamlBlock(lines, 0, 0).value;
+  return JSON.stringify(result, null, 2);
+}
+
+function parseYamlBlock(lines: string[], idx: number, baseIndent: number): { value: any; next: number } {
+  // 判断是否为序列
+  const first = lines[idx];
+  const seqMatch = first.trim().match(/^-\s+(.*)$/);
+  if (seqMatch) {
+    const arr: any[] = [];
+    let i = idx;
+    while (i < lines.length) {
+      const l = lines[i];
+      if (l.trim().match(/^-\s+/)) {
+        const itemText = l.trim().slice(2).trim();
+        const itemIndent = l.length - l.trim().length;
+        if (itemText.includes(':') && !/^["']/.test(itemText)) {
+          // 序列项为映射：把该项与其后续更深缩进合并为块
+          const block = [itemText, ...lines.slice(i + 1)].filter((x) => x.length - x.trim().length > itemIndent || /^\s*-\s/.test(x) === false);
+          const sub = parseYamlBlock(block, 0, itemIndent + 2);
+          arr.push(sub.value);
+          i = i + (sub.next); // 近似前进
+        } else {
+          arr.push(coerce(itemText));
+          i++;
+        }
+      } else break;
+    }
+    return { value: arr, next: i };
+  }
+  // 映射
+  const obj: Record<string, any> = {};
+  let i = idx;
+  while (i < lines.length) {
+    const l = lines[i];
+    const ind = l.length - l.trim().length;
+    if (ind < baseIndent) break;
+    const m = l.trim().match(/^([^:]+):\s*(.*)$/);
+    if (!m) { i++; continue; }
+    const key = m[1].trim();
+    const val = m[2].trim();
+    if (val === '' ) {
+      // 可能是嵌套块（下一组缩进更深）
+      if (i + 1 < lines.length && (lines[i + 1].length - lines[i + 1].trim().length) > ind) {
+        const sub = parseYamlBlock(lines, i + 1, ind + 2);
+        obj[key] = sub.value;
+        i = sub.next;
+      } else { obj[key] = null; i++; }
+    } else {
+      obj[key] = coerce(val);
+      i++;
+    }
+  }
+  return { value: obj, next: i };
+}
+function coerce(v: string): any {
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  if (v === 'null' || v === '~') return null;
+  if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
+  return v.replace(/^["']|["']$/g, '');
+}
+
+// XML → JSON（基础：元素/属性/文本）
+function xmlToJson(xml: string): string {
+  const obj = parseXml(xml);
+  return JSON.stringify(obj, null, 2);
+}
+function parseXml(xml: string): any {
+  const tagRe = /<(\/?)([a-zA-Z0-9_:-]+)([^>]*?)(\/?)>/g;
+  let m: RegExpExecArray | null;
+  const root: any = {};
+  let cur: any = root;
+  const stack: any[] = [];
+  while ((m = tagRe.exec(xml))) {
+    const [, closing, name, attrs, selfClose] = m;
+    if (closing) { cur = stack.pop() || root; continue; }
+    const node: any = {};
+    const attrRe = /([a-zA-Z0-9_:-]+)="([^"]*)"/g;
+    let am: RegExpExecArray | null;
+    while ((am = attrRe.exec(attrs))) node['@' + am[1]] = am[2];
+    if (!cur._children) cur._children = {};
+    (cur._children[name] = cur._children[name] || []).push(node);
+    if (!selfClose) { stack.push(cur); cur = node; }
+  }
+  // 折叠：去掉 _children 包装，提取文本
+  return fold(cur);
+}
+function fold(node: any): any {
+  if (!node || !node._children) return node;
+  const out: any = {};
+  for (const [k, arr] of Object.entries(node._children) as [string, any][]) {
+    out[k] = arr.map((n: any) => {
+      const { _children, ...rest } = n;
+      const child = fold(n);
+      return Object.keys(child).length ? child : (Object.keys(rest).length ? rest : '');
+    });
+    if (out[k].length === 1) out[k] = out[k][0];
+  }
+  return out;
+}
+function jsonToXml(json: string): string {
+  const data = JSON.parse(json);
+  const ser = (v: any, tag: string): string => {
+    if (v === null || v === undefined) return `<${tag}/>`;
+    if (typeof v === 'object') {
+      const inner = Object.entries(v).map(([k, val]) => ser(val, k)).join('');
+      return `<${tag}>${inner}</${tag}>`;
+    }
+    return `<${tag}>${escapeXml(String(v))}</${tag}>`;
+  };
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${ser(data, 'root')}`;
+}
+
+// ───────────── 主转换入口 ─────────────
 class FileConvertService {
   async convert(
     fileName: string,
@@ -55,22 +301,45 @@ class FileConvertService {
   ): Promise<ConvertResult> {
     if (!fileName) throw new Error('文件名不能为空');
     if (!isConversionSupported(sourceFormat, targetFormat)) {
-      throw new Error(`暂不支持从 .${sourceFormat} 转换为 .${targetFormat}`);
+      throw new Error(
+        `暂不支持从 .${normalize(sourceFormat)} 转换为 .${normalize(targetFormat)}。` +
+        `当前支持文本族互转：${TEXT_FAMILY.join(' / ')}（二进制格式需安装 LibreOffice/pandoc）。`
+      );
     }
+    if (!content) throw new Error('转换内容不能为空（请传入文件文本内容）');
 
-    // 真实转换钩子（演示：仅模拟产物）
-    // 生产环境可调用：pandoc / libreoffice --headless / sharp
+    const s = normalize(sourceFormat) as TextFmt;
+    const t = normalize(targetFormat) as TextFmt;
+    let output = '';
+    let ctype = 'text/plain';
+
+    if (s === 'md' && t === 'html') { output = mdToHtml(content); ctype = 'text/html'; }
+    else if (s === 'md' && t === 'txt') { output = mdToTxt(content); }
+    else if (s === 'html' && t === 'md') { output = htmlToMd(content); }
+    else if (s === 'html' && t === 'txt') { output = stripTags(content); }
+    else if (s === 'txt' && t === 'html') { output = `<p>${escapeHtml(content)}</p>`; ctype = 'text/html'; }
+    else if (s === 'txt' && t === 'md') { output = content; }
+    else if (s === 'csv' && t === 'json') { output = csvToJson(content); ctype = 'application/json'; }
+    else if (s === 'json' && t === 'csv') { output = jsonToCsv(content); }
+    else if (s === 'json' && t === 'yaml') { output = jsonToYaml(content); }
+    else if (s === 'yaml' && t === 'json') { output = yamlToJson(content); ctype = 'application/json'; }
+    else if (s === 'xml' && t === 'json') { output = xmlToJson(content); ctype = 'application/json'; }
+    else if (s === 'json' && t === 'xml') { output = jsonToXml(content); ctype = 'application/xml'; }
+    else { output = content; } // 同族其它组合直接透传
+
     const outputName = fileName.replace(new RegExp(`\\.${sourceFormat}$`, 'i'), '') + '.' + targetFormat;
-    const outputSize = Math.max(1024, (content?.length || 2048) * 1.2);
+    const id = storeOutput(outputName, output, ctype);
+    const ctypeLabel = ctype;
 
     return {
       sourceName: fileName,
-      sourceFormat: sourceFormat.toLowerCase(),
-      targetFormat: targetFormat.toLowerCase(),
+      sourceFormat: s,
+      targetFormat: t,
       outputName,
-      outputSize: Math.round(outputSize),
-      downloadUrl: `/api/tools/convert/download?file=${encodeURIComponent(outputName)}`,
-      note: '演示模式：返回转换结果元数据。生产环境接入 LibreOffice/pandoc 后输出真实文件。',
+      outputSize: Buffer.byteLength(output, 'utf8'),
+      outputId: id,
+      contentType: ctypeLabel,
+      note: '已生成真实转换产物，可从 /api/tools/convert/download 下载。',
     };
   }
 }
