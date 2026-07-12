@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Button, Input, Tag, Tooltip, Spin, message } from 'antd';
 import {
   CustomerServiceOutlined, CloseOutlined, SendOutlined, WechatOutlined,
-  PictureOutlined, RobotOutlined, MinusOutlined,
+  PictureOutlined, RobotOutlined, MinusOutlined, MailOutlined,
 } from '@ant-design/icons';
 import { aibakAPI } from '@/services/api';
 
@@ -38,6 +38,7 @@ export default function CustomerServiceFab() {
   const [loading, setLoading] = useState(false);
   const [model, setModel] = useState<'hy3' | 'hy3-preview'>('hy3');
   const [imgMode, setImgMode] = useState(false);
+  const [showHuman, setShowHuman] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 首页自动弹出（仅首次，关闭后当天不再弹）
@@ -144,6 +145,10 @@ export default function CustomerServiceFab() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
+          <Tooltip title="转人工客服（微信 / 飞书 / 邮箱）">
+            <Button type="text" size="small" onClick={() => setShowHuman(true)}
+              style={{ color: '#fff', fontSize: 12 }}>转人工</Button>
+          </Tooltip>
           <Button type="text" size="small" icon={<MinusOutlined />} onClick={() => setMinimized((m) => !m)}
             style={{ color: '#fff' }} />
           <Button type="text" size="small" icon={<CloseOutlined />} onClick={closeAll} style={{ color: '#fff' }} />
@@ -173,6 +178,38 @@ export default function CustomerServiceFab() {
               </div>
             ))}
             {loading && <Spin size="small" style={{ marginLeft: 4 }} />}
+
+            {/* 转人工联系卡（微信 / 飞书 / 邮箱） */}
+            {showHuman && (
+              <div style={{
+                marginTop: 4, padding: 12, borderRadius: 12,
+                background: 'linear-gradient(135deg, rgba(7,193,96,0.10), rgba(108,92,231,0.08))',
+                border: '1px solid var(--border-light)',
+              }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', marginBottom: 8 }}>
+                  人工客服为您服务
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
+                    <WechatOutlined style={{ color: '#07c160', fontSize: 16 }} />
+                    <span>微信客服：<b>aibak-service</b>（添加备注「AIbak」）</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
+                    <CustomerServiceOutlined style={{ color: '#3370ff', fontSize: 16 }} />
+                    <span>飞书客服：搜索「AIbak 支持」或留言工单</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
+                    <MailOutlined style={{ color: '#6c5ce7', fontSize: 16 }} />
+                    <span>商务 / 技术邮箱：<b>contact@aibak.site</b></span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    人工客服服务时间：工作日 9:00–21:00；非工作时间留言将于次日回复。
+                  </div>
+                </div>
+                <Button size="small" type="link" style={{ paddingLeft: 0, marginTop: 4 }}
+                  onClick={() => setShowHuman(false)}>收起</Button>
+              </div>
+            )}
 
             {/* 快捷问题 */}
             {messages.length <= 1 && (
