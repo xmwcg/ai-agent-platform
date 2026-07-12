@@ -12,9 +12,10 @@ import axios from 'axios';
 import { randomBytes } from 'crypto';
 import { signTencentTC3, type TC3SignOptions } from '../lib/tc3';
 import { MediaTask } from '../models/MediaTask';
+import { callCloudbaseImage } from './cloudbase-ai.service';
 
 export type MediaTaskType = 'text2img' | 'image2image' | 'text2video' | 'image2video';
-export type MediaProviderName = 'mock' | 'hunyuan' | 'keling' | 'jimeng' | 'moneyprinterturbo';
+export type MediaProviderName = 'mock' | 'hunyuan' | 'keling' | 'jimeng' | 'moneyprinterturbo' | 'cloudbase-free';
 
 /**
  * BYOK 凭据（用户自带 Key）。随调用注入，绝不污染单例 provider 实例，避免并发竞态。
@@ -168,6 +169,66 @@ class MockProvider implements MediaProvider {
       task.note = 'Mock 模式：生成完成（占位图）。';
     }
     return task;
+  }
+}
+
+/* --------------------------- 云函数免费额度（HY-Image 文生图 / 图生图） --------------------------- */
+/**
+ * 使用 CloudBase 小程序成长计划免费额度下的 HY-Image 模型生成图像，
+ * 作为免费用户的真实兜底（替代 Mock 占位图），让文生图 / 图生图开箱即用、真实出图。
+ * 采用异步范式：generate 立即返回 processing 任务，首次 queryTask 时再调用云函数取回真实图像。
+ */
+export class CloudbaseImageProvider implements MediaProvider {
+  name = 'cloudbase-free' as const;
+  label = 'AIbak 免费额度（HY-Image）';
+  supportedTypes: MediaTaskType[] = ['text2img', 'image2image'];
+  isConfigured() {
+    return true; // 免费额度默认可用，无需密钥
+  }
+  async generate(params: MediaGenParams): Promise<MediaGenResult> {
+    const isImage2Image = params.type === 'image2image';
+    const model = isImage2Image
+      ? 'HY-Image-v3.0-I2I-ToB-v1.0.1'
+      : 'HY-Image-3.0-Plus-4090-Tob-v1.0';
+    const taskId = genTaskId();
+    const result: any = {
+      type: params.type,
+      taskId,
+      status: 'processing',
+      prompt: params.prompt,
+      outputUrl: '',
+      provider: 'cloudbase-free',
+      note: '正在调用云函数 HY-Image 免费额度生成图像……',
+      // 图生图参考图随任务持久化，供 queryTask 回源
+      ...(isImage2Image && params.imageBase64 ? { imageBase64: params.imageBase64 } : {}),
+      ...(isImage2Image && params.imageUrl ? { imageUrl: params.imageUrl } : {}),
+    };
+    await persistTask(taskId, result);
+    return result as MediaGenResult;
+  }
+  async queryTask(taskId: string, _credentials?: MediaCredentials): Promise<MediaGenResult> {
+    const task = await retrieveTask(taskId);
+    if (!task) throw new Error('任务不存在或已过期');
+    if (task.status === 'completed') return task;
+    const isImage2Image = task.type === 'image2image';
+    const model = isImage2Image
+      ? 'HY-Image-v3.0-I2I-ToB-v1.0.1'
+      : 'HY-Image-3.0-Plus-4090-Tob-v1.0';
+    const images = await callCloudbaseImage(model, task.prompt, {
+      size: '1024x1024',
+      ...(isImage2Image && (task as any).imageBase64 ? { imageBase64: (task as any).imageBase64 } : {}),
+      ...(isImage2Image && (task as any).imageUrl ? { imageUrl: (task as any).imageUrl } : {}),
+    });
+    const completed: MediaGenResult = {
+      ...task,
+      status: 'completed',
+      outputUrl: images[0] || '',
+      images,
+      provider: 'cloudbase-free',
+      note: '云函数 HY-Image 免费额度生成完成。',
+    };
+    await persistTask(taskId, completed);
+    return completed;
   }
 }
 
@@ -502,6 +563,7 @@ const PROVIDERS: Record<MediaProviderName, MediaProvider> = {
   keling: new KelingProvider(),
   jimeng: new JimengProvider(),
   moneyprinterturbo: new MoneyPrinterTurboProvider(),
+  'cloudbase-free': new CloudbaseImageProvider(),
 };
 
 export function listMediaProviders() {
@@ -513,11 +575,18 @@ export function listMediaProviders() {
   }));
 }
 
-/** 厂商选择：显式指定(已配置) > 自动已配置厂商 > Mock */
-export function selectMediaProvider(preferred?: MediaProviderName): MediaProvider {
+/**
+ * 厂商选择：显式指定(已配置) > 自动已配置厂商 > 云函数免费额度(文生图/图生图) > Mock
+ * 保证免费用户也能产出真实图像（HY-Image 免费额度），杜绝占位假图。
+ */
+export function selectMediaProvider(preferred?: MediaProviderName, type?: MediaTaskType): MediaProvider {
   if (preferred && PROVIDERS[preferred]?.isConfigured()) return PROVIDERS[preferred];
   for (const name of ['hunyuan', 'keling', 'jimeng', 'moneyprinterturbo'] as MediaProviderName[]) {
-    if (PROVIDERS[name].isConfigured()) return PROVIDERS[name];
+    const p = PROVIDERS[name];
+    if (p.isConfigured() && p.supportedTypes.includes((type || 'text2img') as MediaTaskType)) return p;
+  }
+  if ((type === 'text2img' || type === 'image2image') && PROVIDERS['cloudbase-free'].isConfigured()) {
+    return PROVIDERS['cloudbase-free'];
   }
   return PROVIDERS.mock;
 }
@@ -526,7 +595,7 @@ class MediaGenService {
   async generate(params: MediaGenParams): Promise<MediaGenResult> {
     if (!params?.prompt?.trim()) throw new Error('提示词不能为空');
     const mockMode = process.env.ENABLE_MOCK_MODE === 'true';
-    const provider = mockMode ? PROVIDERS.mock : selectMediaProvider(params.provider);
+    const provider = mockMode ? PROVIDERS.mock : selectMediaProvider(params.provider, params.type);
     return provider.generate(params);
   }
 
