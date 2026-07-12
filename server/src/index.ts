@@ -45,6 +45,7 @@ import xhsRoutes from './routes/xhs';
 import referralRoutes from './routes/referral';
 import pointsRoutes from './routes/points';
 import marketplaceRevenueRoutes from './routes/marketplace-revenue';
+import aibakChatRoutes from './routes/aibak-chat';
 import { mcpService } from './services/mcp.service';
 import { sendError } from './lib/http-error';
 import { logger } from './lib/logger';
@@ -143,6 +144,7 @@ app.use('/api/media-keys', mediaByokRoutes); // 媒体生成 BYOK（用户自带
 app.use('/api/referral', referralRoutes);            // 推荐/分销体系
 app.use('/api/points', pointsRoutes);                // 积分签到/任务体系
 app.use('/api/marketplace', marketplaceRevenueRoutes); // 市场收益/提现
+app.use('/api/aibak', aibakChatRoutes);               // CloudBase 免费 AI 对话
 
 // 静态资源：对象存储（OSS）落盘的图片/视频由 /generated 对外提供
 // 与 lib/object-storage.ts 的 LOCAL_STORAGE_DIR 保持一致（默认 server/uploads/generated）

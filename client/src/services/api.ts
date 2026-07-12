@@ -417,8 +417,17 @@ export const pointsAPI = {
   awardTask: (taskType: string) => apiClient.post('/points/task', { taskType }),
 };
 
-// 工作流（Agent 工具流）导入导出 API
-export const workflowAPI = {
+// CloudBase AI 免费用量对话
+export const aibakAPI = {
+  chat: (data: {
+    message?: string;
+    messages?: Array<{ role: string; content: string }>;
+    history?: Array<{ role: string; content: string }>;
+    model?: 'hy3' | 'hy3-preview';
+    stream?: boolean;
+  }) => apiClient.post('/aibak/chat', data),
+  status: () => apiClient.get('/aibak/status'),
+};
   // 导入工作流包（单个 / 数组 / {workflows:[...]}）
   importPackage: (pkg: any) => apiClient.post('/wf/import', pkg),
   // 导出单个工作流为包

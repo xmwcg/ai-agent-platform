@@ -35,6 +35,7 @@ import XiaohongshuGenerator from '@/pages/XiaohongshuGenerator';
 import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import PointsCenter from '@/pages/PointsCenter';
+import AibakChat from '@/pages/AibakChat';
 
 const router = createBrowserRouter([
   {
@@ -76,6 +77,7 @@ const router = createBrowserRouter([
       { path: 'skills', element: <SkillsMarketPage /> },
       { path: 'diagnostics', element: <DiagnosticsPage /> },
       { path: 'ai-chat', element: <AiChat /> },
+      { path: 'aibak-chat', element: <AibakChat /> },
       { path: 'workflows', element: <WorkflowEditor /> },
       { path: 'workflow/:id', element: <WorkflowEditor /> },
       { path: 'knowledge-graph', element: <KnowledgeGraphPage /> },
