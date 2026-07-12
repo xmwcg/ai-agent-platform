@@ -1,88 +1,177 @@
-import { useEffect, useCallback } from 'react';
-import { Layout, Menu, theme, Typography, Button, Avatar, Dropdown, Space, Tag, Drawer } from 'antd';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useCallback, useMemo, useState } from 'react';
 import {
-  HomeOutlined,
-  BookOutlined,
-  RobotOutlined,
-  PictureOutlined,
-  SettingOutlined,
-  CompassOutlined,
-  BarChartOutlined,
-  CalendarOutlined,
-  UserOutlined,
-  LogoutOutlined,
-  LoginOutlined,
-  CrownOutlined,
-  CodeOutlined,
-  ProfileOutlined,
-  ApiOutlined,
-  CustomerServiceOutlined,
-  ToolOutlined,
-  RocketOutlined,
-  TeamOutlined,
-  DashboardOutlined,
-  AppstoreOutlined,
-  NodeIndexOutlined,
-  ApartmentOutlined,
-  EditOutlined,
-  MenuOutlined,
-  GiftOutlined,
+  Layout, Menu, Typography, Button, Avatar, Dropdown, Space, Tag,
+  Drawer, Breadcrumb, Badge, Tooltip, Switch, Divider,
+} from 'antd';
+import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
+import {
+  HomeOutlined, BookOutlined, RobotOutlined, SettingOutlined,
+  CompassOutlined, CalendarOutlined, UserOutlined, LogoutOutlined,
+  LoginOutlined, CrownOutlined, CodeOutlined, ProfileOutlined,
+  ApiOutlined, CustomerServiceOutlined, ToolOutlined, RocketOutlined,
+  TeamOutlined, DashboardOutlined, AppstoreOutlined, NodeIndexOutlined,
+  ApartmentOutlined, EditOutlined, MenuOutlined, GiftOutlined,
+  SunOutlined, MoonOutlined, ThunderboltOutlined, PictureOutlined,
+  BarChartOutlined, ExperimentOutlined, BulbOutlined, SecurityScanOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/auth';
 import { useUIStore } from '@/stores/ui';
 
-const { Header, Content, Footer, Sider } = Layout;
-const { Title } = Typography;
+const { Header, Content, Sider } = Layout;
+const { Text } = Typography;
 
-const PLAN_LABEL: Record<string, { text: string; color: string }> = {
+// ─── 常量化菜单配置 ───
+const MENU_GROUPS = [
+  {
+    key: 'core', label: '核心功能', defaultOpen: true,
+    children: [
+      { key: '/', icon: <HomeOutlined />, label: '首页', primary: true },
+      { key: '/quickstart', icon: <RocketOutlined />, label: '快速启动' },
+      { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话', primary: true },
+      { key: '/knowledge', icon: <BookOutlined />, label: '知识中枢' },
+      { key: '/knowledge-graph', icon: <ApartmentOutlined />, label: '知识图谱' },
+      { key: '/sandbox', icon: <CodeOutlined />, label: '实践沙盒' },
+    ],
+  },
+  {
+    key: 'create', label: '创作与学习',
+    children: [
+      { key: '/courses', icon: <ExperimentOutlined />, label: '学习中心' },
+      { key: '/learning-path', icon: <CompassOutlined />, label: '学习路径' },
+      { key: '/creative', icon: <BulbOutlined />, label: '创作工坊' },
+      { key: '/code', icon: <CodeOutlined />, label: '代码解释' },
+      { key: '/xhs', icon: <EditOutlined />, label: '小红书文案' },
+      { key: '/text2img', icon: <PictureOutlined />, label: '文生图' },
+    ],
+  },
+  {
+    key: 'tools', label: '工具与分析',
+    children: [
+      { key: '/tools', icon: <ToolOutlined />, label: '智能工具箱' },
+      { key: '/compare', icon: <BarChartOutlined />, label: '对比分析' },
+      { key: '/calendar', icon: <CalendarOutlined />, label: '模型日历' },
+      { key: '/workflows', icon: <NodeIndexOutlined />, label: '工作流编辑器' },
+    ],
+  },
+  {
+    key: 'platform', label: '平台与生态',
+    children: [
+      { key: '/model-config', icon: <ApiOutlined />, label: '模型配置' },
+      { key: '/marketplace', icon: <ApiOutlined />, label: 'API 市场' },
+      { key: '/skills', icon: <AppstoreOutlined />, label: '技能市场' },
+      { key: '/plugins', icon: <SettingOutlined />, label: '插件管理' },
+      { key: '/customer-service', icon: <CustomerServiceOutlined />, label: '智能客服' },
+    ],
+  },
+  {
+    key: 'manage', label: '管理与账户',
+    children: [
+      { key: '/team', icon: <TeamOutlined />, label: '团队权限' },
+      { key: '/diagnostics', icon: <DashboardOutlined />, label: '部署自检' },
+      { key: '/pricing', icon: <CrownOutlined />, label: '会员升级' },
+      { key: '/points-center', icon: <GiftOutlined />, label: '积分中心' },
+      { key: '/profile', icon: <ProfileOutlined />, label: '个人中心' },
+    ],
+  },
+];
+
+// 从所有菜单中提取扁平的 key→label 映射，用于面包屑
+const ALL_MENU_FLAT: Record<string, string> = {};
+MENU_GROUPS.forEach((g) =>
+  g.children.forEach((c) => {
+    ALL_MENU_FLAT[c.key] = c.label;
+  })
+);
+
+const PLAN_TAGS: Record<string, { text: string; color: string }> = {
   free: { text: '免费版', color: 'default' },
   pro: { text: '专业版', color: 'blue' },
   max: { text: '旗舰版', color: 'gold' },
 };
 
-// ─── 响应式断点 ───
-const MOBILE_BREAKPOINT = 768;
+// ─── 面包屑路径解析 ───
+function useBreadcrumbs() {
+  const location = useLocation();
+  return useMemo(() => {
+    const parts = location.pathname.split('/').filter(Boolean);
+    if (!parts.length) return [{ label: '首页', path: '/' }];
 
-// ─── 侧边栏菜单配置 ───
-const menuItems = [
-  { type: 'group' as const, key: 'g1', label: '核心', children: [
+    const crumbs = [{ label: '首页', path: '/' }];
+    let accumulated = '';
+    parts.forEach((part, i) => {
+      accumulated += '/' + part;
+      // 尝试从菜单表匹配
+      const matched = ALL_MENU_FLAT[accumulated];
+      if (matched) {
+        crumbs.push({ label: matched, path: accumulated });
+      } else if (i === parts.length - 1) {
+        // 最后一个未匹配的 segment，显示原始值
+        const decoded = decodeURIComponent(part);
+        crumbs.push({ label: decoded.length > 16 ? decoded.slice(0, 16) + '…' : decoded, path: accumulated });
+      }
+    });
+    return crumbs;
+  }, [location.pathname]);
+}
+
+// ─── 移动端底部 TabBar ───
+function BottomTabBar({ onMenuOpen }: { onMenuOpen: () => void }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  const tabs = [
     { key: '/', icon: <HomeOutlined />, label: '首页' },
-    { key: '/quickstart', icon: <RocketOutlined />, label: '快速启动' },
-    { key: '/knowledge', icon: <BookOutlined />, label: '知识中枢' },
-    { key: '/knowledge-graph', icon: <ApartmentOutlined />, label: '知识图谱' },
-    { key: '/sandbox', icon: <CodeOutlined />, label: '实践沙盒' },
     { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话' },
-    { key: '/customer-service', icon: <CustomerServiceOutlined />, label: '智能客服' },
-  ]},
-  { type: 'group' as const, key: 'g2', label: '学习与创作', children: [
-    { key: '/courses', icon: <PictureOutlined />, label: '学习中心' },
-    { key: '/learning-path', icon: <CompassOutlined />, label: '学习路径' },
-    { key: '/calendar', icon: <CalendarOutlined />, label: '模型日历' },
-    { key: '/compare', icon: <BarChartOutlined />, label: '对比分析' },
-    { key: '/creative', icon: <PictureOutlined />, label: '创作工坊' },
-    { key: '/code', icon: <CodeOutlined />, label: '代码解释' },
-    { key: '/tools', icon: <ToolOutlined />, label: '智能工具箱' },
-    { key: '/xhs', icon: <EditOutlined />, label: '小红书文案' },
-  ]},
-  { type: 'group' as const, key: 'g3', label: '平台与账户', children: [
-    { key: '/model-config', icon: <ApiOutlined />, label: '模型配置中心' },
-    { key: '/team', icon: <TeamOutlined />, label: '团队权限' },
-    { key: '/marketplace', icon: <ApiOutlined />, label: '开放API市场' },
-    { key: '/skills', icon: <AppstoreOutlined />, label: '技能市场' },
-    { key: '/workflows', icon: <NodeIndexOutlined />, label: '工作流编辑器' },
-    { key: '/diagnostics', icon: <DashboardOutlined />, label: '部署自检' },
-    { key: '/plugins', icon: <SettingOutlined />, label: '插件管理' },
-    { key: '/pricing', icon: <CrownOutlined />, label: '会员升级' },
-    { key: '/points-center', icon: <GiftOutlined />, label: '积分中心' },
-    { key: '/profile', icon: <ProfileOutlined />, label: '个人中心' },
-  ]},
-];
+    { key: '/knowledge', icon: <BookOutlined />, label: '知识库' },
+    { key: '/profile', icon: <UserOutlined />, label: '我的' },
+  ];
 
+  return (
+    <div className="hide-on-desktop" style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+      background: 'var(--bg-container)', borderTop: '1px solid var(--border)',
+      display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+      height: 56, paddingBottom: 'env(safe-area-inset-bottom, 0)',
+    }}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          onClick={() => (tab.key === '/more' ? onMenuOpen() : navigate(tab.key))}
+          style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', gap: 2, border: 'none', background: 'transparent',
+            cursor: 'pointer', padding: '6px 0',
+            color: currentPath === tab.key ? 'var(--brand-primary)' : 'var(--text-tertiary)',
+            fontSize: 10, lineHeight: 1.2, transition: 'color 0.2s',
+          }}
+        >
+          <span style={{ fontSize: 20 }}>{tab.icon}</span>
+          <span>{tab.label}</span>
+        </button>
+      ))}
+      <button
+        onClick={onMenuOpen}
+        style={{
+          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', gap: 2, border: 'none', background: 'transparent',
+          cursor: 'pointer', padding: '6px 0',
+          color: 'var(--text-tertiary)', fontSize: 10, lineHeight: 1.2,
+        }}
+      >
+        <span style={{ fontSize: 20 }}><MenuOutlined /></span>
+        <span>更多</span>
+      </button>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  App 主组件
+// ══════════════════════════════════════════════════════════════
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { token: { colorBgContainer, borderRadiusLG } } = theme.useToken();
 
   // ─── Zustand 全局状态 ───
   const user = useAuthStore((s) => s.user);
@@ -93,107 +182,155 @@ function App() {
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const sidebarMobileOpen = useUIStore((s) => s.sidebarMobileOpen);
   const isMobile = useUIStore((s) => s.isMobile);
+  const isTablet = useUIStore((s) => s.isTablet);
+  const themeMode = useUIStore((s) => s.themeMode);
   const setSidebarCollapsed = useUIStore((s) => s.setSidebarCollapsed);
   const setSidebarMobileOpen = useUIStore((s) => s.setSidebarMobileOpen);
   const setViewport = useUIStore((s) => s.setViewport);
+  const toggleTheme = useUIStore((s) => s.toggleTheme);
 
-  // ─── 初始化：拉取用户信息 ───
+  const breadcrumbs = useBreadcrumbs();
+
+  // ─── 初始化 ───
   useEffect(() => {
-    if (status === 'idle') {
-      fetchProfile();
-    }
+    if (status === 'idle') fetchProfile();
   }, [status, fetchProfile]);
 
-  // ─── 响应式视口监听 ───
-  const handleResize = useCallback(() => {
-    setViewport(window.innerWidth);
-  }, [setViewport]);
-
+  // ─── 视口监听 ───
+  const handleResize = useCallback(() => setViewport(window.innerWidth), [setViewport]);
   useEffect(() => {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [handleResize]);
 
-  // ─── 移动端自动收起侧边栏 ───
+  // ─── 移动端自动折叠 ───
   useEffect(() => {
-    if (isMobile && !sidebarCollapsed) {
-      setSidebarCollapsed(true);
-    }
+    if (isMobile && !sidebarCollapsed) setSidebarCollapsed(true);
   }, [isMobile]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  // ─── 当前选中菜单（智能匹配路径） ───
+  const selectedKeys = useMemo(() => {
+    const path = location.pathname;
+    if (path === '/') return ['/'];
+    // 优先最长匹配
+    const candidates = Object.keys(ALL_MENU_FLAT).filter((k) => k !== '/' && path.startsWith(k));
+    candidates.sort((a, b) => b.length - a.length);
+    return candidates.length > 0 ? [candidates[0]] : ['/'];
+  }, [location.pathname]);
+
+  // 默认展开的菜单组
+  const defaultOpenKeys = useMemo(() => {
+    for (const group of MENU_GROUPS) {
+      if (group.children.some((c) => selectedKeys.includes(c.key))) return [group.key];
+    }
+    return ['core'];
+  }, [selectedKeys]);
 
   const handleMenuClick = (key: string) => {
     navigate(key);
-    // 移动端点击菜单后自动关闭
-    if (isMobile) {
-      setSidebarMobileOpen(false);
-    }
+    if (isMobile) setSidebarMobileOpen(false);
   };
 
-  // ─── 当前选中菜单项 ───
-  const selectedKey = location.pathname === '/' ? '/' : '/' + location.pathname.split('/')[1];
+  const handleLogout = () => { logout(); navigate('/login'); };
 
-  // ─── 渲染侧边栏菜单 ───
-  const renderMenu = () => (
-    <Menu
-      theme="dark"
-      mode="inline"
-      selectedKeys={[selectedKey]}
-      defaultSelectedKeys={['/']}
-      items={menuItems}
-      onClick={({ key }) => handleMenuClick(key)}
-      style={{ background: 'transparent', borderInlineEnd: 0 }}
-    />
-  );
-
-  // ─── 渲染 Sider Logo ───
+  // ─── 渲染 Logo ───
   const renderLogo = (collapsed: boolean) => (
-    <div style={{
-      height: 56, margin: 16, display: 'flex', alignItems: 'center', gap: 10,
-      color: '#fff', fontWeight: 700, fontSize: 16, paddingLeft: collapsed ? 0 : 8,
-      cursor: 'pointer',
-    }} onClick={() => navigate('/')}>
-      <RobotOutlined style={{ fontSize: 22, color: '#6366f1' }} />
-      {!collapsed && <span>Reasonix AI</span>}
+    <div
+      onClick={() => { navigate('/'); if (isMobile) setSidebarMobileOpen(false); }}
+      style={{
+        height: 56, padding: collapsed ? '12px 0' : '12px 20px',
+        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+        transition: 'all 0.2s ease',
+      }}
+    >
+      <div style={{
+        width: 32, height: 32, borderRadius: 10,
+        background: 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 2px 8px rgba(108,92,231,0.3)',
+      }}>
+        <ThunderboltOutlined style={{ color: '#fff', fontSize: 16 }} />
+      </div>
+      {!collapsed && (
+        <span style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+          Reasonix AI
+        </span>
+      )}
     </div>
   );
 
-  // ─── 渲染用户区域 ───
+  // ─── 渲染桌面侧边栏菜单 ───
+  const renderSideMenu = () => (
+    <Menu
+      mode="inline"
+      selectedKeys={selectedKeys}
+      defaultOpenKeys={defaultOpenKeys}
+      onClick={({ key }) => handleMenuClick(key)}
+      style={{
+        background: 'transparent', borderInlineEnd: 0,
+        color: 'var(--text-secondary)', fontWeight: 500,
+      }}
+      items={MENU_GROUPS.map((group) => ({
+        type: 'group' as const,
+        key: group.key,
+        label: sidebarCollapsed ? undefined : (
+          <span style={{
+            fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+            color: 'var(--text-tertiary)', textTransform: 'uppercase',
+          }}>
+            {group.label}
+          </span>
+        ),
+        children: group.children.map((item) => ({
+          key: item.key,
+          icon: <span style={{ fontSize: 18, color: item.primary ? 'var(--brand-primary)' : undefined }}>{item.icon}</span>,
+          label: item.label,
+          style: item.primary ? { fontWeight: 600 } : undefined,
+        })),
+      }))}
+    />
+  );
+
+  // ─── 渲染用户区 ───
   const renderUserArea = () => {
-    if (status === 'loading') return null;
+    if (status === 'loading') return <div style={{ width: 80 }} />;
     if (!user) {
       return (
-        <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')}>
+        <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')} size={isMobile ? 'small' : 'middle'}>
           登录
         </Button>
       );
     }
     return (
-      <Dropdown menu={{
-        items: [
-          { key: 'profile', icon: <UserOutlined />, label: '个人中心' },
-          ...(user.plan && user.plan !== 'free' ? [{ key: 'pricing', icon: <CrownOutlined />, label: '管理订阅' }] : []),
-          { type: 'divider' as const },
-          { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true },
-        ],
-        onClick: ({ key }: any) => {
-          if (key === 'logout') handleLogout();
-          if (key === 'pricing') navigate('/pricing');
-          if (key === 'profile') navigate('/profile');
-        },
-      }}>
-        <Button type="text" style={{ height: 48 }}>
-          <Space>
-            <Avatar size="small" icon={<UserOutlined />} style={{ background: '#6366f1' }} />
-            <span>{user.name}</span>
-            {user.plan && user.plan !== 'free' && (
-              <Tag color={PLAN_LABEL[user.plan]?.color} style={{ marginInlineEnd: 0 }}>
-                {PLAN_LABEL[user.plan]?.text}
+      <Dropdown
+        menu={{
+          items: [
+            { key: 'profile', icon: <UserOutlined />, label: '个人中心' },
+            { key: 'points-center', icon: <GiftOutlined />, label: '积分中心' },
+            ...(user.plan && user.plan !== 'free' ? [{ key: 'pricing', icon: <CrownOutlined />, label: '管理订阅' }] : []),
+            { type: 'divider' as const },
+            { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true },
+          ],
+          onClick: ({ key }: any) => {
+            if (key === 'logout') handleLogout();
+            if (key === 'pricing') navigate('/pricing');
+            if (key === 'profile') navigate('/profile');
+            if (key === 'points-center') navigate('/points-center');
+          },
+        }}
+        placement="bottomRight"
+      >
+        <Button type="text" style={{
+          height: isMobile ? 36 : 44, padding: '0 8px', borderRadius: 12,
+        }}>
+          <Space size={8}>
+            <Avatar size={isMobile ? 28 : 32} icon={<UserOutlined />}
+              style={{ background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)' }} />
+            {!isMobile && <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{user.name}</span>}
+            {user.plan && user.plan !== 'free' && !isMobile && (
+              <Tag color={PLAN_TAGS[user.plan]?.color} style={{ marginInlineEnd: 0 }}>
+                {PLAN_TAGS[user.plan]?.text}
               </Tag>
             )}
           </Space>
@@ -202,104 +339,179 @@ function App() {
     );
   };
 
-  return (
-    <Layout style={{ minHeight: '100vh' }}>
-      {/* ─── 桌面端侧边栏 ─── */}
-      {!isMobile && (
-        <Sider
-          collapsible
-          collapsed={sidebarCollapsed}
-          onCollapse={(value) => setSidebarCollapsed(value)}
-          width={232}
-          style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' }}
-        >
-          {renderLogo(sidebarCollapsed)}
-          {renderMenu()}
-        </Sider>
-      )}
+  // ─── 渲染面包屑 ───
+  const renderBreadcrumb = () => {
+    if (isMobile || breadcrumbs.length <= 1) return null;
+    return (
+      <Breadcrumb
+        items={breadcrumbs.map((crumb, i) => ({
+          title: i === breadcrumbs.length - 1 ? crumb.label : <Link to={crumb.path}>{crumb.label}</Link>,
+        }))}
+        style={{ fontSize: 13 }}
+      />
+    );
+  };
 
-      {/* ─── 移动端 Drawer 侧边栏 ─── */}
+  const sidebarSider = (
+    <Sider
+      collapsible
+      collapsed={sidebarCollapsed}
+      onCollapse={(v) => setSidebarCollapsed(v)}
+      width={240}
+      collapsedWidth={72}
+      trigger={null}
+      style={{
+        background: 'var(--bg-sidebar)',
+        borderRight: '1px solid var(--border)',
+        boxShadow: 'var(--sidebar-shadow)',
+        transition: 'all 0.25s ease',
+        overflowY: 'auto',
+      }}
+    >
+      {renderLogo(sidebarCollapsed)}
+      <div style={{ paddingBottom: 20 }}>
+        {renderSideMenu()}
+      </div>
+    </Sider>
+  );
+
+  // ─── 桌面/平板：经典侧边栏 ───
+  // ─── 移动端：Drawer ───
+  const sidebarContent = (
+    <div style={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      background: 'var(--bg-sidebar)',
+    }}>
+      {renderLogo(false)}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {renderSideMenu()}
+      </div>
+    </div>
+  );
+
+  // ─── 内容区域页码过渡 key ───
+  const [pageKey, setPageKey] = useState(0);
+  useEffect(() => {
+    setPageKey((k) => k + 1);
+  }, [location.pathname]);
+
+  return (
+    <Layout style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
+      {/* 桌面端/平板侧边栏 */}
+      {!isMobile && sidebarSider}
+
+      {/* 移动端 Drawer */}
       {isMobile && (
         <Drawer
           placement="left"
           open={sidebarMobileOpen}
           onClose={() => setSidebarMobileOpen(false)}
-          width={260}
-          bodyStyle={{ padding: 0, background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' }}
-          headerStyle={{ background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
-          title={<span style={{ color: '#fff' }}>Reasonix AI</span>}
-          closeIcon={<span style={{ color: '#fff' }}>✕</span>}
+          width={280}
+          bodyStyle={{ padding: 0 }}
+          headerStyle={{ display: 'none' }}
+          closable={false}
         >
-          {renderMenu()}
+          {sidebarContent}
         </Drawer>
       )}
 
-      <Layout>
+      {/* 主区域 */}
+      <Layout style={{ background: 'var(--bg-base)' }}>
         {/* ─── 顶栏 ─── */}
         <Header style={{
+          height: isMobile ? 48 : 56,
           padding: isMobile ? '0 12px' : '0 24px',
-          background: colorBgContainer,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: '1px solid #f0f0f0',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
+          background: 'var(--header-bg)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          borderBottom: '1px solid var(--border)',
+          position: 'sticky', top: 0, zIndex: 50,
+          transition: 'background 0.3s',
         }}>
-          <Space>
+          <Space size={12}>
             {/* 移动端汉堡菜单 */}
             {isMobile && (
+              <Button type="text" icon={<MenuOutlined />}
+                onClick={() => setSidebarMobileOpen(true)}
+                style={{ fontSize: 18, width: 36, height: 36 }} />
+            )}
+            {/* 桌面端侧边栏折叠按钮 */}
+            {!isMobile && (
               <Button
                 type="text"
                 icon={<MenuOutlined />}
-                onClick={() => setSidebarMobileOpen(true)}
-                style={{ fontSize: 18 }}
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                style={{ fontSize: 16, width: 36, height: 36 }}
               />
             )}
-            <Title level={4} style={{
-              margin: 0,
-              color: '#0f172a',
-              letterSpacing: 0.5,
-              fontSize: isMobile ? 16 : 20,
+            {/* 标题 */}
+            <span style={{
+              fontWeight: 700, fontSize: isMobile ? 15 : 18,
+              color: 'var(--text-primary)', letterSpacing: '-0.3px',
             }}>
               AI Agent 智能体平台
-            </Title>
+            </span>
           </Space>
-          <Space>
+
+          {/* 面包屑（桌面） */}
+          {!isMobile && (
+            <div style={{
+              position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+              pointerEvents: 'auto',
+            }}>
+              {renderBreadcrumb()}
+            </div>
+          )}
+
+          <Space size={4}>
+            {/* 主题切换 */}
+            <Tooltip title={themeMode === 'dark' ? '切换亮色' : '切换暗色'}>
+              <Button
+                type="text"
+                icon={themeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+                onClick={toggleTheme}
+                style={{ width: 36, height: 36, fontSize: 16, borderRadius: 10 }}
+              />
+            </Tooltip>
+
+            {/* 系统状态 */}
+            <Tooltip title="系统运行正常">
+              <Badge dot status="success" offset={[-2, 2]}>
+                <Button type="text" icon={<DashboardOutlined />}
+                  style={{ width: 36, height: 36, borderRadius: 10 }} />
+              </Badge>
+            </Tooltip>
+
             {renderUserArea()}
           </Space>
         </Header>
 
         {/* ─── 内容区 ─── */}
-        <Content style={{ margin: isMobile ? '8px' : '16px' }}>
-          <div
-            style={{
-              padding: isMobile ? 16 : 24,
-              minHeight: 360,
-              background: colorBgContainer,
-              borderRadius: borderRadiusLG,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-            }}
-          >
+        <Content
+          key={pageKey}
+          className="page-enter"
+          style={{
+            margin: isMobile ? '8px' : '16px',
+            paddingBottom: isMobile ? 64 : 0, // 为底部 TabBar 留空间
+          }}
+        >
+          <div style={{
+            padding: isMobile ? 16 : 24,
+            minHeight: 360,
+            background: 'var(--bg-container)',
+            borderRadius: 16,
+            border: '1px solid var(--border-light)',
+            boxShadow: '0 1px 2px var(--shadow-color)',
+          }}>
             <Outlet />
           </div>
         </Content>
 
-        {/* ─── 页脚 ─── */}
-        <Footer style={{
-          textAlign: 'center',
-          color: '#94a3b8',
-          fontSize: isMobile ? 12 : 14,
-          padding: isMobile ? '12px 24px' : '24px 50px',
-        }}>
-          Reasonix AI Agent Platform ©2025 · 一站式 AI 学习 / 创作 / 生产力平台
-          <span style={{ marginLeft: 12 }}>
-            <a onClick={() => navigate('/terms')} style={{ color: '#94a3b8', cursor: 'pointer' }}>服务条款</a>
-            <span style={{ margin: '0 8px' }}>·</span>
-            <a onClick={() => navigate('/privacy')} style={{ color: '#94a3b8', cursor: 'pointer' }}>隐私政策</a>
-          </span>
-        </Footer>
+        {/* ─── 移动端底部 TabBar ─── */}
+        {isMobile && (
+          <BottomTabBar onMenuOpen={() => setSidebarMobileOpen(true)} />
+        )}
       </Layout>
     </Layout>
   );
