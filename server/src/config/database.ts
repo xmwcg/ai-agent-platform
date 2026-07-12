@@ -141,6 +141,10 @@ try {
     },
     maxRetriesPerRequest: 3,
     lazyConnect: true,
+    enableOfflineQueue: false, // 连接断开时命令立即报错（由各调用方 catch 降级），不无限挂起
+    connectTimeout: 5000,
+    keepAlive: 30000, // 启用 TCP keepalive（30s 初始延迟），及时探测并回收「半开连接」
+    noDelay: true,
   });
   // 若 10s 内未连上则降级为内存版（给 Redis 充足的启动时间）
   const fallbackTimer = setTimeout(() => {
