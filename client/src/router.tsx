@@ -35,6 +35,7 @@ import XiaohongshuGenerator from '@/pages/XiaohongshuGenerator';
 import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import PointsCenter from '@/pages/PointsCenter';
+import DistributionPage from '@/pages/DistributionPage';
 import AibakChat from '@/pages/AibakChat';
 import AboutPage from '@/pages/AboutPage';
 import ContactPage from '@/pages/ContactPage';
@@ -90,6 +91,7 @@ const router = createBrowserRouter([
       { path: 'terms', element: <TermsPage /> },
       { path: 'privacy', element: <PrivacyPage /> },
       { path: 'points-center', element: <PointsCenter /> },
+      { path: 'distribution', element: <DistributionPage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'contact', element: <ContactPage /> },
       { path: 'join', element: <JoinPage /> },

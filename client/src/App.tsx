@@ -10,7 +10,7 @@ import {
   LoginOutlined, CrownOutlined, CodeOutlined, ProfileOutlined,
   ApiOutlined, CustomerServiceOutlined, ToolOutlined, RocketOutlined,
   TeamOutlined, DashboardOutlined, AppstoreOutlined, NodeIndexOutlined,
-  ApartmentOutlined, EditOutlined, MenuOutlined, GiftOutlined,
+  ApartmentOutlined, EditOutlined, MenuOutlined, GiftOutlined, ShareAltOutlined,
   SunOutlined, MoonOutlined, ThunderboltOutlined, PictureOutlined,
   BarChartOutlined, ExperimentOutlined, BulbOutlined, SecurityScanOutlined,
 } from '@ant-design/icons';
@@ -18,6 +18,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useUIStore } from '@/stores/ui';
 import FreeExperienceFab from '@/components/FreeExperienceFab';
 import ScrollFab from '@/components/ScrollFab';
+import CustomerServiceFab from '@/components/CustomerServiceFab';
 import AppFooter from '@/components/AppFooter';
 
 // ─── 品牌常量 ───
@@ -36,8 +37,7 @@ const MENU_GROUPS = [
       { key: '/', icon: <HomeOutlined />, label: '首页' },
       { key: '/quickstart', icon: <RocketOutlined />, label: '快速启动' },
       { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话' },
-      { key: '/knowledge', icon: <BookOutlined />, label: '知识中枢' },
-      { key: '/knowledge-graph', icon: <ApartmentOutlined />, label: '知识图谱' },
+      { key: '/knowledge', icon: <BookOutlined />, label: '通用知识库' },
       { key: '/sandbox', icon: <CodeOutlined />, label: '实践沙盒' },
     ],
   },
@@ -48,8 +48,6 @@ const MENU_GROUPS = [
       { key: '/learning-path', icon: <CompassOutlined />, label: '学习路径' },
       { key: '/creative', icon: <BulbOutlined />, label: '创作工坊' },
       { key: '/code', icon: <CodeOutlined />, label: '代码解释' },
-      { key: '/xhs', icon: <EditOutlined />, label: '小红书文案' },
-      { key: '/text2img', icon: <PictureOutlined />, label: '文生图' },
     ],
   },
   {
@@ -65,7 +63,7 @@ const MENU_GROUPS = [
     key: 'platform', label: '平台与生态',
     children: [
       { key: '/model-config', icon: <ApiOutlined />, label: '模型配置' },
-      { key: '/marketplace', icon: <ApiOutlined />, label: 'API 市场' },
+      { key: '/marketplace', icon: <ShopOutlined />, label: 'API 市场' },
       { key: '/skills', icon: <AppstoreOutlined />, label: '技能市场' },
       { key: '/plugins', icon: <SettingOutlined />, label: '插件管理' },
       { key: '/customer-service', icon: <CustomerServiceOutlined />, label: '智能客服' },
@@ -78,6 +76,7 @@ const MENU_GROUPS = [
       { key: '/diagnostics', icon: <DashboardOutlined />, label: '部署自检' },
       { key: '/pricing', icon: <CrownOutlined />, label: '会员升级' },
       { key: '/points-center', icon: <GiftOutlined />, label: '积分中心' },
+      { key: '/distribution', icon: <ShareAltOutlined />, label: '分销中心' },
       { key: '/profile', icon: <ProfileOutlined />, label: '个人中心' },
     ],
   },
@@ -554,6 +553,9 @@ function App() {
 
       {/* 右下角悬浮工具条：返回顶部 / 返回首页 / 上下翻页 */}
       <ScrollFab />
+
+      {/* 左下角自动客服弹窗（接入云函数 4 模型，售前售后问答） */}
+      <CustomerServiceFab />
     </Layout>
   );
 }
