@@ -316,3 +316,20 @@ export const aiModelManager = new AIModelManager();
 export const createAIClient = (provider?: AIProvider): OpenAI => {
   return aiModelManager.createClient(provider);
 };
+
+/**
+ * 平台免费额度：云函数 4 个免费模型（消耗小程序成长计划免费额度）
+ * 全站已内置为统一推理兜底，此处作为「模型配置中心」的一等公民展示能力标签
+ */
+export interface FreeModelDef {
+  id: string;
+  label: string;
+  kind: 'text' | 'image';
+  capabilities: { reasoning: boolean; vision: boolean; image: boolean };
+}
+export const AIBAK_FREE_MODELS: FreeModelDef[] = [
+  { id: 'hy3', label: '混元 hy3（文本大模型）', kind: 'text', capabilities: { reasoning: true, vision: false, image: false } },
+  { id: 'hy3-preview', label: '混元 hy3-preview（文本大模型）', kind: 'text', capabilities: { reasoning: true, vision: false, image: false } },
+  { id: 'HY-Image-3.0-Plus-4090-Tob-v1.0', label: '文生图 HY-Image-3.0-Plus', kind: 'image', capabilities: { reasoning: false, vision: true, image: true } },
+  { id: 'HY-Image-v3.0-I2I-ToB-v1.0.1', label: '图生图 HY-Image-v3.0-I2I', kind: 'image', capabilities: { reasoning: false, vision: true, image: true } },
+];

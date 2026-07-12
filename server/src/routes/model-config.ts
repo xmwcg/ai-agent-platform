@@ -2,8 +2,9 @@ import { Router, Request, Response } from 'express';
 import { ModelConfig } from '../models/ModelConfig';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { enforceQuota, quotaIncrement } from '../middleware/subscription';
-import { aiModelManager } from '../config/ai-models';
+import { aiModelManager, AIBAK_FREE_MODELS } from '../config/ai-models';
 import { reloadCustomProviders } from '../gateway/ai-gateway.service';
+import { fetchProviderModels } from '../services/model-fetch.service';
 import { sendError } from '../lib/http-error';
 import { encryptSecret, decryptSecret } from '../lib/crypto';
 import { logSecretAudit, checkTestAbuse } from '../services/secret-audit.service';
@@ -275,6 +276,33 @@ router.post('/:id/test', requireAuth, async (req: AuthRequest, res: Response) =>
 /** 平台内置 provider 信息（只读参考） */
 router.get('/providers/builtin', (req: Request, res: Response) => {
   res.json({ success: true, data: aiModelManager.getEnabledProviders() });
+});
+
+/**
+ * 自动获取厂商模型清单（OpenAI 兼容）：修复「获取慢 / 网络错误」
+ * - 15s 超时 + 内存缓存（按 baseURL+apiKey 哈希），避免反复慢请求
+ * - 同一 key 并发去重，避免重复叠加请求
+ */
+router.post('/providers/fetch-models', async (req: Request, res: Response) => {
+  try {
+    const { baseURL, apiKey } = req.body || {};
+    if (!baseURL || !apiKey) {
+      return res.status(400).json({ success: false, error: '缺少 baseURL 或 apiKey' });
+    }
+    const ids = await fetchProviderModels(baseURL, apiKey);
+    res.json({ success: true, data: ids, count: ids.length });
+  } catch (err: any) {
+    res.status(502).json({
+      success: false,
+      error: err?.message || '获取失败',
+      hint: '请确认 Base URL 与 Key 正确、服务可达（需为 OpenAI 兼容的 /models 接口）',
+    });
+  }
+});
+
+/** 平台免费额度（云函数 4 个免费模型）元信息，供配置中心展示与一键选用 */
+router.get('/providers/aibak-free', (_req: Request, res: Response) => {
+  res.json({ success: true, data: AIBAK_FREE_MODELS });
 });
 
 export default router;
