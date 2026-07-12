@@ -106,6 +106,7 @@ function FeatureCard({ icon, title, desc, gradient, path, badge }: {
   return (
     <div
       onClick={() => navigate(path)}
+      className="feature-card"
       style={{
         position: 'relative', cursor: 'pointer', background: 'var(--bg-container)', borderRadius: 16,
         padding: '22px 20px', border: '1px solid var(--border)', height: '100%',

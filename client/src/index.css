@@ -132,6 +132,15 @@ code, pre, kbd, samp {
   100% { transform: translateY(-100vh) scale(0.3); opacity: 0; }
 }
 
+/* ─── Hero 浮动光斑 ─── */
+@keyframes orbFloat {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(24px, -28px) scale(1.08); }
+}
+
+/* ─── 功能卡片渐变描边（hover 显现）─── */
+.feature-card:hover .card-glow { opacity: 1 !important; }
+
 /* ─── 页面过渡动画 ─── */
 .page-enter {
   animation: pageEnter 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
