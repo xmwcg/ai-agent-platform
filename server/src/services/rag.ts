@@ -1,5 +1,6 @@
 import { embeddingService } from './embedding';
 import { aiAgentService } from './ai-agent';
+import { callCloudbaseChat } from '../routes/aibak-chat';
 import { KnowledgeDocument, IKnowledgeDocument } from '../models/KnowledgeDocument';
 import { logger } from '../lib/logger';
 import { measure } from '../lib/trace';
@@ -48,12 +49,18 @@ class RAGService {
     userId: string = 'default-user'
   ): Promise<{ answer: string; sources: RAGSource[]; sessionId: string }> {
     try {
-      // 1. 检索相关文档
+      // 1. 检索相关文档（向量检索失败则回退关键词检索，保证知识库问答始终可用）
       logger.info('rag', `Searching for: "${question}"`);
-      const searchResults = await embeddingService.searchSimilarDocuments(question, {
-        limit: this.config.maxDocuments,
-        minSimilarity: this.config.minSimilarity
-      });
+      let searchResults: Array<{ document: IKnowledgeDocument; similarity: number }> = [];
+      try {
+        searchResults = await embeddingService.searchSimilarDocuments(question, {
+          limit: this.config.maxDocuments,
+          minSimilarity: this.config.minSimilarity
+        });
+      } catch (embedErr) {
+        logger.warn('rag', `Embedding search failed, falling back to keyword search: ${(embedErr as Error)?.message}`);
+        searchResults = await this.keywordSearch(question, this.config.maxDocuments);
+      }
 
       if (searchResults.length === 0) {
         logger.warn('rag', 'No relevant documents found');
@@ -63,7 +70,7 @@ class RAGService {
         }
         const result = await aiAgentService.sendMessage(sessionId, question);
         return {
-          answer: result.reply + '\n\n(No relevant documents found in knowledge base)',
+          answer: result.reply + '\n\n(知识库中未找到相关文档)',
           sources: [],
           sessionId
         };
@@ -82,17 +89,32 @@ class RAGService {
         sessionId = await aiAgentService.createSession(userId);
       }
 
-      // 5. 发送消息（使用 RAG 增强的提示词）
-      const result = await measure(
-        'rag.generateAnswer',
-        () =>
-          aiAgentService.sendMessage(sessionId, ragPrompt, {
-            systemPrompt: this.config.systemPromptTemplate
+      // 5. 发送消息（使用 RAG 增强的提示词）；chat provider 不可用时回退 CloudBase 免费模型
+      let reply: string;
+      try {
+        const result = await measure(
+          'rag.generateAnswer',
+          () =>
+            aiAgentService.sendMessage(sessionId, ragPrompt, {
+              systemPrompt: this.config.systemPromptTemplate
+                ?.replace('{{CONTEXT}}', context)
+                .replace('{{QUESTION}}', question)
+            }),
+          { userId, input: { question, sourceCount: searchResults.length } }
+        );
+        reply = result.reply;
+      } catch (genErr) {
+        logger.warn('rag', `Primary chat provider failed, falling back to CloudBase free model: ${(genErr as Error)?.message}`);
+        reply = await callCloudbaseChat(
+          [
+            { role: 'system', content: this.config.systemPromptTemplate
               ?.replace('{{CONTEXT}}', context)
-              .replace('{{QUESTION}}', question)
-          }),
-        { userId, input: { question, sourceCount: searchResults.length } }
-      );
+              .replace('{{QUESTION}}', question) || '你是一个知识库助手，请基于上下文回答。' },
+            { role: 'user', content: question },
+          ],
+          'hy3'
+        );
+      }
 
       // 6. 返回结果（包含来源文档）
       const sources = searchResults.map(r => ({
@@ -103,7 +125,7 @@ class RAGService {
       }));
 
       return {
-        answer: result.reply,
+        answer: reply,
         sources,
         sessionId
       };
@@ -111,6 +133,26 @@ class RAGService {
       logger.error('rag', 'RAG chat error', error instanceof Error ? error.message : error);
       throw error;
     }
+  }
+
+  // 关键词回退检索：当向量嵌入服务不可用（如未配置 embedding endpoint）时，
+  // 基于标题/正文/标签/分类的文本匹配返回相关文档，保证知识库问答不崩溃。
+  private async keywordSearch(
+    query: string,
+    limit: number
+  ): Promise<Array<{ document: IKnowledgeDocument; similarity: number }>> {
+    const terms = query.split(/\s+/).map(t => t.trim()).filter(t => t.length > 1);
+    const or: Record<string, any>[] = [
+      { title: { $regex: query, $options: 'i' } },
+      { content: { $regex: query, $options: 'i' } },
+    ];
+    if (terms.length) {
+      or.push({ tags: { $in: terms } }, { categories: { $in: terms } });
+    }
+    const docs = await KnowledgeDocument.find({ $or: or })
+      .limit(limit)
+      .lean();
+    return docs.map(d => ({ document: d as unknown as IKnowledgeDocument, similarity: 0.72 }));
   }
 
   // 构建上下文（从检索结果）

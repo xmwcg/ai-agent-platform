@@ -43,6 +43,25 @@ function storeRef(dataUrl: string): { id: string; url: string } | null {
 const SYSTEM_PROMPT = '你是 aibak.site (Reasonix AI) 平台的 AI 助手。请用中文清晰简洁地回答问题。写代码时请使用 markdown 代码块。';
 
 /**
+ * 调用 CloudBase ai-chat 云函数（小程序成长计划免费额度）生成文本。
+ * 抽离为独立函数，供知识库 RAG 等模块在 chat provider 不可用时的兜底调用。
+ * @returns 模型返回的文本
+ * @throws 当云函数不可用或返回失败时
+ */
+export async function callCloudbaseChat(
+  chatMessages: Array<{ role: string; content: string }>,
+  model = 'hy3',
+): Promise<string> {
+  const response = await axios.post(
+    CLOUDBASE_CHAT_URL,
+    { messages: chatMessages, model, stream: false },
+    { headers: { 'Content-Type': 'application/json' }, timeout: 60000 },
+  );
+  if (response.data?.success) return response.data.text as string;
+  throw new Error(response.data?.error || 'CLOUDBASE_ERROR');
+}
+
+/**
  * POST /api/aibak/chat
  * 代理调用 CloudBase ai-chat 云函数，优先消耗小程序成长计划赠送的免费额度
  */
@@ -74,37 +93,28 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res: Response) => {
     logger.info('aibak-chat', `调用云函数 ai-chat, model=${model}, msgs=${chatMessages.length}`);
 
     const startTime = Date.now();
-    const response = await axios.post(CLOUDBASE_CHAT_URL, {
-      messages: chatMessages,
-      model,
-      stream: false, // 后端统一用非流式，避免代理复杂性
-    }, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 60000,
-    });
-
-    const elapsed = Date.now() - startTime;
-
-    if (response.data?.success) {
-      const usage = response.data.usage || {};
-      logger.info('aibak-chat', `✅ 成功, ${elapsed}ms, tokens=${usage.total_tokens || 'N/A'}`);
-
-      res.json({
-        success: true,
-        text: response.data.text,
-        usage,
-        model,
-        provider: 'cloudbase-free',
-        elapsedMs: elapsed,
-      });
-    } else {
-      logger.warn('aibak-chat', `❌ 云函数返回失败: ${response.data?.error || '未知'}`);
-      res.status(502).json({
+    let text: string;
+    try {
+      text = await callCloudbaseChat(chatMessages, model);
+    } catch (err: any) {
+      logger.warn('aibak-chat', `❌ 云函数返回失败: ${err?.message || '未知'}`);
+      return res.status(502).json({
         success: false,
-        error: response.data?.error || 'AI 服务返回异常',
-        code: response.data?.code || 'CLOUDBASE_ERROR',
+        error: err?.message || 'AI 服务返回异常',
+        code: 'CLOUDBASE_ERROR',
       });
     }
+
+    const elapsed = Date.now() - startTime;
+    logger.info('aibak-chat', `✅ 成功, ${elapsed}ms`);
+
+    res.json({
+      success: true,
+      text,
+      model,
+      provider: 'cloudbase-free',
+      elapsedMs: elapsed,
+    });
   } catch (error: any) {
     // 区分超时、网络错误、云函数内部错误
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
