@@ -35,6 +35,16 @@ export default function Login() {
 
   const finishLogin = useFinishLogin();
   const popupRef = useRef<Window | null>(null);
+  // 后端下发的可用登录方式（缺密钥的渠道自动隐藏，配置即生效）
+  const [methods, setMethods] = useState<{ email: boolean; wechat: boolean; sms: boolean }>({
+    email: true, wechat: false, sms: false,
+  });
+
+  useEffect(() => {
+    apiClient.get('/auth/login-methods').then((r: any) => {
+      if (r?.data) setMethods({ email: true, wechat: !!r.data.wechat, sms: !!r.data.sms });
+    }).catch(() => { /* 探测失败则用默认（仅邮箱） */ });
+  }, []);
 
   // ─── 微信扫码弹窗回调监听（配置生效时，后端回调页 postMessage 回传 token） ───
   useEffect(() => {
@@ -203,6 +213,13 @@ export default function Login() {
     </div>
   );
 
+  // 按后端可用登录方式动态组装（缺密钥的渠道自动隐藏）
+  const tabs = [
+    { key: 'email', label: '邮箱登录', children: emailPanel },
+    ...(methods.sms ? [{ key: 'sms', label: '手机号', children: smsPanel }] : []),
+    ...(methods.wechat ? [{ key: 'wechat', label: '微信扫码', children: wechatPanel }] : []),
+  ];
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -218,14 +235,11 @@ export default function Login() {
           <Text type="secondary">登录到 AIbak · 全站 AI 应用平台</Text>
         </div>
 
-        <Tabs
-          centered
-          items={[
-            { key: 'email', label: '邮箱登录', children: emailPanel },
-            { key: 'sms', label: '手机号', children: smsPanel },
-            { key: 'wechat', label: '微信扫码', children: wechatPanel },
-          ]}
-        />
+        {tabs.length > 1 ? (
+          <Tabs centered items={tabs} />
+        ) : (
+          emailPanel
+        )}
 
         <Divider />
 

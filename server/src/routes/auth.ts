@@ -195,6 +195,16 @@ router.post('/sms/login', authLimiter, validate(smsLoginSchema), async (req: Aut
   }
 });
 
+// 登录方式可用状态：前端据此动态显示/隐藏入口；缺密钥自动隐藏，不影响其他功能上线
+router.get('/login-methods', async (_req: Request, res: Response) => {
+  const wechatEnabled = !!(process.env.WECHAT_OPEN_APPID && process.env.WECHAT_OPEN_SECRET);
+  const smsEnabled = !!process.env.SMS_PROVIDER; // 未配置短信服务商则隐藏手机号入口（避免只能 Mock）
+  res.json({
+    success: true,
+    data: { email: true, wechat: wechatEnabled, sms: smsEnabled },
+  });
+});
+
 // ===================== 微信扫码登录（OAuth2 网站应用） =====================
 // 生成扫码登录入口：返回需渲染为二维码的 authorizeUrl（开发态 Mock 可直接走通）
 router.get('/wechat/qr', async (_req: Request, res: Response) => {
