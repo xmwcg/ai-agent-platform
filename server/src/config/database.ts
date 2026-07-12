@@ -159,28 +159,55 @@ try {
 export { redisClient };
 
 // 健康检查
+/**
+ * 给可能挂起的 Promise 加超时：避免底层连接僵死（如 Redis 半开 socket、
+ * MongoDB 卡住）时，健康检查/自检无限等待，导致 /api/health 永不返回、
+ * Docker 健康检查误判 unhealthy、部署门禁卡死。
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} health check timeout after ${ms}ms`)),
+      ms
+    );
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+
 export const checkDatabaseHealth = async (): Promise<{ mongodb: boolean; redis: boolean }> => {
   const result = {
     mongodb: false,
     redis: false
   };
   
-  // Check MongoDB
+  // Check MongoDB（带超时，连接僵死时不会无限挂起）
   try {
-    if (mongoose.connection.db) {
-      await mongoose.connection.db.admin().ping();
+    if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+      await withTimeout(mongoose.connection.db.admin().ping() as Promise<unknown>, 1500, 'mongodb');
     }
     result.mongodb = mongoose.connection.readyState === 1;
   } catch (error) {
     console.error('❌ MongoDB health check failed:', error);
   }
   
-  // Check Redis
+  // Check Redis（带超时；ioredis 半开连接会让 ping 永不 resolve）
   try {
-    await redisClient.ping();
-    result.redis = redisClient.status === 'ready';
+    if (redisClient && redisClient.status === 'ready') {
+      await withTimeout(Promise.resolve(redisClient.ping()), 1500, 'redis');
+    }
+    result.redis = true;
   } catch (error) {
     console.error('❌ Redis health check failed:', error);
+    result.redis = false;
   }
   
   return result;
