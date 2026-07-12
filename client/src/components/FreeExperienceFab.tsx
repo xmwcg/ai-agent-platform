@@ -3,7 +3,7 @@ import { Drawer, Button, Input, Select, Spin, Tag, Empty, Space } from 'antd';
 import {
   GiftOutlined, RobotOutlined, PictureOutlined, SendOutlined,
   CloseOutlined, UploadOutlined, DownloadOutlined, ClearOutlined,
-  ReloadOutlined, ThunderboltOutlined,
+  ReloadOutlined, ThunderboltOutlined, ExpandOutlined, CompressOutlined,
 } from '@ant-design/icons';
 import { aibakAPI, extractApiError } from '@/services/api';
 
@@ -32,6 +32,34 @@ const SIZE_OPTIONS = [
   { label: '1280×1280（大正方）', value: '1280x1280' },
 ];
 
+// ─── 免费额度（每日软上限，防止被恶意刷有成本的 API）──
+// 纯前端 localStorage 计数：作为体验层护栏；真正的限额兜底由云函数白名单 + 成长计划额度承担。
+const DAILY_QUOTA = { chat: 30, image: 15 };
+function todayKey(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `aibak_free_${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function loadQuota(): { chat: number; image: number } {
+  try {
+    const raw = localStorage.getItem(todayKey());
+    const r = raw ? JSON.parse(raw) : {};
+    return { chat: Number(r.chat) || 0, image: Number(r.image) || 0 };
+  } catch {
+    return { chat: 0, image: 0 };
+  }
+}
+function saveQuota(q: { chat: number; image: number }) {
+  try { localStorage.setItem(todayKey(), JSON.stringify(q)); } catch { /* ignore */ }
+}
+
+// 剩余额度颜色：充足=明亮绿；接近耗尽=琥珀；已用尽=红
+function quotaColor(left: number, cap: number): string {
+  if (left <= 0) return '#ff5c5c';
+  if (left <= Math.ceil(cap * 0.2)) return '#ffb347';
+  return '#00e676'; // 明亮的绿，用于提醒免费次数
+}
+
 // 轻量 Markdown 渲染（与免费对话页一致）
 function renderMarkdown(text: string): string {
   if (!text) return '';
@@ -59,8 +87,20 @@ const ACCENT_SOFT = 'rgba(108,92,231,0.08)';
 export default function FreeExperienceFab() {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const [maximized, setMaximized] = useState(false);
   const [activeId, setActiveId] = useState<string>('hy3');
   const active = useMemo(() => MODELS.find((m) => m.id === activeId)!, [activeId]);
+
+  // 免费额度计数（每日）
+  const [quota, setQuota] = useState<{ chat: number; image: number }>({ chat: 0, image: 0 });
+  useEffect(() => { setQuota(loadQuota()); }, []);
+  const bumpQuota = (kind: 'chat' | 'image') => {
+    setQuota((prev) => {
+      const next = { ...prev, [kind]: prev[kind] + 1 };
+      saveQuota(next);
+      return next;
+    });
+  };
 
   // 文本对话状态
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
@@ -88,6 +128,16 @@ export default function FreeExperienceFab() {
     async (text?: string) => {
       const msg = (text ?? input).trim();
       if (!msg || sending) return;
+
+      // 免费额度护栏：超限拦截，防止刷 API
+      if (quota.chat >= DAILY_QUOTA.chat) {
+        setMessages((prev) => [...prev, {
+          role: 'assistant',
+          content: `⚠️ 今日免费对话次数已用完（${DAILY_QUOTA.chat} 次/天），明日 0 点自动重置。如需无限使用，请前往正式版解锁。`,
+        }]);
+        return;
+      }
+
       const userMsg = { role: 'user' as const, content: msg };
       const newMsgs = [...messages, userMsg];
       setMessages(newMsgs);
@@ -97,6 +147,7 @@ export default function FreeExperienceFab() {
         const res: any = await aibakAPI.chat({ messages: newMsgs, model: activeId as 'hy3' | 'hy3-preview', stream: false });
         if (res?.success) {
           setMessages((prev) => [...prev, { role: 'assistant', content: res.text }]);
+          bumpQuota('chat');
         } else {
           setMessages((prev) => [...prev, { role: 'assistant', content: `❌ 错误：${res?.error || '未知错误'}` }]);
         }
@@ -106,7 +157,7 @@ export default function FreeExperienceFab() {
         setSending(false);
       }
     },
-    [input, messages, sending, activeId],
+    [input, messages, sending, activeId, quota.chat],
   );
 
   // ─── 图像生成 ───
@@ -158,6 +209,12 @@ export default function FreeExperienceFab() {
 
   const genImage = useCallback(async () => {
     if (!imgPrompt.trim() || genLoading) return;
+
+    // 免费额度护栏：超限拦截
+    if (quota.image >= DAILY_QUOTA.image) {
+      setImgError(`今日免费生图次数已用完（${DAILY_QUOTA.image} 张/天），明日 0 点自动重置。`);
+      return;
+    }
     if (active.kind === 'i2i' && !imgBase64) {
       setImgError('图生图请先上传一张参考图');
       return;
@@ -174,6 +231,7 @@ export default function FreeExperienceFab() {
       });
       if (res?.success) {
         setImages(res.images || []);
+        bumpQuota('image');
       } else {
         setImgError(res?.error || '图像生成失败');
       }
@@ -182,7 +240,7 @@ export default function FreeExperienceFab() {
     } finally {
       setGenLoading(false);
     }
-  }, [imgPrompt, genLoading, active, imgBase64, imgSize]);
+  }, [imgPrompt, genLoading, active, imgBase64, imgSize, quota.image]);
 
   const clearText = () => setMessages([]);
   const clearImage = () => {
@@ -350,21 +408,25 @@ export default function FreeExperienceFab() {
     </div>
   );
 
+  // 免费额度剩余（用于绿色提醒）
+  const chatLeft = DAILY_QUOTA.chat - quota.chat;
+  const imgLeft = DAILY_QUOTA.image - quota.image;
+
   return (
     <>
-      {/* 左侧悬浮入口（打开时隐藏，避免遮挡抽屉） */}
+      {/* 右侧悬浮入口（打开时隐藏，避免遮挡抽屉） */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
           title="免费体验 AI 工具"
           style={{
-            position: 'fixed', left: 0, top: '50%', transform: 'translateY(-50%)',
+            position: 'fixed', right: 0, top: '50%', transform: 'translateY(-50%)',
             zIndex: 1100, border: 'none', cursor: 'pointer', color: '#fff',
             background: `linear-gradient(135deg, ${ACCENT} 0%, #a29bfe 100%)`,
-            borderTopRightRadius: 16, borderBottomRightRadius: 16,
+            borderTopLeftRadius: 16, borderBottomLeftRadius: 16,
             width: 46, padding: '14px 0', display: 'flex', flexDirection: 'column',
             alignItems: 'center', gap: 8,
-            boxShadow: '2px 0 14px rgba(108,92,231,0.35)',
+            boxShadow: '-2px 0 14px rgba(108,92,231,0.35)',
           }}
         >
           <GiftOutlined style={{ fontSize: 18 }} />
@@ -377,8 +439,8 @@ export default function FreeExperienceFab() {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        placement="left"
-        width={isMobile ? '92vw' : 460}
+        placement="right"
+        width={maximized ? (isMobile ? '100vw' : 'min(1200px, 96vw)') : (isMobile ? '92vw' : 460)}
         closable={false}
         styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' } }}
         style={{ zIndex: 1100 }}
@@ -393,11 +455,21 @@ export default function FreeExperienceFab() {
               <GiftOutlined style={{ fontSize: 22 }} />
               <div>
                 <div style={{ fontWeight: 700, fontSize: 17 }}>免费体验 AI 工具</div>
-                <div style={{ fontSize: 12, opacity: 0.9 }}>CloudBase 小程序成长计划免费额度</div>
+                <div style={{ fontSize: 12, opacity: 0.95 }}>超强文本大模型及文生图，图生图免费体验</div>
+                {/* 免费额度绿色明亮提醒 */}
+                <div style={{ fontSize: 12, fontWeight: 600, display: 'flex', gap: 12, alignItems: 'center', marginTop: 3 }}>
+                  <span style={{ color: quotaColor(chatLeft, DAILY_QUOTA.chat) }}>● 免费对话 {quota.chat}/{DAILY_QUOTA.chat}</span>
+                  <span style={{ color: quotaColor(imgLeft, DAILY_QUOTA.image) }}>免费生图 {quota.image}/{DAILY_QUOTA.image}</span>
+                </div>
               </div>
             </div>
-            <Button type="text" icon={<CloseOutlined />} onClick={() => setOpen(false)}
-              style={{ color: '#fff', fontSize: 16 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Button type="text" icon={maximized ? <CompressOutlined /> : <ExpandOutlined />}
+                onClick={() => setMaximized((v) => !v)} title={maximized ? '还原' : '最大化'}
+                style={{ color: '#fff', fontSize: 16 }} />
+              <Button type="text" icon={<CloseOutlined />} onClick={() => setOpen(false)}
+                style={{ color: '#fff', fontSize: 16 }} />
+            </div>
           </div>
         </div>
 
