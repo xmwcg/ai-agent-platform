@@ -10,7 +10,7 @@ import {
   LoginOutlined, CrownOutlined, CodeOutlined, ProfileOutlined,
   ApiOutlined, CustomerServiceOutlined, ToolOutlined, RocketOutlined,
   TeamOutlined, DashboardOutlined, AppstoreOutlined, NodeIndexOutlined,
-  ApartmentOutlined, EditOutlined, MenuOutlined, GiftOutlined, ShareAltOutlined,
+  ApartmentOutlined, EditOutlined, MenuOutlined, GiftOutlined, ShareAltOutlined, ShopOutlined,
   SunOutlined, MoonOutlined, ThunderboltOutlined, PictureOutlined,
   BarChartOutlined, ExperimentOutlined, BulbOutlined, SecurityScanOutlined,
 } from '@ant-design/icons';
