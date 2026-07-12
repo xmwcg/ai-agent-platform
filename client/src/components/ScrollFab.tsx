@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Tooltip } from 'antd';
 import {
   VerticalAlignTopOutlined, HomeFilled,
-  UpOutlined, DownOutlined,
+  UpOutlined, DownOutlined, WechatOutlined,
 } from '@ant-design/icons';
 
 /**
@@ -119,6 +119,13 @@ export default function ScrollFab() {
           </button>
         </Tooltip>
       )}
+
+      <Tooltip title="联系我们 / 微信客服" placement="left">
+        <button style={btnStyle} onClick={() => navigate('/contact')}
+          onMouseEnter={hoverIn} onMouseLeave={hoverOut} aria-label="联系我们">
+          <WechatOutlined />
+        </button>
+      </Tooltip>
 
       {showTop && (
         <Tooltip title="返回顶部" placement="left">
