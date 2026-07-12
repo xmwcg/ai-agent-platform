@@ -53,6 +53,12 @@ exports.main = async (event, context) => {
     image_urls,
   } = inputData;
 
+  // 归一化垫图：hunyuan images 仅接受裸 base64（不含 data:image/...;base64, 前缀）。
+  // 前端 canvas.toDataURL 产出的是 data URL，这里统一剥掉前缀，避免上游 400。
+  const stripDataUrlPrefix = (s) =>
+    typeof s === 'string' && s.includes(',') ? s.slice(s.indexOf(',') + 1) : s;
+  const normImages = Array.isArray(images) ? images.map(stripDataUrlPrefix) : images;
+
   if (!prompt) {
     return {
       statusCode: 400,
@@ -89,7 +95,7 @@ exports.main = async (event, context) => {
       size,
       ...v3Params,
       // 透传垫图：base64 数组或 URL 数组（图生图关键）
-      ...(images && images.length ? { images } : {}),
+      ...(normImages && normImages.length ? { images: normImages } : {}),
       ...(image_urls && image_urls.length ? { image_urls } : {}),
     });
 
