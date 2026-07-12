@@ -49,6 +49,7 @@ export default function ProfilePage() {
   const [referralLink, setReferralLink] = useState('');
   const [profileName, setProfileName] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   const [creditsHistoryLoading, setCreditsHistoryLoading] = useState(false);
 
   useEffect(() => {
@@ -65,14 +66,14 @@ export default function ProfilePage() {
       const res: any = await marketplaceAPI.usage();
       const history = res?.data?.transactions || res?.data || [];
       setCreditsHistory(Array.isArray(history) ? history : []);
-    } catch {}
+    } catch { /* 忽略 */ }
     setCreditsHistoryLoading(false);
   }, []);
   useEffect(() => { loadCreditsHistory(); }, [loadCreditsHistory]);
 
   const loadByokKeys = async () => {
     setByokLoading(true);
-    try { const res: any = await byokAPI.list(); if (res?.data) setByokKeys(res.data); } catch {}
+    try { const res: any = await byokAPI.list(); if (res?.data) setByokKeys(res.data); } catch { /* 忽略 */ }
     setByokLoading(false);
   };
   useEffect(() => { loadByokKeys(); }, []);
@@ -84,7 +85,7 @@ export default function ProfilePage() {
       setReferralStats(statsRes?.data || null);
       const codeRes: any = await referralAPI.code();
       setReferralLink(codeRes?.data?.referralLink || codeRes?.data?.referralCode ? `https://aibak.site/register?ref=${codeRes.data.referralCode}` : '');
-    } catch {}
+    } catch { /* 忽略 */ }
   }, []);
   useEffect(() => { loadReferral(); }, [loadReferral]);
 
@@ -324,7 +325,6 @@ export default function ProfilePage() {
     </Card>
   );
 
-  const [activeTab, setActiveTab] = useState('overview');
   const tabContentMap: Record<string, React.ReactNode> = {
     overview: renderOverview(),
     security: renderSecurity(),
