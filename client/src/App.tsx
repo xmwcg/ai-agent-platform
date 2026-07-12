@@ -25,9 +25,9 @@ const MENU_GROUPS = [
   {
     key: 'core', label: '核心功能', defaultOpen: true,
     children: [
-      { key: '/', icon: <HomeOutlined />, label: '首页', primary: true },
+      { key: '/', icon: <HomeOutlined />, label: '首页' },
       { key: '/quickstart', icon: <RocketOutlined />, label: '快速启动' },
-      { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话', primary: true },
+      { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话' },
       { key: '/knowledge', icon: <BookOutlined />, label: '知识中枢' },
       { key: '/knowledge-graph', icon: <ApartmentOutlined />, label: '知识图谱' },
       { key: '/sandbox', icon: <CodeOutlined />, label: '实践沙盒' },
@@ -282,12 +282,15 @@ function App() {
             {group.label}
           </span>
         ),
-        children: group.children.map((item) => ({
-          key: item.key,
-          icon: <span style={{ fontSize: 18, color: item.primary ? 'var(--brand-primary)' : undefined }}>{item.icon}</span>,
-          label: item.label,
-          style: item.primary ? { fontWeight: 600 } : undefined,
-        })),
+        children: group.children.map((item) => {
+          const isPrimary = item.key === '/' || item.key === '/ai-chat';
+          return {
+            key: item.key,
+            icon: <span style={{ fontSize: 18, color: isPrimary ? 'var(--brand-primary)' : undefined }}>{item.icon}</span>,
+            label: item.label,
+            style: isPrimary ? { fontWeight: 600 } : undefined,
+          };
+        }),
       }))}
     />
   );
