@@ -136,6 +136,31 @@ function Pillar({ icon, title, desc, gradient }: { icon: React.ReactNode; title:
   );
 }
 
+// ─── 滚动揭示动效（提升一线大厂级质感）───
+function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); io.disconnect(); } },
+      { threshold: 0.12 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} style={{
+      opacity: visible ? 1 : 0,
+      transform: visible ? 'none' : 'translateY(26px)',
+      transition: `opacity 0.6s cubic-bezier(0.22,1,0.36,1) ${delay}ms, transform 0.6s cubic-bezier(0.22,1,0.36,1) ${delay}ms`,
+    }}>
+      {children}
+    </div>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const isMobile = useUIStore((s) => s.isMobile);
@@ -223,10 +248,28 @@ export default function Home() {
               </span>
             ))}
           </div>
+
+          {/* 4 个免费大模型额度徽章（真实可调用，消耗小程序成长计划免费额度） */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 6 }}>
+            {[
+              { n: 'hy3', t: '文本大模型', c: '#10b981' },
+              { n: 'hy3-preview', t: '文本大模型', c: '#06b6d4' },
+              { n: 'HY-Image-3.0-Plus', t: '文生图', c: '#8b5cf6' },
+              { n: 'HY-Image-v3.0-I2I', t: '图生图', c: '#f59e0b' },
+            ].map((m) => (
+              <span key={m.n} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.08)', border: `1px solid ${m.c}66`, borderRadius: 999, padding: '5px 12px', fontSize: 12, color: '#e2e8f0' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: m.c, boxShadow: `0 0 8px ${m.c}` }} />
+                <b style={{ color: '#fff' }}>{m.n}</b>
+                <span style={{ color: 'rgba(255,255,255,0.6)' }}>{m.t}</span>
+                <Tag style={{ marginInlineEnd: 0, background: m.c, border: 'none', color: '#fff', fontSize: 10, lineHeight: '16px', padding: '0 6px' }}>免费</Tag>
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* ═══ 统计数据 ═══ */}
+      <Reveal>
       <Row gutter={[12, 12]} style={{ marginBottom: 30 }}>
         {[
           { label: '知识文档', value: docCount, icon: <BookOutlined />, gradient: 'linear-gradient(135deg, #6c5ce7, #a29bfe)' },
@@ -238,18 +281,21 @@ export default function Home() {
           <Col xs={12} sm={8} md={4} lg={4} key={s.label}><StatCard {...s} unit="" /></Col>
         ))}
       </Row>
+      </Reveal>
 
       {/* ═══ 核心优势 ═══ */}
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
         <Title level={isMobile ? 4 : 3} style={{ margin: '0 0 4px' }}>为什么选择 AIbak</Title>
         <Text style={{ color: 'var(--text-secondary)', fontSize: 13 }}>为企业与个人打造的全栈 AI 生产力底座</Text>
       </div>
+      <Reveal>
       <Row gutter={[16, 24]} style={{ marginBottom: 34 }}>
         <Col xs={12} md={6}><Pillar icon={<RobotOutlined />} title="多模型对话" desc="一键切换国内外主流大模型" gradient="linear-gradient(135deg,#10b981,#059669)" /></Col>
         <Col xs={12} md={6}><Pillar icon={<BookOutlined />} title="通用知识库" desc="RAG 检索 · 法律/AI/行业问答" gradient="linear-gradient(135deg,#6c5ce7,#5541d7)" /></Col>
         <Col xs={12} md={6}><Pillar icon={<ToolOutlined />} title="智能工具箱" desc="20+ 创作/分析/办公工具" gradient="linear-gradient(135deg,#3b82f6,#2563eb)" /></Col>
         <Col xs={12} md={6}><Pillar icon={<ShopOutlined />} title="API 变现" desc="自有模型上架 · 分销返佣" gradient="linear-gradient(135deg,#f43f5e,#e11d48)" /></Col>
       </Row>
+      </Reveal>
 
       {/* ═══ 功能矩阵 ═══ */}
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
@@ -275,6 +321,7 @@ export default function Home() {
       </Row>
 
       {/* ═══ CTA ═══ */}
+      <Reveal>
       <div style={{
         marginTop: 36, borderRadius: 24, padding: isMobile ? '32px 16px' : '52px 32px', textAlign: 'center',
         background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)', position: 'relative', overflow: 'hidden',
@@ -296,6 +343,7 @@ export default function Home() {
           </div>
         </div>
       </div>
+      </Reveal>
     </div>
   );
 }
