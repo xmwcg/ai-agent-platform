@@ -270,7 +270,7 @@ export default function ProfilePage() {
       <Col xs={24} md={8}>
         <Card style={cardStyle}>
           <Title level={5} style={{ color: 'var(--text-primary)' }}>你的邀请链接</Title>
-          <Input value={referralLink || `https://aibak.site/register?ref=${authUser?.referralCode || authUser?._id || ''}`} readOnly />
+          <Input value={referralLink || `https://aibak.site/register?ref=${authUser?._id || ''}`} readOnly />
           <Space style={{ marginTop: 12 }} wrap>
             <Button icon={<QrcodeOutlined />} onClick={() => setShareModal(true)}>分享二维码</Button>
             <Button icon={<ExportOutlined />}>复制链接</Button>

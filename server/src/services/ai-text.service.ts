@@ -21,7 +21,7 @@ export async function generateText(
   opts: GenerateTextOptions
 ): Promise<{ text: string; provider: string; model: string }> {
   const { system, user, temperature = 0.7, maxTokens } = opts;
-  const messages: Array<{ role: string; content: string }> = [];
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
   if (system) messages.push({ role: 'system', content: system });
   messages.push({ role: 'user', content: user });
 
