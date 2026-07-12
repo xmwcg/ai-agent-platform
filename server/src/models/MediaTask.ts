@@ -21,6 +21,9 @@ export interface IMediaTask extends Document {
    * 内容为加密后的 JSON：{ secretId?, secretKey }
    */
   byokEnc?: string;
+  /** 图生图参考图（base64 或公网 URL），供异步 queryTask 回源生成，24h TTL 内自动清理 */
+  imageBase64?: string;
+  imageUrl?: string;
   createdAt: Date;
   /** TTL 索引：24 小时后自动删除旧任务 */
   expiresAt: Date;
@@ -40,6 +43,8 @@ const MediaTaskSchema = new Schema<IMediaTask>(
     note: { type: String, default: '' },
     userId: { type: String, index: true, sparse: true, default: null },
     byokEnc: { type: String, default: null },
+    imageBase64: { type: String, default: null },
+    imageUrl: { type: String, default: null },
     expiresAt: { type: Date, default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) },
   },
   { timestamps: { createdAt: true, updatedAt: false } }

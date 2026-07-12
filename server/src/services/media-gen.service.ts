@@ -31,6 +31,7 @@ export interface MediaGenParams {
   type: MediaTaskType;
   prompt: string;
   imageBase64?: string;
+  imageUrl?: string;
   negativePrompt?: string;
   duration?: number;
   size?: string;

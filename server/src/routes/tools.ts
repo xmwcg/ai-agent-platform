@@ -80,7 +80,8 @@ router.get('/media/types', (req: Request, res: Response) => {
   res.json({
     success: true,
     data: [
-      { type: 'image2image', label: '图生图', desc: '基于参考图生成风格化图像' },
+      { type: 'text2img', label: '文生图', desc: '根据文本描述生成图像（HY-Image 免费额度）' },
+      { type: 'image2image', label: '图生图', desc: '基于参考图生成风格化图像（HY-Image 免费额度）' },
       { type: 'text2video', label: '文生视频', desc: '根据文本描述生成短视频' },
       { type: 'image2video', label: '图生视频', desc: '将静态图转化为动态视频' },
     ],
