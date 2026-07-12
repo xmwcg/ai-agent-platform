@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/auth';
 import { useUIStore } from '@/stores/ui';
+import FreeExperienceFab from '@/components/FreeExperienceFab';
 
 const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
@@ -28,7 +29,6 @@ const MENU_GROUPS = [
       { key: '/', icon: <HomeOutlined />, label: '首页' },
       { key: '/quickstart', icon: <RocketOutlined />, label: '快速启动' },
       { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话' },
-      { key: '/aibak-chat', icon: <GiftOutlined />, label: '免费 AI 对话' },
       { key: '/knowledge', icon: <BookOutlined />, label: '知识中枢' },
       { key: '/knowledge-graph', icon: <ApartmentOutlined />, label: '知识图谱' },
       { key: '/sandbox', icon: <CodeOutlined />, label: '实践沙盒' },
@@ -517,6 +517,9 @@ function App() {
           <BottomTabBar onMenuOpen={() => setSidebarMobileOpen(true)} />
         )}
       </Layout>
+
+      {/* 全局左侧悬浮入口：免费体验 AI 工具（4 个免费模型） */}
+      <FreeExperienceFab />
     </Layout>
   );
 }

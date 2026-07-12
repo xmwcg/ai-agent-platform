@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Drawer, Button, Input, Select, Spin, Tag, Empty, Space, Tooltip } from 'antd';
+import { Drawer, Button, Input, Select, Spin, Tag, Empty, Space } from 'antd';
 import {
   GiftOutlined, RobotOutlined, PictureOutlined, SendOutlined,
   CloseOutlined, UploadOutlined, DownloadOutlined, ClearOutlined,
-  SparklesOutlined, ReloadOutlined,
+  ReloadOutlined, ThunderboltOutlined,
 } from '@ant-design/icons';
 import { aibakAPI, extractApiError } from '@/services/api';
 
@@ -311,7 +311,7 @@ export default function FreeExperienceFab() {
       </div>
       <div style={{ borderTop: '1px solid var(--border)', padding: '10px 4px 4px', display: 'flex', gap: 8 }}>
         <Button onClick={clearImage} icon={<ReloadOutlined />} style={{ flexShrink: 0 }}>重置</Button>
-        <Button type="primary" icon={<SparklesOutlined />} onClick={genImage} loading={genLoading}
+        <Button type="primary" icon={<ThunderboltOutlined />} onClick={genImage} loading={genLoading}
           disabled={!imgPrompt.trim() || (active.kind === 'i2i' && !imgBase64)}
           style={{ background: ACCENT, borderColor: ACCENT, flex: 1 }}>
           生成
