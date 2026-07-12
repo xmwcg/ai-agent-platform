@@ -94,7 +94,7 @@ const router = createBrowserRouter([
       { path: 'distribution', element: <DistributionPage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'contact', element: <ContactPage /> },
-      { path: 'join', element: <JoinPage /> },
+      { path: 'partners', element: <JoinPage /> },
       { path: 'cookies', element: <CookiesPage /> },
       { path: '*', element: <div>404 - 页面未找到</div> }
     ]

@@ -28,7 +28,7 @@ const FOOTER_GROUPS: { title: string; links: { label: string; path: string; exte
     links: [
       { label: '平台介绍', path: '/about' },
       { label: '联系我们', path: '/contact' },
-      { label: '加入我们', path: '/join' },
+      { label: '合作伙伴', path: '/partners' },
       { label: '官网 aibak.site', path: SITE_URL, external: true },
     ],
   },
@@ -157,7 +157,7 @@ export default function AppFooter() {
             { label: '法律声明', path: '/terms' },
             { label: 'Cookies 政策', path: '/cookies' },
             { label: '联系我们', path: '/contact' },
-            { label: '加入我们', path: '/join' },
+            { label: '合作伙伴', path: '/partners' },
             { label: '平台介绍', path: '/about' },
           ].map((l) => (
             <span key={l.label}

@@ -420,6 +420,9 @@ export const pointsAPI = {
 };
 
 // CloudBase AI 免费用量对话 / 图像生成（小程序成长计划免费额度）
+// ⚠️ 关键：全局 apiClient 超时为 10s，但后端 /aibak/chat 上限 60s、/aibak/image 上限 170s，
+// 若不单独放大超时，所有 AI 请求都会在前端 10s 被中断，表现为「请求频繁 / 超时 / 网络失败」。
+// 因此 chat / image 单独覆盖 timeout。
 export const aibakAPI = {
   chat: (data: {
     message?: string;
@@ -427,7 +430,7 @@ export const aibakAPI = {
     history?: Array<{ role: string; content: string }>;
     model?: 'hy3' | 'hy3-preview';
     stream?: boolean;
-  }) => apiClient.post('/aibak/chat', data),
+  }) => apiClient.post('/aibak/chat', data, { timeout: 90000 }),
   // 图像生成（文生图 / 图生图），model 为 HY-Image-* 系列
   image: (data: {
     model: string;
@@ -435,8 +438,8 @@ export const aibakAPI = {
     size?: string;
     imageBase64?: string;
     imageUrl?: string;
-  }) => apiClient.post('/aibak/image', data),
-  status: () => apiClient.get('/aibak/status'),
+  }) => apiClient.post('/aibak/image', data, { timeout: 190000 }),
+  status: () => apiClient.get('/aibak/status', { timeout: 15000 }),
 };
 
 // 工作流（Agent 工具流）导入导出 API
