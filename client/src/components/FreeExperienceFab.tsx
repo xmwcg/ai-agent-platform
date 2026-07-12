@@ -110,20 +110,50 @@ export default function FreeExperienceFab() {
   );
 
   // ─── 图像生成 ───
-  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 图生图垫图压缩：降分辨率到 ≤1024px 并转 JPEG，避免 base64 超出网关请求体上限(400)
+  const compressImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('读取失败'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('图片解析失败'));
+        img.onload = () => {
+          const max = 1024;
+          let { width, height } = img;
+          if (width > max || height > max) {
+            const ratio = Math.min(max / width, max / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('canvas 不可用'));
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
       setImgError('参考图需小于 10MB');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
+    setImgError('');
+    try {
+      const dataUrl = await compressImage(file);
       setImgPreview(dataUrl);
       setImgBase64(dataUrl);
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setImgError('图片处理失败，请换一张');
+    }
   };
 
   const genImage = useCallback(async () => {

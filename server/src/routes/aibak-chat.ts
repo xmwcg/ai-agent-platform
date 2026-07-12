@@ -142,13 +142,18 @@ router.post('/image', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     const response = await axios.post(CLOUDBASE_IMAGE_URL, body, {
       headers: { 'Content-Type': 'application/json' },
-      timeout: 120000, // 图像生成（尤其 thinking 模式）可能较长
+      timeout: 170000, // 图像生成（尤其 thinking 模式）可能较长，需小于云函数 180s 超时
     });
 
     const elapsed = Date.now() - startTime;
 
     if (response.data?.success) {
-      const images = response.data.data || response.data.images || [];
+      // 兼容云函数两种返回：data:[{url,revised_prompt}] 或 单值 url
+      const images =
+        response.data.data ||
+        response.data.images ||
+        (response.data.url ? [{ url: response.data.url, revised_prompt: response.data.revisedPrompt || response.data.revised_prompt }] : []) ||
+        [];
       logger.info('aibak-image', `✅ 成功, ${elapsed}ms, imgs=${images.length}`);
       res.json({
         success: true,
