@@ -388,6 +388,18 @@ export const mcpAPI = {
     }),
 };
 
+// 🔥 API 市场收益 / 提现
+export const revenueAPI = {
+  stats: () => apiClient.get('/marketplace/revenue/stats'),
+  list: (params?: { status?: string; page?: number; pageSize?: number }) =>
+    apiClient.get('/marketplace/revenue/list', { params }),
+  byResource: () => apiClient.get('/marketplace/revenue/by-resource'),
+  withdraw: (data: { amount: number; method: 'wechat' | 'alipay'; account: string }) =>
+    apiClient.post('/marketplace/revenue/withdraw', data),
+  withdraws: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/marketplace/revenue/withdraws', { params }),
+};
+
 // 推荐/分销 API
 export const referralAPI = {
   stats: () => apiClient.get('/referral/stats'),

@@ -27,6 +27,7 @@ import {
   ApartmentOutlined,
   EditOutlined,
   MenuOutlined,
+  GiftOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/auth';
 import { useUIStore } from '@/stores/ui';
@@ -73,6 +74,7 @@ const menuItems = [
     { key: '/diagnostics', icon: <DashboardOutlined />, label: '部署自检' },
     { key: '/plugins', icon: <SettingOutlined />, label: '插件管理' },
     { key: '/pricing', icon: <CrownOutlined />, label: '会员升级' },
+    { key: '/points-center', icon: <GiftOutlined />, label: '积分中心' },
     { key: '/profile', icon: <ProfileOutlined />, label: '个人中心' },
   ]},
 ];

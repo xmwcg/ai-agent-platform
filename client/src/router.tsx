@@ -34,6 +34,7 @@ import SandboxPage from '@/pages/SandboxPage';
 import XiaohongshuGenerator from '@/pages/XiaohongshuGenerator';
 import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
+import PointsCenter from '@/pages/PointsCenter';
 
 const router = createBrowserRouter([
   {
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
       { path: 'xhs', element: <XiaohongshuGenerator /> },
       { path: 'terms', element: <TermsPage /> },
       { path: 'privacy', element: <PrivacyPage /> },
+      { path: 'points-center', element: <PointsCenter /> },
       { path: '*', element: <div>404 - 页面未找到</div> }
     ]
   }

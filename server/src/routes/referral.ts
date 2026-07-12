@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { auth } from '../middleware/auth';
+import { requireAuth } from '../middleware/auth';
 import {
   getReferralStats,
   getReferralList,
@@ -9,7 +9,7 @@ import {
 const router = Router();
 
 // 所有路由需要登录
-router.use(auth);
+router.use(requireAuth);
 
 /**
  * GET /api/referral/stats

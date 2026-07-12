@@ -8,6 +8,8 @@ import { ApiKey, IApiKey } from '../models/ApiKey';
 import { ApiUsageLog } from '../models/ApiUsageLog';
 import { CreditsTransaction } from '../models/CreditsTransaction';
 import { getCreditsCost, MarketplaceResource } from '../config/credits-pricing';
+import { recordApiRevenue } from '../services/marketplace-revenue.service';
+import { RESOURCE_PRICING_RANGE } from '../config/marketplace-fee';
 import {
   generateApiKey,
   hashKey,
@@ -215,6 +217,13 @@ router.post('/v1/chat', enforceApiKey({ resource: 'chat' }), validate(chatSchema
       status: 'success',
       creditsDeducted: (req as any)._creditsDeducted,
     });
+    // 异步记录 API 市场收益（平台抽成 + 创作者分成）
+    void recordApiRevenue(
+      key.ownerId.toString(),
+      String(key._id),
+      'chat',
+      RESOURCE_PRICING_RANGE.chat.default,
+    );
     res.json({
       provider: 'marketplace',
       model: 'reasonix-route',

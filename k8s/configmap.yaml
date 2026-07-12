@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-platform-config
+  namespace: ai-agent-platform
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  CLIENT_URL: "https://aibak.site"
+  MONGODB_URI: "mongodb://mongo-service:27017/ai_agent_platform"
+  REDIS_URL: "redis://redis-service:6379"
+  DEFAULT_PAY_PROVIDER: "wechat"
+  AI_COST_DAILY_BUDGET: "500"
+  SMS_MOCK: "false"
+  WECHAT_LOGIN_MOCK: "false"
