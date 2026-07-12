@@ -1,14 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { createAIClient, aiModelManager } from '../config/ai-models';
 import { aiAgentService } from '../services/ai-agent';
+import { callCloudbaseChat } from './aibak-chat';
 import { AuthRequest, optionalAuth, requireAuth } from '../middleware/auth';
 import { enforceQuota, quotaIncrement, enforceCostValve, quotaCostRecord } from '../middleware/subscription';
 import { estimateCostFen } from '../services/cost-control.service';
 import { sendError } from '../lib/http-error';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
-// 聊天接口（使用 Agent 服务）
+// 聊天接口（使用 Agent 服务；chat provider 不可用时回退 CloudBase 免费模型，保证可用）
 router.post('/chat', optionalAuth, enforceCostValve(), enforceQuota('ai_chat'), async (req: AuthRequest, res: Response) => {
   try {
     const { message, sessionId, config, model, provider } = req.body;
@@ -25,24 +27,39 @@ router.post('/chat', optionalAuth, enforceCostValve(), enforceQuota('ai_chat'), 
     }
 
     // 发送消息（model/provider 允许前端实时切换模型，直连统一网关）
-    const result = await aiAgentService.sendMessage(currentSessionId, message, config, {
-      model: model || undefined,
-      provider: provider || undefined,
-    });
+    let reply: string;
+    let usage: any = undefined;
+    try {
+      const result = await aiAgentService.sendMessage(currentSessionId, message, config, {
+        model: model || undefined,
+        provider: provider || undefined,
+      });
+      reply = result.reply;
+      usage = result.usage;
+    } catch (gwErr) {
+      // 兜底：外部 chat provider 未配置/不可用时，走 CloudBase 小程序成长计划免费模型
+      logger.warn('ai.chat', `Gateway failed, falling back to CloudBase free model: ${(gwErr as Error)?.message}`);
+      const cfMessages = [
+        { role: 'system', content: config?.systemPrompt || 'You are a helpful AI assistant.' },
+        { role: 'user', content: message },
+      ];
+      reply = await callCloudbaseChat(cfMessages, 'hy3');
+    }
 
     // 登录用户：累加用量 + 记录 AI 成本（驱动成本预警阀门）
     if (req.user?.id) {
       await quotaIncrement(req.user.id, 'ai_chat');
-      const usage = (result as any)?.usage || {};
-      const costFen = estimateCostFen(Number(usage.prompt_tokens) || 0, Number(usage.completion_tokens) || 0);
+      const u = usage || {};
+      const costFen = estimateCostFen(Number(u.prompt_tokens) || 0, Number(u.completion_tokens) || 0);
       await quotaCostRecord(req.user.id, costFen);
     }
 
     res.json({
       success: true,
       sessionId: currentSessionId,
-      message: result.reply,
-      usage: result.usage
+      message: reply,
+      usage,
+      provider: usage ? undefined : 'cloudbase-free'
     });
 
   } catch (error) {
