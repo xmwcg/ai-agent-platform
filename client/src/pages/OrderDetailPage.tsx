@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Card, Typography, Spin, Descriptions, Tag, Button, Result, Row, Col, Statistic, message,
+  Card, Typography, Spin, Descriptions, Tag, Button, Result, Row, Col, Statistic, message, Progress,
 } from 'antd';
 import {
   ArrowLeftOutlined, ShoppingOutlined, CrownOutlined, MessageOutlined,
-  CreditCardOutlined, CheckCircleFilled,
+  CreditCardOutlined, CheckCircleFilled, BarChartOutlined,
 } from '@ant-design/icons';
 import { billingAPI, extractApiError } from '@/services/api';
 import PageHeader from '@/components/PageHeader';
@@ -27,6 +27,7 @@ export default function OrderDetailPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<any>(null);
+  const [detail, setDetail] = useState<any>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [creditPkgs, setCreditPkgs] = useState<any[]>([]);
 
@@ -34,13 +35,14 @@ export default function OrderDetailPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [ordersRes, plansRes, pkgsRes]: any[] = await Promise.all([
-          billingAPI.getOrders().catch(() => ({ data: [] })),
+        const [detailRes, plansRes, pkgsRes]: any[] = await Promise.all([
+          billingAPI.getOrderDetail(orderNo!).catch(() => null),
           billingAPI.getPlans().catch(() => ({ data: [] })),
           billingAPI.getCreditsPackages().catch(() => ({ data: [] })),
         ]);
-        const list: any[] = ordersRes?.data || [];
-        setOrder(list.find((o) => o.orderNo === orderNo) || null);
+        const d = detailRes?.data;
+        setDetail(d || null);
+        setOrder(d?.order || null);
         setPlans(plansRes?.data || []);
         setCreditPkgs(pkgsRes?.data || []);
       } catch (err) {
@@ -136,6 +138,58 @@ export default function OrderDetailPage() {
               积分可用于 AI 对话、文生图、工具调用等全部功能（10 积分 ≈ 1 次 AI 对话）。
             </Paragraph>
           </Card>
+
+          {detail && (
+            <Card style={{ borderRadius: 16, border: '1px solid var(--border)', marginBottom: 16 }}>
+              <Title level={5} style={{ color: 'var(--text-primary)', marginTop: 0 }}>
+                <BarChartOutlined /> 当前额度与用量
+              </Title>
+              <Row gutter={[12, 12]}>
+                <Col span={12}>
+                  <Statistic
+                    title="当前套餐"
+                    value={PLAN_NAMES[detail.membership?.plan] || detail.membership?.plan || '免费版'}
+                    valueStyle={{ fontSize: 18, color: 'var(--brand-primary)' }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title="账户积分余额"
+                    value={detail.credits || 0}
+                    prefix={<CrownOutlined style={{ color: 'var(--brand-primary)' }} />}
+                    valueStyle={{ fontSize: 18 }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title="会员有效期至"
+                    value={detail.membership?.membershipExpiresAt
+                      ? new Date(detail.membership.membershipExpiresAt).toLocaleDateString('zh-CN')
+                      : '—'}
+                    valueStyle={{ fontSize: 18 }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title="今日 AI 对话"
+                    value={`${(detail.usage?.ai_chat?.used ?? 0)}${detail.usage?.ai_chat?.limit === -1 ? '' : ' / ' + (detail.usage?.ai_chat?.limit ?? 0)}`}
+                    suffix={detail.usage?.ai_chat?.limit === -1 ? '无限' : '条'}
+                    prefix={<MessageOutlined style={{ color: 'var(--brand-success)' }} />}
+                    valueStyle={{ fontSize: 18, color: 'var(--brand-success)' }}
+                  />
+                </Col>
+              </Row>
+              {detail.usage?.ai_chat?.limit && detail.usage.ai_chat.limit !== -1 && (
+                <div style={{ marginTop: 8 }}>
+                  <Progress
+                    percent={Math.min(100, Math.round(((detail.usage.ai_chat.used || 0) / detail.usage.ai_chat.limit) * 100))}
+                    size="small"
+                    status={detail.usage.ai_chat.used >= detail.usage.ai_chat.limit ? 'exception' : 'active'}
+                  />
+                </div>
+              )}
+            </Card>
+          )}
 
           {order.status === 'pending' && (
             <Card style={{ borderRadius: 16, border: '1px solid var(--border)' }}>

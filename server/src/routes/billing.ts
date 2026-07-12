@@ -323,6 +323,31 @@ router.get('/orders/:orderNo/status', requireAuth, async (req: AuthRequest, res:
   }
 });
 
+// 订单详情：订单本体 + 会员状态 + 当前积分余额 + 当日配额用量（AI 对话次数等）
+router.get('/orders/:orderNo/detail', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const order = await Order.findOne({ orderNo: req.params.orderNo });
+    if (!order) return res.status(404).json({ success: false, error: '订单不存在' });
+    if (order.userId.toString() !== req.user!.id) {
+      return res.status(403).json({ success: false, error: '无权查看他人订单' });
+    }
+    const user = await User.findById(order.userId).select('plan credits membershipExpiresAt').lean();
+    const { plan, expired } = await resolveUserPlan(order.userId.toString());
+    const usage = await getQuotaUsage(order.userId.toString());
+    res.json({
+      success: true,
+      data: {
+        order,
+        membership: { plan, expired, membershipExpiresAt: user?.membershipExpiresAt || null },
+        credits: user?.credits ?? 0,
+        usage,
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
 // 支付网关回调（微信 / 支付宝 / Stripe）—— 带幂等性、重放防护、审计日志
 router.post('/webhook/:provider', async (req: Request, res: Response) => {
   try {

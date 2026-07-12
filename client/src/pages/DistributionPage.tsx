@@ -49,7 +49,9 @@ export default function DistributionPage() {
   const [posterUrl, setPosterUrl] = useState('');
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [form] = Form.useForm();
   const posterCanvas = useRef<HTMLCanvasElement>(null);
+  const qrSvgRef = useRef<HTMLDivElement>(null);
 
   const inviteLink = code ? `https://aibak.site/register?ref=${code}` : 'https://aibak.site/register';
 
@@ -62,9 +64,9 @@ export default function DistributionPage() {
         referralAPI.commissions({ page: 1, pageSize: 20 }).catch(() => ({ data: [] })),
         referralAPI.withdrawals().catch(() => ({ data: [] })),
       ]);
-      setCode(codeRes?.code || codeRes?.data?.code || '');
+      setCode(codeRes?.data?.referralCode || codeRes?.code || '');
       setStats(statsRes?.data || statsRes || {});
-      const arr = commRes?.data?.list || commRes?.data?.docs || commRes?.data || [];
+      const arr = commRes?.data?.items || commRes?.data?.list || commRes?.data?.docs || commRes?.data || [];
       setCommissions(Array.isArray(arr) ? arr : []);
       const wd = wdRes?.data || wdRes?.data?.list || [];
       setWithdrawals(Array.isArray(wd) ? wd : []);
@@ -85,42 +87,56 @@ export default function DistributionPage() {
     } catch { message.error('复制失败，请手动复制'); }
   };
 
-  // 生成分享海报（canvas 合成：背景 + 标题 + 二维码 + 链接）
+  // 生成分享海报（canvas 合成：背景 + 标题 + 真实二维码 + 链接）
   const genPoster = () => {
-    const canvas = posterCanvas.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const W = 600, H = 800;
-    const grad = ctx.createLinearGradient(0, 0, W, H);
-    grad.addColorStop(0, '#6c5ce7'); grad.addColorStop(1, '#a29bfe');
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 40px sans-serif';
-    ctx.fillText('AIbak 全站 AI 应用平台', 40, 90);
-    ctx.font = '22px sans-serif';
-    ctx.fillText('一站式智能生产力 · 邀请即享佣金', 40, 140);
-    // 白底卡片
-    ctx.fillStyle = '#fff'; ctx.roundRect(60, 200, 480, 440, 24); ctx.fill();
-    // 二维码
-    const size = 280;
-    ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 26px sans-serif';
-    ctx.fillText('扫码注册 · 立得 100 积分', 90, 260);
-    // 用 QRCode 渲染到离屏再绘制
-    const svg = document.createElement('div');
-    // 简化：直接提示用户使用下方二维码；此处绘制占位框
-    ctx.strokeStyle = '#6c5ce7'; ctx.lineWidth = 3;
-    ctx.strokeRect(160, 300, size, size);
-    ctx.fillStyle = '#64748b'; ctx.font = '16px sans-serif';
-    ctx.fillText('（二维码见左侧 / 弹窗）', 175, 620);
-    ctx.fillStyle = '#0f172a'; ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('我的邀请码：' + (code || '—'), 90, 580);
-    ctx.fillStyle = '#6c5ce7'; ctx.font = '15px monospace';
-    const link = inviteLink.length > 46 ? inviteLink.slice(0, 46) + '…' : inviteLink;
-    ctx.fillText(link, 90, 615);
-    setPosterUrl(canvas.toDataURL('image/png'));
-    setPosterOpen(true);
+    const draw = (qrImg?: HTMLImageElement) => {
+      const canvas = posterCanvas.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const W = 600, H = 800;
+      const grad = ctx.createLinearGradient(0, 0, W, H);
+      grad.addColorStop(0, '#6c5ce7'); grad.addColorStop(1, '#a29bfe');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 40px sans-serif';
+      ctx.fillText('AIbak 全站 AI 应用平台', 40, 90);
+      ctx.font = '22px sans-serif';
+      ctx.fillText('一站式智能生产力 · 邀请即享佣金', 40, 140);
+      // 白底卡片
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(60, 200, 480, 440, 24); ctx.fill();
+      // 标题
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('扫码注册 · 立得 100 积分', 90, 262);
+      // 二维码（真实）
+      if (qrImg) {
+        ctx.drawImage(qrImg, 160, 300, 280, 280);
+      } else {
+        ctx.strokeStyle = '#6c5ce7'; ctx.lineWidth = 3; ctx.strokeRect(160, 300, 280, 280);
+      }
+      // 邀请码 + 链接
+      ctx.fillStyle = '#0f172a'; ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('我的邀请码：' + (code || '—'), 90, 620);
+      ctx.fillStyle = '#6c5ce7'; ctx.font = '15px monospace';
+      const link = inviteLink.length > 46 ? inviteLink.slice(0, 46) + '…' : inviteLink;
+      ctx.fillText(link, 90, 660);
+      setPosterUrl(canvas.toDataURL('image/png'));
+      setPosterOpen(true);
+    };
+
+    const svgEl = qrSvgRef.current?.querySelector('svg') as SVGElement | null;
+    if (!svgEl) { draw(); return; }
+    try {
+      const xml = new XMLSerializer().serializeToString(svgEl);
+      const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+      const img = new Image();
+      img.onload = () => draw(img);
+      img.onerror = () => draw();
+      img.src = url;
+    } catch {
+      draw();
+    }
   };
 
   const onWithdraw = async (vals: { amount: number; method: 'wechat' | 'alipay'; account?: string }) => {
@@ -282,13 +298,20 @@ export default function DistributionPage() {
             </div>
           )}
         </div>
-        <canvas ref={posterCanvas} width={600} height={800} style={{ display: 'none' }} />
       </Modal>
 
+      {/* 隐藏容器：用于海报真实二维码绘制与离屏 canvas（常驻 DOM 避免 ref 为空） */}
+      <div style={{ position: 'absolute', left: -99999, top: 0, width: 0, height: 0, overflow: 'hidden' }} aria-hidden>
+        <canvas ref={posterCanvas} width={600} height={800} />
+        <div ref={qrSvgRef}>
+          {inviteLink && <QRCodeSVG value={inviteLink} size={280} />}
+        </div>
+      </div>
+
       {/* 提现弹窗 */}
-      <Modal open={withdrawOpen} onCancel={() => setWithdrawOpen(false)} onOk={() => formRef.current?.submit()}
+      <Modal open={withdrawOpen} onCancel={() => setWithdrawOpen(false)} onOk={() => form.submit()}
         confirmLoading={submitting} title="申请提现" okText="提交申请">
-        <Form layout="vertical" ref={formRef as any} onFinish={onWithdraw} initialValues={{ method: 'wechat', amount: 50 }}>
+        <Form form={form} layout="vertical" onFinish={onWithdraw} initialValues={{ method: 'wechat', amount: 50 }}>
           <Form.Item label="提现金额（元，最低 ¥50）" name="amount" rules={[{ required: true, type: 'number', min: 50, message: '最低 ¥50' }]}>
             <Input type="number" prefix="¥" />
           </Form.Item>
@@ -304,5 +327,3 @@ export default function DistributionPage() {
     </div>
   );
 }
-
-const formRef = { current: null as any };
