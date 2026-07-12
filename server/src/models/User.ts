@@ -20,6 +20,7 @@ export interface IUser extends Document {
   referredBy?: mongoose.Types.ObjectId; // 推荐人 ID
   commissionBalance: number;   // 佣金余额（分）
   totalCommissionEarned: number; // 累计佣金（分）
+  commissionWithdrawn: number;   // 已提现佣金（分），用于计算可提现余额
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -113,6 +114,10 @@ const userSchema = new Schema<IUser>(
       default: 0,
     },
     totalCommissionEarned: {
+      type: Number,
+      default: 0,
+    },
+    commissionWithdrawn: {
       type: Number,
       default: 0,
     },

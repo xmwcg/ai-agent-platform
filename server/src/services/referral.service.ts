@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { Referral, Commission, IReferral } from '../models/Referral';
 import { User } from '../models/User';
 import { CreditsTransaction } from '../models/CreditsTransaction';
+import { Withdrawal } from '../models/Withdrawal';
 
 // 佣金比例配置（三级分销）
 const COMMISSION_RATES = {
@@ -193,6 +194,73 @@ export async function settleCommissions(userId: string): Promise<number> {
   return result.modifiedCount;
 }
 
+const MIN_WITHDRAW_YUAN = 50;
+
+/**
+ * 申请提现：校验可提现余额（已结算且未提现），生成提现单并锁定对应佣金。
+ * - 可提现 = 已结算佣金（分） - 已提现（分）
+ * - 锁定：将足够的 settled 佣金标记为 withdrawn，并累加 commissionWithdrawn
+ */
+export async function requestWithdrawal(
+  userId: string,
+  amountYuan: number,
+  method: 'wechat' | 'alipay',
+  account?: string,
+): Promise<{ withdrawalId: string; availableCents: number; amountCents: number }> {
+  if (!amountYuan || amountYuan < MIN_WITHDRAW_YUAN) {
+    throw new Error(`单笔提现最低 ¥${MIN_WITHDRAW_YUAN}`);
+  }
+  const amountCents = Math.round(amountYuan * 100);
+
+  const user = await User.findById(userId);
+  if (!user) throw new Error('用户不存在');
+
+  const stats = await getReferralStats(userId);
+  const settledCents = stats.settledCommission || 0;
+  const withdrawnCents = user.commissionWithdrawn || 0;
+  const availableCents = settledCents - withdrawnCents;
+  if (amountCents > availableCents) {
+    throw new Error(`可提现余额不足（当前可提现 ¥${(availableCents / 100).toFixed(2)}）`);
+  }
+
+  // 锁定佣金：将 settled 佣金按时间顺序标记为 withdrawn，直到累计 >= amountCents
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const settled = await Commission.find({ userId, status: 'settled' })
+      .sort({ createdAt: 1 })
+      .session(session);
+    let remaining = amountCents;
+    const toWithdraw: string[] = [];
+    for (const c of settled) {
+      if (remaining <= 0) break;
+      toWithdraw.push(c._id.toString());
+      remaining -= c.commissionAmount;
+    }
+    await Commission.updateMany(
+      { _id: { $in: toWithdraw } },
+      { status: 'withdrawn', withdrawnAt: new Date() },
+      { session }
+    );
+    await User.findByIdAndUpdate(
+      userId,
+      { $inc: { commissionWithdrawn: amountCents } },
+      { session }
+    );
+    const wd = await Withdrawal.create(
+      [{ userId, amount: amountYuan, amountCents, method, account, status: 'pending' }],
+      { session }
+    );
+    await session.commitTransaction();
+    return { withdrawalId: wd[0]._id.toString(), availableCents: availableCents - amountCents, amountCents };
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
+}
+
 /**
  * 获取用户的推荐统计
  */
@@ -210,11 +278,42 @@ export async function getReferralStats(userId: string) {
     ]),
   ]);
 
+  // 已提现（withdrawn 状态）佣金
+  const withdrawnCommissions = await Commission.aggregate([
+    { $match: { userId: new mongoose.Types.ObjectId(userId), status: 'withdrawn' } },
+    { $group: { _id: null, total: { $sum: '$commissionAmount' } } },
+  ]);
+
+  // 近 6 个月佣金趋势（用于报表）
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
+  const trend = await Commission.aggregate([
+    {
+      $match: {
+        userId: new mongoose.Types.ObjectId(userId),
+        createdAt: { $gte: sixMonthsAgo },
+      },
+    },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
+        amount: { $sum: '$commissionAmount' },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+  const monthlyTrend = trend.map((t: any) => ({ month: t._id, amountCents: t.amount }));
+
   return {
     directReferrals: directCount,
     totalReferrals,
     pendingCommission: pendingCommissions[0]?.total || 0,
     settledCommission: settledCommissions[0]?.total || 0,
+    commissionTotal:
+      (pendingCommissions[0]?.total || 0) + (settledCommissions[0]?.total || 0),
+    paidCommission: withdrawnCommissions[0]?.total || 0,
+    monthlyTrend,
   };
 }
 

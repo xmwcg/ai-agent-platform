@@ -4,7 +4,9 @@ import {
   getReferralStats,
   getReferralList,
   getCommissionList,
+  requestWithdrawal,
 } from '../services/referral.service';
+import { Withdrawal } from '../models/Withdrawal';
 
 const router = Router();
 
@@ -74,6 +76,37 @@ router.get('/code', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || '获取推荐码失败' });
+  }
+});
+
+// 申请提现（真实锁定佣金，生成提现单，管理员/财务复核打款）
+router.post('/withdraw', async (req: Request, res: Response) => {
+  try {
+    const { amount, method, account } = req.body || {};
+    const amt = Number(amount);
+    const userId = (req as any).user._id;
+    const result = await requestWithdrawal(
+      userId,
+      amt,
+      method === 'alipay' ? 'alipay' : 'wechat',
+      account,
+    );
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || '提现申请失败' });
+  }
+});
+
+// 我的提现记录
+router.get('/withdrawals', async (req: Request, res: Response) => {
+  try {
+    const list = await Withdrawal.find({ userId: (req as any).user._id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+    res.json({ success: true, data: list });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || '查询失败' });
   }
 });
 

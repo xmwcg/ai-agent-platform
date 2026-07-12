@@ -415,6 +415,9 @@ export const referralAPI = {
   list: (params?: { page?: number; pageSize?: number }) => apiClient.get('/referral/list', { params }),
   commissions: (params?: { page?: number; pageSize?: number }) => apiClient.get('/referral/commissions', { params }),
   code: () => apiClient.get('/referral/code'),
+  withdraw: (data: { amount: number; method: 'wechat' | 'alipay'; account?: string }) =>
+    apiClient.post('/referral/withdraw', data),
+  withdrawals: (params?: { page?: number; pageSize?: number }) => apiClient.get('/referral/withdrawals', { params }),
 };
 
 // 积分/签到 API
