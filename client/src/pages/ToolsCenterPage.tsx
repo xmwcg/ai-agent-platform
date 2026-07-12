@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card, Typography, Tabs, Select, Button, Input, Space, Tag, message,
   Row, Col, Spin, Empty, Upload, Divider, Menu, InputNumber, Slider,
@@ -11,7 +12,7 @@ import {
   WechatOutlined, GlobalOutlined, AuditOutlined, SafetyOutlined,
   IdcardOutlined, MailOutlined, ScheduleOutlined, ContainerOutlined,
   BarChartOutlined, CodeOutlined, ConsoleSqlOutlined, ApiOutlined,
-  BookOutlined, ExperimentOutlined,
+  BookOutlined, ExperimentOutlined, PictureOutlined, EditOutlined,
 } from '@ant-design/icons';
 import { toolsAPI, extractApiError } from '@/services/api';
 import { aiAPI } from '@/services/api';
@@ -102,6 +103,7 @@ const TOOL_CATEGORIES = [
 ];
 
 const ToolsCenterPage: React.FC = () => {
+  const navigate = useNavigate();
   const [activeCat, setActiveCat] = useState('creative');
 
   const tools = {
@@ -174,6 +176,31 @@ const ToolsCenterPage: React.FC = () => {
 
       {/* 右侧工具区 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+        {/* 热门独立工具：合并「小红书文案 / 文生图」入口（调用云函数 4 模型） */}
+        <div style={{ marginBottom: 18 }}>
+          <Text strong style={{ fontSize: 13 }}>🚀 热门独立工具</Text>
+          <div style={{ display: 'flex', gap: 12, marginTop: 10, flexWrap: 'wrap' }}>
+            {[
+              { label: '小红书文案', desc: '爆款笔记 / 种草文案生成', icon: <EditOutlined />, path: '/xhs', grad: 'linear-gradient(135deg,#ff6b6b,#ee5253)' },
+              { label: '文生图 / 图生图', desc: 'HY-Image 免费模型出图', icon: <PictureOutlined />, path: '/text2img', grad: 'linear-gradient(135deg,#6c5ce7,#a29bfe)' },
+            ].map((t) => (
+              <div key={t.path} onClick={() => navigate(t.path)} style={{
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
+                borderRadius: 12, border: '1px solid var(--border, #f0f0f0)', background: 'var(--bg-container,#fff)',
+                minWidth: 220, transition: 'all 0.25s',
+              }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 10px 26px rgba(0,0,0,0.12)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+              >
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: t.grad, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18 }}>{t.icon}</div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{t.label}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary,#888)' }}>{t.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
         <Tabs
           activeKey={Object.keys((tools as any)[activeCat] || {})[0]}
           tabPosition="top"
