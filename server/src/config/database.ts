@@ -139,9 +139,8 @@ try {
       console.log(`🔄 Redis reconnecting... attempt ${times}, delay ${delay}ms`);
       return delay;
     },
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: null, // 不限制重试次数（null = 无限重试），避免命令失败后永久断连
     lazyConnect: true,
-    enableOfflineQueue: false, // 连接断开时命令立即报错（由各调用方 catch 降级），不无限挂起
     connectTimeout: 5000,
     keepAlive: 5000, // TCP keepalive 5s 初始延迟（避免 30s 会导致健康检查 15s 轮询让 socket 永不空闲）
     noDelay: true,
