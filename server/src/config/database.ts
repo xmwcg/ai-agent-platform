@@ -142,7 +142,7 @@ try {
     maxRetriesPerRequest: null, // 不限制重试次数（null = 无限重试），避免命令失败后永久断连
     lazyConnect: true,
     connectTimeout: 5000,
-    keepAlive: 5000, // TCP keepalive 5s 初始延迟（避免 30s 会导致健康检查 15s 轮询让 socket 永不空闲）
+    // keepAlive 由 OS 默认管理（Docker 桥接网络下自定义 keepalive 可能误判断连）
     noDelay: true,
   });
   // 若 10s 内未连上则降级为内存版（给 Redis 充足的启动时间）
@@ -202,8 +202,9 @@ export const checkDatabaseHealth = async (): Promise<{ mongodb: boolean; redis: 
     console.error('❌ MongoDB health check failed:', error);
   }
   
-  // Check Redis（带超时 + 半开连接自动重连）
-  // 半开连接下 status 仍是 'ready' 但 ping 挂死 → 不能依赖 status 门控
+  // Check Redis（带超时保护）
+  // 仅报告状态，不主动 disconnect/reconnect（避免打断正在使用连接的 queue worker）;
+  // 重连由 ioredis 内置 retryStrategy 负责
   try {
     const isReady = redisClient && redisClient.status === 'ready';
     if (isReady) {
@@ -213,15 +214,6 @@ export const checkDatabaseHealth = async (): Promise<{ mongodb: boolean; redis: 
   } catch (error) {
     console.error('❌ Redis health check failed:', error);
     result.redis = false;
-    // 半开连接自动重连：ping 超时说明底层 socket 已死，主动断开并重连
-    try {
-      if (redisClient && typeof redisClient.disconnect === 'function') {
-        redisClient.disconnect();
-      }
-      if (redisClient && typeof redisClient.connect === 'function') {
-        redisClient.connect().catch(() => {});
-      }
-    } catch { /* 重连失败不影响主流程 */ }
   }
   
   return result;
