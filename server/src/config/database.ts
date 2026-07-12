@@ -139,7 +139,7 @@ try {
       console.log(`🔄 Redis reconnecting... attempt ${times}, delay ${delay}ms`);
       return delay;
     },
-    maxRetriesPerRequest: null, // 不限制重试次数（null = 无限重试），避免命令失败后永久断连
+    maxRetriesPerRequest: 20, // 足够多的重试次数（避免 null 可能的边缘行为）
     lazyConnect: true,
     connectTimeout: 5000,
     // keepAlive 由 OS 默认管理（Docker 桥接网络下自定义 keepalive 可能误判断连）
