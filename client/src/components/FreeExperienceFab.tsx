@@ -23,7 +23,7 @@ const MODELS: FabModel[] = [
   { id: 'HY-Image-v3.0-I2I-ToB-v1.0.1', label: '图生图', kind: 'i2i', group: '图像生成', desc: '混元图生图 3.0 · 免费额度' },
 ];
 
-const TEXT_SUGGESTIONS = ['介绍一下 Reasonix AI 平台', '知识库怎么用？', '写一个 Python 你好世界', '解释一下什么是 RAG'];
+const TEXT_SUGGESTIONS = ['介绍一下 AIbak 平台', '知识库怎么用？', '写一个 Python 你好世界', '解释一下什么是 RAG'];
 const IMAGE_SUGGESTIONS = ['一只胖橘猫坐在窗台打盹，水彩风格，温暖色调', '赛博朋克风格的未来城市夜景', '极简主义咖啡馆室内设计'];
 const SIZE_OPTIONS = [
   { label: '1024×1024（方形）', value: '1024x1024' },
