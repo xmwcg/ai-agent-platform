@@ -57,6 +57,8 @@ export default function PricingPage() {
   const [payStatus, setPayStatus] = useState<'confirm' | 'creating' | 'waiting' | 'success' | 'expired'>('confirm');
   const [qr, setQr] = useState<{ value: string; orderNo: string; itemName: string } | null>(null);
   const pollRef = useRef<number | null>(null);
+  // 后端下发的「已配置可用」支付方式（缺密钥的渠道自动隐藏，后期填密钥即自动上线）
+  const [paymentMethods, setPaymentMethods] = useState<{ key: string; label: string; enabled: boolean }[]>([]);
 
   // 从后端加载数据
   const [plans, setPlans] = useState<PlanFromServer[]>([]);
@@ -67,18 +69,20 @@ export default function PricingPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [plansRes, pkgsRes, subRes] = await Promise.all([
-          billingAPI.getPlans(),
-          billingAPI.getCreditsPackages(),
-          billingAPI.getSubscription().catch(() => null),
-        ]);
-        // 过滤掉免费版（不需要购买），或按需保留
-        const allPlans = (plansRes as any)?.data || [];
-        setPlans(allPlans);
-        setCreditsPackages((pkgsRes as any)?.data || []);
-        if ((subRes as any)?.data?.plan) {
-          setCurrentPlan((subRes as any).data.plan);
-        }
+      const [plansRes, pkgsRes, subRes, methodsRes] = await Promise.all([
+        billingAPI.getPlans(),
+        billingAPI.getCreditsPackages(),
+        billingAPI.getSubscription().catch(() => null),
+        billingAPI.getPaymentMethods().catch(() => null),
+      ]);
+      // 过滤掉免费版（不需要购买），或按需保留
+      const allPlans = (plansRes as any)?.data || [];
+      setPlans(allPlans);
+      setCreditsPackages((pkgsRes as any)?.data || []);
+      setPaymentMethods((methodsRes as any)?.data?.methods || []);
+      if ((subRes as any)?.data?.plan) {
+        setCurrentPlan((subRes as any).data.plan);
+      }
       } catch (e) {
         setLoadError(extractApiError(e, '加载套餐失败'));
       } finally {
@@ -87,6 +91,19 @@ export default function PricingPage() {
     }
     load();
   }, []);
+
+  // 支付方式加载后，若当前选中的渠道不可用，则自动切到第一个可用渠道
+  useEffect(() => {
+    if (paymentMethods.length === 0) return;
+    setPayProvider((prev) => {
+      const current = paymentMethods.find((p) => p.key === prev);
+      if (!current || !current.enabled) {
+        const first = paymentMethods.find((p) => p.enabled);
+        return first ? (first.key as PayProvider) : prev;
+      }
+      return prev;
+    });
+  }, [paymentMethods]);
 
   // 组件卸载时清理轮询定时器
   useEffect(() => () => stopPolling(), []);
@@ -188,6 +205,15 @@ export default function PricingPage() {
   // 获取付费套餐（不含免费版）
   const paidPlans = plans.filter((p) => p.id !== 'free');
 
+  // 仅展示后端已配置可用的支付方式（缺密钥的渠道自动隐藏；兜底：接口异常时只显示微信）
+  const visibleProviders = (() => {
+    const list = PAY_PROVIDERS.filter((pp) => {
+      const m = paymentMethods.find((x) => x.key === pp.key);
+      return m ? m.enabled : pp.key === 'wechat';
+    });
+    return list.length ? list : PAY_PROVIDERS.filter((pp) => pp.key === 'wechat');
+  })();
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 0' }}>
@@ -233,11 +259,6 @@ export default function PricingPage() {
 
   const getItemName = (item: PlanFromServer | CreditsPackage): string =>
     'id' in item ? item.name : (item as CreditsPackage).name;
-
-  const getItemTagline = (item: PlanFromServer | CreditsPackage): string => {
-    if ('tagline' in item) return item.tagline;
-    return (item as CreditsPackage).description;
-  };
 
   const getItemFeatures = (item: PlanFromServer | CreditsPackage): string[] => {
     if ('features' in item) return item.features;
@@ -382,7 +403,7 @@ export default function PricingPage() {
             <Divider style={{ margin: '12px 0' }} />
             <Paragraph style={{ marginBottom: 8 }}><strong>支付方式</strong></Paragraph>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {PAY_PROVIDERS.map((pp) => {
+              {visibleProviders.map((pp) => {
                 const active = payProvider === pp.key;
                 return (
                   <div

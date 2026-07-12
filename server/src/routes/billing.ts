@@ -6,7 +6,7 @@ import { WebhookEvent } from '../models/WebhookEvent';
 import { CreditsTransaction } from '../models/CreditsTransaction';
 import { PLANS, PlanId, DEFAULT_PLAN, getPlan } from '../config/billing';
 import { CREDITS_PACKAGES } from '../config/credits-pricing';
-import { getPaymentGateway, isRealGateway } from '../services/payment.service';
+import { getPaymentGateway, isRealGateway, listPaymentMethods } from '../services/payment.service';
 import { resolveUserPlan, getQuotaUsage } from '../middleware/subscription';
 import { sendError } from '../lib/http-error';
 import { validate, ValidationSchema } from '../lib/validation';
@@ -84,6 +84,11 @@ async function grantCreditsPack(userId: string, packageId: string, orderNo: stri
 // 套餐列表（公开）
 router.get('/plans', (_req: Request, res: Response) => {
   res.json({ success: true, data: Object.values(PLANS) });
+});
+
+// 已启用的支付方式（公开，前端据此动态展示入口；缺密钥的渠道自动隐藏）
+router.get('/payment-methods', (_req: Request, res: Response) => {
+  res.json({ success: true, data: { methods: listPaymentMethods() } });
 });
 
 // 积分包列表（公开）

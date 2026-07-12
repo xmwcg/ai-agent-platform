@@ -143,6 +143,8 @@ export const billingAPI = {
   cancelSubscription: () => apiClient.post('/billing/subscription/cancel'),
   getOrders: () => apiClient.get('/billing/orders/history'),
   getPaymentStatus: () => apiClient.get('/billing/payment-status'),
+  // 已启用的支付方式（前端据此动态展示入口，缺密钥的渠道自动隐藏）
+  getPaymentMethods: () => apiClient.get('/billing/payment-methods'),
   getWebhookEvents: (params?: { page?: number; limit?: number; status?: string }) =>
     apiClient.get('/billing/webhook-events', { params }),
 };

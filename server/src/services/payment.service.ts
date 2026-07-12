@@ -63,6 +63,8 @@ export interface PaymentGateway {
   verifyWebhook(rawBody: string, signature: string, extra?: WebhookExtraHeaders): Promise<WebhookResult | null>;
   /** 可选：向渠道主动查询订单支付状态（回调延迟/未配公网时的兜底） */
   queryOrder?(orderNo: string): Promise<QueryOrderResult>;
+  /** 该渠道是否已在 .env 配置真实密钥（前端据此决定是否展示入口） */
+  isConfigured(): boolean;
 }
 
 /* ----------------------- 真实 Webhook 验签工具（可单测） ----------------------- */
@@ -163,6 +165,12 @@ export function alipayVerify(params: Record<string, string>, publicKeyPem: strin
 class MockGateway implements PaymentGateway {
   readonly name: PaymentProvider = 'mock';
 
+  isConfigured() {
+    // Mock 网关无需密钥；但前端不渲染 Mock 入口（listPaymentMethods 仅遍历真实渠道）
+    return true;
+  }
+
+
   async createOrder(input: CreateOrderInput): Promise<PaymentOrderResult> {
     return {
       provider: 'mock',
@@ -195,6 +203,10 @@ class WeChatPayGateway implements PaymentGateway {
   private get privateKey() { return process.env.WECHAT_PRIVATE_KEY || ''; }
   /** 微信平台证书公钥（PEM），用于回调验签 */
   private get platformCert() { return process.env.WECHAT_PLATFORM_CERT || ''; }
+
+  isConfigured() {
+    return !!(this.mchId && this.apiKey && this.privateKey);
+  }
 
   private ensureConfigured() {
     if (!this.mchId || !this.apiKey || !this.privateKey) {
@@ -316,6 +328,10 @@ class StripeGateway implements PaymentGateway {
   readonly name: PaymentProvider = 'stripe';
   private get secretKey() { return process.env.STRIPE_SECRET_KEY || ''; }
 
+  isConfigured() {
+    return !!this.secretKey;
+  }
+
   private ensureConfigured() {
     if (!this.secretKey) {
       throw new Error('Stripe 未配置：请在 .env 设置 STRIPE_SECRET_KEY');
@@ -384,6 +400,10 @@ class AlipayGateway implements PaymentGateway {
     return process.env.ALIPAY_PUBLIC_KEY ? normalizeAlipayPem(process.env.ALIPAY_PUBLIC_KEY, 'PUBLIC') : '';
   }
   private get gateway() { return process.env.ALIPAY_GATEWAY || 'https://openapi.alipay.com/gateway.do'; }
+
+  isConfigured() {
+    return !!(this.appId && this.privateKey);
+  }
 
   private ensureConfigured() {
     if (!this.appId || !this.privateKey) {
@@ -474,6 +494,22 @@ const gateways: Record<PaymentProvider, PaymentGateway> = {
 
 export function getPaymentGateway(provider: PaymentProvider = 'mock'): PaymentGateway {
   return gateways[provider] || gateways.mock;
+}
+
+/** 各支付渠道展示元信息（顺序即前端展示顺序） */
+export const PAYMENT_METHOD_META: { key: PaymentProvider; label: string }[] = [
+  { key: 'wechat', label: '微信支付' },
+  { key: 'alipay', label: '支付宝' },
+  { key: 'stripe', label: 'Stripe' },
+];
+
+/** 返回各真实支付渠道的「是否已配置」状态，供前端动态展示入口（缺密钥的渠道自动隐藏） */
+export function listPaymentMethods() {
+  return PAYMENT_METHOD_META.map((m) => ({
+    key: m.key,
+    label: m.label,
+    enabled: getPaymentGateway(m.key).isConfigured(),
+  }));
 }
 
 export function isRealGateway(provider: PaymentProvider): boolean {
