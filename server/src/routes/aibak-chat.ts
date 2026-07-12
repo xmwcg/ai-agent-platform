@@ -4,22 +4,15 @@ import { randomBytes } from 'crypto';
 import { AuthRequest, optionalAuth } from '../middleware/auth';
 import { sendError } from '../lib/http-error';
 import { logger } from '../lib/logger';
+import { callCloudbaseChat, AIBAK_MODELS } from '../services/cloudbase-ai.service';
 
 const router = Router();
 
-// CloudBase ai-chat 云函数 HTTP 地址（消耗小程序成长计划免费额度）
+// 图像生成云函数（文生图 / 图生图），默认由 chat 云函数 URL 推导同名 ai-image 函数
 const CLOUDBASE_CHAT_URL = process.env.CLOUDBASE_CHAT_URL ||
   'https://jymkjtools-study-d6eipek12446b18-1450366372.ap-shanghai.app.tcloudbase.com/ai-chat';
-
-// 图像生成云函数（文生图 / 图生图），默认由 chat 云函数 URL 推导同名 ai-image 函数
 const CLOUDBASE_IMAGE_URL = process.env.CLOUDBASE_IMAGE_URL ||
   CLOUDBASE_CHAT_URL.replace(/\/ai-chat$/, '/ai-image');
-
-// 免费额度下支持的 4 个模型（2 文本 + 2 图像）
-const AIBAK_MODELS = {
-  text: ['hy3', 'hy3-preview'],
-  image: ['HY-Image-3.0-Plus-4090-Tob-v1.0', 'HY-Image-v3.0-I2I-ToB-v1.0.1'],
-};
 
 // 图生图参考图临时托管：CloudBase 图像网关对请求体大小有限制，base64 直传会 413，
 // 因此后端把参考图存内存并暴露公网 URL（经 nginx /api 反代），让函数通过 image_urls 回源拉取。
@@ -44,22 +37,9 @@ const SYSTEM_PROMPT = '你是 aibak.site (Reasonix AI) 平台的 AI 助手。请
 
 /**
  * 调用 CloudBase ai-chat 云函数（小程序成长计划免费额度）生成文本。
- * 抽离为独立函数，供知识库 RAG 等模块在 chat provider 不可用时的兜底调用。
- * @returns 模型返回的文本
- * @throws 当云函数不可用或返回失败时
+ * 已抽离至 services/cloudbase-ai.service，此处仅做再导出以兼容既有引用。
  */
-export async function callCloudbaseChat(
-  chatMessages: Array<{ role: string; content: string }>,
-  model = 'hy3',
-): Promise<string> {
-  const response = await axios.post(
-    CLOUDBASE_CHAT_URL,
-    { messages: chatMessages, model, stream: false },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 60000 },
-  );
-  if (response.data?.success) return response.data.text as string;
-  throw new Error(response.data?.error || 'CLOUDBASE_ERROR');
-}
+export { callCloudbaseChat };
 
 /**
  * POST /api/aibak/chat

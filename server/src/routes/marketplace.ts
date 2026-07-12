@@ -10,6 +10,7 @@ import { CreditsTransaction } from '../models/CreditsTransaction';
 import { getCreditsCost, MarketplaceResource } from '../config/credits-pricing';
 import { recordApiRevenue } from '../services/marketplace-revenue.service';
 import { RESOURCE_PRICING_RANGE } from '../config/marketplace-fee';
+import { generateText } from '../services/ai-text.service';
 import {
   generateApiKey,
   hashKey,
@@ -203,9 +204,14 @@ router.get('/usage', requireAuth, async (req: AuthRequest, res: Response) => {
 /** 按量计费端点：开放 API 市场 - 对话 */
 router.post('/v1/chat', enforceApiKey({ resource: 'chat' }), validate(chatSchema), async (req: AuthRequest, res: Response) => {
   try {
-    const { prompt } = req.body as { prompt: string };
+    const { prompt, system } = req.body as { prompt: string; system?: string };
     const key = (req as ApiKeyRequest).apiKey;
-    const reply = `(API 调用) 已处理：${String(prompt).slice(0, 60)}…`;
+    // 真实推理：优先第三方模型，未配置时回退 CloudBase 免费云函数，绝不返回假数据
+    const { text: reply } = await generateText({
+      system: system || '你是一个专业 AI 助手，请用简洁、准确的语言回答用户问题。',
+      user: prompt,
+      temperature: 0.7,
+    });
     // 异步记录用量日志（不阻塞响应），支撑账单导出与积分抵扣审计
     void logApiUsage({
       keyId: String(key._id),
@@ -225,8 +231,8 @@ router.post('/v1/chat', enforceApiKey({ resource: 'chat' }), validate(chatSchema
       RESOURCE_PRICING_RANGE.chat.default,
     );
     res.json({
-      provider: 'marketplace',
-      model: 'reasonix-route',
+      provider: 'aibak-unified',
+      model: 'aibak-unified-router',
       reply,
       apiKeyId: String(key._id),
       remaining: remainingQuota(key as unknown as ApiKeyQuotaState),
