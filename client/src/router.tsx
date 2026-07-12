@@ -36,6 +36,7 @@ import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import PointsCenter from '@/pages/PointsCenter';
 import DistributionPage from '@/pages/DistributionPage';
+import OrderDetailPage from '@/pages/OrderDetailPage';
 import AibakChat from '@/pages/AibakChat';
 import AboutPage from '@/pages/AboutPage';
 import ContactPage from '@/pages/ContactPage';
@@ -92,6 +93,7 @@ const router = createBrowserRouter([
       { path: 'privacy', element: <PrivacyPage /> },
       { path: 'points-center', element: <PointsCenter /> },
       { path: 'distribution', element: <DistributionPage /> },
+      { path: 'orders/:orderNo', element: <OrderDetailPage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'contact', element: <ContactPage /> },
       { path: 'partners', element: <JoinPage /> },

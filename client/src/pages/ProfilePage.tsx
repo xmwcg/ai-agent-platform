@@ -51,6 +51,8 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [creditsHistoryLoading, setCreditsHistoryLoading] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -88,6 +90,13 @@ export default function ProfilePage() {
     } catch { /* 忽略 */ }
   }, []);
   useEffect(() => { loadReferral(); }, [loadReferral]);
+
+  const loadOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    try { const res: any = await billingAPI.getOrders(); if (res?.data) setOrders(res.data); } catch { /* 忽略 */ }
+    setOrdersLoading(false);
+  }, []);
+  useEffect(() => { loadOrders(); }, [loadOrders]);
 
   useEffect(() => { if (authUser?.name) setProfileName(authUser.name); }, [authUser?.name]);
 
@@ -158,6 +167,9 @@ export default function ProfilePage() {
     },
     {
       key: 'byok', label: <span><KeyOutlined /> 媒体 Key</span>,
+    },
+    {
+      key: 'orders', label: <span><CreditCardOutlined /> 订单查询</span>,
     },
   ];
 
@@ -325,12 +337,63 @@ export default function ProfilePage() {
     </Card>
   );
 
+  const renderOrders = () => (
+    <Card style={cardStyle}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Title level={5} style={{ color: 'var(--text-primary)', margin: 0 }}>我的订单</Title>
+        <Button size="small" loading={ordersLoading} onClick={loadOrders}>刷新</Button>
+      </div>
+      <Table
+        dataSource={orders}
+        rowKey="orderNo"
+        size="small"
+        pagination={{ pageSize: 8 }}
+        locale={{ emptyText: '暂无订单记录' }}
+        columns={[
+          {
+            title: '订单号', dataIndex: 'orderNo', key: 'orderNo',
+            render: (v: string) => <Text style={{ fontFamily: 'monospace', fontSize: 12 }}>{v}</Text>,
+          },
+          {
+            title: '类型', dataIndex: 'orderType', key: 'orderType',
+            render: (t: string) => t === 'credits_pack' ? <Tag>积分包</Tag> : <Tag color="blue">会员</Tag>,
+          },
+          {
+            title: '金额', dataIndex: 'amount', key: 'amount',
+            render: (v: number) => <Text strong>¥{((v || 0) / 100).toFixed(2)}</Text>,
+          },
+          {
+            title: '状态', dataIndex: 'status', key: 'status',
+            render: (s: string) => {
+              const m: Record<string, { t: string; c: string }> = {
+                pending: { t: '待支付', c: 'gold' }, paid: { t: '已支付', c: 'green' },
+                failed: { t: '失败', c: 'red' }, expired: { t: '过期', c: 'default' }, refunded: { t: '退款', c: 'volcano' },
+              };
+              return <Tag color={m[s]?.c}>{m[s]?.t || s}</Tag>;
+            },
+          },
+          {
+            title: '时间', dataIndex: 'createdAt', key: 'createdAt',
+            render: (v: string) => <Text type="secondary" style={{ fontSize: 12 }}>{v ? new Date(v).toLocaleDateString('zh-CN') : '-'}</Text>,
+          },
+          {
+            title: '操作', key: 'action',
+            render: (_: any, row: any) => (
+              <Button type="link" size="small" onClick={() => navigate(`/orders/${row.orderNo}`)}>明细</Button>
+            ),
+          },
+        ]}
+      />
+    </Card>
+  );
+
   const tabContentMap: Record<string, React.ReactNode> = {
     overview: renderOverview(),
     security: renderSecurity(),
     points: renderPoints(),
     referral: renderReferral(),
     byok: renderByok(),
+    orders: renderOrders(),
   };
 
   return (
