@@ -419,7 +419,7 @@ export const pointsAPI = {
   awardTask: (taskType: string) => apiClient.post('/points/task', { taskType }),
 };
 
-// CloudBase AI 免费用量对话
+// CloudBase AI 免费用量对话 / 图像生成（小程序成长计划免费额度）
 export const aibakAPI = {
   chat: (data: {
     message?: string;
@@ -428,6 +428,14 @@ export const aibakAPI = {
     model?: 'hy3' | 'hy3-preview';
     stream?: boolean;
   }) => apiClient.post('/aibak/chat', data),
+  // 图像生成（文生图 / 图生图），model 为 HY-Image-* 系列
+  image: (data: {
+    model: string;
+    prompt: string;
+    size?: string;
+    imageBase64?: string;
+    imageUrl?: string;
+  }) => apiClient.post('/aibak/image', data),
   status: () => apiClient.get('/aibak/status'),
 };
 
