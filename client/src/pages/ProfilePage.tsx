@@ -14,7 +14,7 @@ import {
   SettingOutlined, BellOutlined, LockOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { billingAPI, profileAPI, marketplaceAPI, byokAPI, extractApiError, MediaByokKey } from '@/services/api';
+import { billingAPI, profileAPI, referralAPI, marketplaceAPI, byokAPI, extractApiError, MediaByokKey } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { usePaymentStore } from '@/stores/payment';
 import { useUIStore } from '@/stores/ui';
@@ -45,6 +45,10 @@ export default function ProfilePage() {
   const [byokForm, setByokForm] = useState({ provider: 'hunyuan', secretId: '', secretKey: '', enabled: true });
   const [byokSaving, setByokSaving] = useState(false);
   const [creditsHistory, setCreditsHistory] = useState<any[]>([]);
+  const [referralStats, setReferralStats] = useState<any>(null);
+  const [referralLink, setReferralLink] = useState('');
+  const [profileName, setProfileName] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
   const [creditsHistoryLoading, setCreditsHistoryLoading] = useState(false);
 
   useEffect(() => {
@@ -72,6 +76,30 @@ export default function ProfilePage() {
     setByokLoading(false);
   };
   useEffect(() => { loadByokKeys(); }, []);
+
+  // 加载真实分销统计与邀请链接（替换原写死的收益/推荐人数与 demo 链接）
+  const loadReferral = useCallback(async () => {
+    try {
+      const statsRes: any = await referralAPI.stats();
+      setReferralStats(statsRes?.data || null);
+      const codeRes: any = await referralAPI.code();
+      setReferralLink(codeRes?.data?.referralLink || codeRes?.data?.referralCode ? `https://aibak.site/register?ref=${codeRes.data.referralCode}` : '');
+    } catch {}
+  }, []);
+  useEffect(() => { loadReferral(); }, [loadReferral]);
+
+  useEffect(() => { if (authUser?.name) setProfileName(authUser.name); }, [authUser?.name]);
+
+  // 真实保存个人资料（PUT /auth/profile，仅后端支持的字段）
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      await profileAPI.update({ name: profileName || authUser?.name || '' });
+      message.success('资料已保存');
+      fetchProfileAction();
+    } catch (err) { message.error(extractApiError(err, '保存失败')); }
+    setSavingProfile(false);
+  };
 
   const handleSaveByok = async () => {
     if (!byokForm.secretKey.trim()) { message.warning('请输入 Secret Key'); return; }
@@ -151,8 +179,8 @@ export default function ProfilePage() {
           <Divider style={{ margin: '12px 0', borderColor: 'var(--border)' }} />
           <Row gutter={16}>
             <Col span={8}><Statistic title="积分" value={credits} prefix={<GiftOutlined />} valueStyle={{ color: 'var(--text-primary)' }} /></Col>
-            <Col span={8}><Statistic title="总收益" value={378.80} prefix={<DollarOutlined />} precision={2} suffix="¥" valueStyle={{ color: 'var(--brand-primary)' }} /></Col>
-            <Col span={8}><Statistic title="推荐人" value={3} prefix={<TeamOutlined />} suffix="人" valueStyle={{ color: 'var(--text-primary)' }} /></Col>
+            <Col span={8}><Statistic title="总收益" value={referralStats ? (referralStats.pendingCommission + referralStats.settledCommission) : 0} prefix={<DollarOutlined />} precision={2} suffix="¥" valueStyle={{ color: 'var(--brand-primary)' }} /></Col>
+            <Col span={8}><Statistic title="推荐人" value={referralStats?.totalReferrals ?? 0} prefix={<TeamOutlined />} suffix="人" valueStyle={{ color: 'var(--text-primary)' }} /></Col>
           </Row>
           <Divider style={{ borderColor: 'var(--border)' }} />
           <Space>
@@ -191,11 +219,19 @@ export default function ProfilePage() {
     <Card style={cardStyle}>
       <Title level={5} style={{ color: 'var(--text-primary)' }}><LockOutlined /> 账户安全</Title>
       <Form layout="vertical" style={{ maxWidth: 500 }}>
-        <Form.Item label="手机号"><Input prefix={<MobileOutlined />} value={authUser?.phone || ''} placeholder="绑定手机号" /></Form.Item>
-        <Form.Item label="微信号"><Input prefix={<WechatOutlined />} value={authUser?.wechatOpenid ? '已绑定' : ''} placeholder="绑定微信" /></Form.Item>
+        <Form.Item label="昵称">
+          <Input
+            prefix={<UserOutlined />}
+            value={profileName}
+            placeholder="设置你的昵称"
+            onChange={(e) => setProfileName(e.target.value)}
+          />
+        </Form.Item>
+        <Form.Item label="手机号"><Input prefix={<MobileOutlined />} value={authUser?.phone || ''} placeholder="绑定手机号（备案后开放）" disabled /></Form.Item>
+        <Form.Item label="微信号"><Input prefix={<WechatOutlined />} value={authUser?.wechatOpenid ? '已绑定' : ''} placeholder="绑定微信（备案后开放）" disabled /></Form.Item>
         <Form.Item label="邮箱"><Input prefix={<MailOutlined />} value={authUser?.email || ''} disabled /><Text type="secondary" style={{ fontSize: 12 }}>作为登录账号暂不可修改</Text></Form.Item>
-        <Form.Item label="新密码"><Input.Password placeholder="输入新密码（留空不修改）" /></Form.Item>
-        <Button type="primary" onClick={() => message.success('安全设置已保存')}>保存设置</Button>
+        <Form.Item label="新密码"><Input.Password placeholder="修改密码功能即将上线" disabled /></Form.Item>
+        <Button type="primary" loading={savingProfile} onClick={handleSaveProfile}>保存资料</Button>
       </Form>
     </Card>
   );
@@ -234,7 +270,7 @@ export default function ProfilePage() {
       <Col xs={24} md={8}>
         <Card style={cardStyle}>
           <Title level={5} style={{ color: 'var(--text-primary)' }}>你的邀请链接</Title>
-          <Input value={`https://aibak.site/ref=${authUser?._id || 'demo'}`} readOnly />
+          <Input value={referralLink || `https://aibak.site/register?ref=${authUser?.referralCode || authUser?._id || ''}`} readOnly />
           <Space style={{ marginTop: 12 }} wrap>
             <Button icon={<QrcodeOutlined />} onClick={() => setShareModal(true)}>分享二维码</Button>
             <Button icon={<ExportOutlined />}>复制链接</Button>
