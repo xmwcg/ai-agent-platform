@@ -73,9 +73,13 @@ exports.main = async (event, context) => {
   const ai = app.ai();
   const imageModel = ai.createImageModel('hunyuan-image');
 
-  // 混元图像 3.0 系列需关闭改写与思考，否则上游易返回 400
-  const v3Params = /Image-3\.0/i.test(model)
-    ? { revise: { value: false }, enable_thinking: { value: false } }
+  // 混元图像 3.0 系列：关闭 prompt 改写；图生图(I2I)模型不支持 enable_thinking，仅文生图加
+  const isV3 = /Image-3\.0/i.test(model);
+  const v3Params = isV3
+    ? {
+        revise: { value: false },
+        ...(isImage2Image ? {} : { enable_thinking: { value: false } }),
+      }
     : {};
 
   try {
