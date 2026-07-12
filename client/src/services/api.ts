@@ -428,9 +428,10 @@ export const aibakAPI = {
   }) => apiClient.post('/aibak/chat', data),
   status: () => apiClient.get('/aibak/status'),
 };
-  // 导入工作流包（单个 / 数组 / {workflows:[...]}）
+
+// 工作流（Agent 工具流）导入导出 API
+export const workflowAPI = {
   importPackage: (pkg: any) => apiClient.post('/wf/import', pkg),
-  // 导出单个工作流为包
   exportPackage: (id: string, download = false) =>
     apiClient.get(`/wf/${id}/export${download ? '?download=1' : ''}`, {
       responseType: download ? 'blob' : 'json',
