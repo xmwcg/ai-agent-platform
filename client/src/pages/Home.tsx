@@ -217,15 +217,15 @@ export default function Home() {
             background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
             color: '#e2e8f0', borderRadius: 20, padding: '2px 14px', fontSize: 12, marginBottom: 16,
           }}>
-            <StarFilled style={{ marginRight: 4 }} />商业级 AI Agent 平台 · v1.1
+            <StarFilled style={{ marginRight: 4 }} />商业级 AI Agent 平台 · aibak.site
           </Tag>
           <h1 style={{
-            color: '#fff', fontSize: isMobile ? 28 : 44, fontWeight: 800,
+            color: '#fff', fontSize: isMobile ? 26 : 44, fontWeight: 800,
             background: 'linear-gradient(135deg, #a29bfe, #81ecec, #fdcb6e)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             margin: '0 0 12px', lineHeight: 1.2,
           }}>
-            AI Agent 商业平台
+            AIbak · 打造您的全站 AI 应用平台
           </h1>
           <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: isMobile ? 14 : 17 }}>
             一站式智能生产力平台 —— 知识管理 · AI 对话 · 智能工具 · 团队协作 · API 变现

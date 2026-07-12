@@ -17,6 +17,13 @@ import {
 import { useAuthStore } from '@/stores/auth';
 import { useUIStore } from '@/stores/ui';
 import FreeExperienceFab from '@/components/FreeExperienceFab';
+import ScrollFab from '@/components/ScrollFab';
+import AppFooter from '@/components/AppFooter';
+
+// ─── 品牌常量 ───
+const BRAND_NAME = 'AIbak';
+const BRAND_SLOGAN = '打造您的全站 AI 应用平台';
+const BRAND_URL = 'https://aibak.site';
 
 const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
@@ -235,28 +242,37 @@ function App() {
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
-  // ─── 渲染 Logo ───
+  // ─── 渲染 Logo（左上角品牌，悬浮锁定；点击回首页） ───
   const renderLogo = (collapsed: boolean) => (
     <div
-      onClick={() => { navigate('/'); if (isMobile) setSidebarMobileOpen(false); }}
+      onClick={() => { navigate('/'); window.scrollTo({ top: 0, behavior: 'smooth' }); if (isMobile) setSidebarMobileOpen(false); }}
+      title={`${BRAND_NAME} · ${BRAND_SLOGAN}`}
       style={{
-        height: 56, padding: collapsed ? '12px 0' : '12px 20px',
+        position: 'sticky', top: 0, zIndex: 5,
+        height: collapsed ? 56 : 64, padding: collapsed ? '12px 0' : '12px 16px',
         display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
         transition: 'all 0.2s ease',
+        background: 'var(--bg-sidebar)',
+        borderBottom: '1px solid var(--border-light)',
       }}
     >
       <div style={{
-        width: 32, height: 32, borderRadius: 10,
+        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
         background: 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: '0 2px 8px rgba(108,92,231,0.3)',
       }}>
-        <ThunderboltOutlined style={{ color: '#fff', fontSize: 16 }} />
+        <ThunderboltOutlined style={{ color: '#fff', fontSize: 17 }} />
       </div>
       {!collapsed && (
-        <span style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
-          Reasonix AI
-        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, overflow: 'hidden' }}>
+          <span style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+            {BRAND_NAME}
+          </span>
+          <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+            {BRAND_SLOGAN}
+          </span>
+        </div>
       )}
     </div>
   );
@@ -449,13 +465,26 @@ function App() {
                 style={{ fontSize: 16, width: 36, height: 36 }}
               />
             )}
-            {/* 标题 */}
-            <span style={{
-              fontWeight: 700, fontSize: isMobile ? 15 : 18,
-              color: 'var(--text-primary)', letterSpacing: '-0.3px',
-            }}>
-              AI Agent 智能体平台
-            </span>
+            {/* 品牌标题（悬浮锁定左上角，链接官网 aibak.site） */}
+            <a
+              href={BRAND_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="访问官网 aibak.site"
+              style={{ display: 'flex', alignItems: 'baseline', gap: 8, textDecoration: 'none' }}
+            >
+              <span style={{
+                fontWeight: 800, fontSize: isMobile ? 16 : 19,
+                color: 'var(--text-primary)', letterSpacing: '-0.3px',
+              }}>
+                {BRAND_NAME}
+              </span>
+              {!isMobile && (
+                <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--text-tertiary)' }}>
+                  {BRAND_SLOGAN}
+                </span>
+              )}
+            </a>
           </Space>
 
           {/* 面包屑（桌面） */}
@@ -510,6 +539,8 @@ function App() {
           }}>
             <Outlet />
           </div>
+          {/* ─── 全局页脚 ─── */}
+          <AppFooter />
         </Content>
 
         {/* ─── 移动端底部 TabBar ─── */}
@@ -520,6 +551,9 @@ function App() {
 
       {/* 全局左侧悬浮入口：免费体验 AI 工具（4 个免费模型） */}
       <FreeExperienceFab />
+
+      {/* 右下角悬浮工具条：返回顶部 / 返回首页 / 上下翻页 */}
+      <ScrollFab />
     </Layout>
   );
 }
