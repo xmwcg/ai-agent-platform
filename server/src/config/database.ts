@@ -75,6 +75,56 @@ class MemoryRedis {
     const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
     return Array.from(this.store.keys()).filter((k) => regex.test(k));
   }
+  // Queue 操作（兼容 ioredis 接口）
+  async lpush(key: string, ...values: string[]): Promise<number> {
+    const arr = this._getList(key);
+    // LPUSH 头部插入
+    for (const v of values.reverse()) {
+      arr.unshift(v);
+    }
+    this._saveList(key, arr);
+    return arr.length;
+  }
+  async brpop(key: string, timeout: number): Promise<[string, string] | null> {
+    const arr = this._getList(key);
+    if (arr.length > 0) {
+      const val = arr.pop()!;
+      this._saveList(key, arr);
+      return [key, val];
+    }
+    // 简易阻塞模拟（MemoryRedis 场景下快速轮询，不真阻塞）
+    const deadline = Date.now() + timeout * 1000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 200));
+      const arr2 = this._getList(key);
+      if (arr2.length > 0) {
+        const val = arr2.pop()!;
+        this._saveList(key, arr2);
+        return [key, val];
+      }
+    }
+    return null; // 超时
+  }
+  async llen(key: string): Promise<number> {
+    return this._getList(key).length;
+  }
+  /** 建立连接（MemoryRedis 不需要，兼容使用） */
+  async connect(): Promise<void> { /* noop */ }
+  /** 断开连接（MemoryRedis 不需要，兼容使用） */
+  async quit(): Promise<void> { /* noop */ }
+  /** 事件监听（内存版不支持） */
+  on(_event: string, _cb: Function): void { /* noop */ }
+  // 内部辅助
+  private _getList(key: string): string[] {
+    try {
+      return JSON.parse(this.store.get(key) || '[]');
+    } catch {
+      return [];
+    }
+  }
+  private _saveList(key: string, arr: string[]): void {
+    this.store.set(key, JSON.stringify(arr));
+  }
   private cleanup(key: string) {
     const exp = this.expirations.get(key);
     if (exp && Date.now() > exp) { this.store.delete(key); this.expirations.delete(key); }
@@ -92,16 +142,16 @@ try {
     maxRetriesPerRequest: 3,
     lazyConnect: true,
   });
-  // 若 1.5s 内未连上则降级为内存版
+  // 若 10s 内未连上则降级为内存版（给 Redis 充足的启动时间）
   const fallbackTimer = setTimeout(() => {
     if (redisClient.status !== 'ready') {
-      console.warn('⚠️  Redis 不可用，已降级为内存模式（配额/限流仍可用）');
+      console.warn('⚠️  Redis 不可用（10s 超时），已降级为内存模式（配额/限流仍可用）');
       redisClient = new MemoryRedis() as any;
     }
-  }, 1500);
+  }, 10000);
   redisClient.on('ready', () => { clearTimeout(fallbackTimer); console.log('✅ Redis connected'); });
-  redisClient.on('error', () => { /* 静默，等待 fallback */ });
-  redisClient.connect().catch(() => { /* 等待 fallback */ });
+  redisClient.on('error', (err: any) => { console.warn(`Redis 连接错误: ${err?.message || err}`); });
+  redisClient.connect().catch((err: any) => { console.warn(`Redis connect 失败: ${err?.message || err}`); });
 } catch {
   redisClient = new MemoryRedis() as any;
 }
