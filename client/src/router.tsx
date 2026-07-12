@@ -36,6 +36,10 @@ import TermsPage from '@/pages/TermsPage';
 import PrivacyPage from '@/pages/PrivacyPage';
 import PointsCenter from '@/pages/PointsCenter';
 import AibakChat from '@/pages/AibakChat';
+import AboutPage from '@/pages/AboutPage';
+import ContactPage from '@/pages/ContactPage';
+import JoinPage from '@/pages/JoinPage';
+import CookiesPage from '@/pages/CookiesPage';
 
 const router = createBrowserRouter([
   {
@@ -86,6 +90,10 @@ const router = createBrowserRouter([
       { path: 'terms', element: <TermsPage /> },
       { path: 'privacy', element: <PrivacyPage /> },
       { path: 'points-center', element: <PointsCenter /> },
+      { path: 'about', element: <AboutPage /> },
+      { path: 'contact', element: <ContactPage /> },
+      { path: 'join', element: <JoinPage /> },
+      { path: 'cookies', element: <CookiesPage /> },
       { path: '*', element: <div>404 - 页面未找到</div> }
     ]
   }
