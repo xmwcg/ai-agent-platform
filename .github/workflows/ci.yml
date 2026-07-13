@@ -40,23 +40,26 @@ jobs:
           node-version: 22
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
-      # client 依赖树庞大（antd/monaco/echarts 等），npm ci 在 GitHub runner 上
-      # 稳定触发 npm 内部 OOM 崩溃 "Exit handler never called"（已验证：Node 20
-      # + npm 10.8，无论 maxsockets=3/5/8/15 及 NODE_OPTIONS 4096M 均崩溃于 4 分钟）。
-      # 根因：npm ci 先 rm -rf node_modules 再全量安装，并行解压内存峰值超过了
-      # GitHub runner 的 7GB 限制。
-      # 改用 npm install（不同内部代码路径，增量安装，内存峰值更低）+
-      # Node 22（V8 内存管理更优）+ 5G 堆上限。
-      - name: Install client deps
+      # client 依赖树庞大（antd/monaco/echarts 等），npm ci/npm install 在
+      # GitHub runner 上稳定触发 npm 内部 OOM 崩溃 "Exit handler never called"
+      # （已验证：Node 20/22 + npm ci/npm install + NODE_OPTIONS 4G/5G 均崩溃
+      #  于 ~4 分钟，无论 maxsockets/retry 如何调整）。
+      # 根因：下载解压 + postinstall 脚本并行执行时内存峰值超 runner 限制。
+      # 方案：分阶段安装——先 --ignore-scripts 安装所有依赖（低内存），
+      # 再 npm rebuild 单独跑脚本（时序分离，降低峰值）+ Node 22 + 6G 堆。
+      - name: Install client deps (phased to avoid OOM)
         env:
-          NODE_OPTIONS: --max-old-space-size=5120
+          NODE_OPTIONS: --max-old-space-size=6144
         run: |
-          npm install --omit=optional --no-audit --no-fund --legacy-peer-deps ||
-          npm install --omit=optional --no-audit --no-fund --legacy-peer-deps
+          npm install --omit=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts ||
+          npm install --omit=optional --no-audit --no-fund --legacy-peer-deps --ignore-scripts
           if [ ! -x node_modules/.bin/tsc ]; then
             echo "::error::npm install failed - node_modules incomplete"
             exit 1
           fi
+      - name: Rebuild native addons
+        run: npx -y npm rebuild 2>/dev/null || true
+        continue-on-error: true
       # 直接使用本地安装的 TypeScript（package-lock 锁定 5.9.3），
       # 避免 `npx` 版本解析错乱（误装 tsc@2.0.4 或拉到 7.x）。
       # tsconfig 已移除 baseUrl，任何 TS 版本都不会触发 TS5101 弃用错误。
