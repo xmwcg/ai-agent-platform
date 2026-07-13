@@ -204,10 +204,17 @@ describe('P0-2 API 市场积分扣减集成测试', () => {
     expect(after.body.data.credits).toBe(creditsBefore + 500);
 
     // 验证积分明细中有 purchase 记录
-    const history = await request(app)
-      .get('/api/marketplace/credits/history?type=purchase')
-      .set(auth());
-    const purchaseRecords = history.body.data.items.filter((i: any) => i.orderNo === orderNo);
+    // 注意：purchase 明细由 billing 以「未 await 的异步写入」落地，存在竞态，
+    // 因此轮询等待其写入完成（最长约 4s），避免偶发 flake。
+    let purchaseRecords: any[] = [];
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const history = await request(app)
+        .get('/api/marketplace/credits/history?type=purchase')
+        .set(auth());
+      purchaseRecords = (history.body?.data?.items || []).filter((i: any) => i.orderNo === orderNo);
+      if (purchaseRecords.length >= 1) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
     expect(purchaseRecords.length).toBe(1);
     expect(purchaseRecords[0].amount).toBe(500);
   });
