@@ -1,0 +1,42 @@
+name: Deploy to Server
+
+# 当 main 分支有新提交（含手机端在 GitHub 直接改代码）时，
+# 自动把代码推送到服务器裸仓库，触发服务器 post-receive 钩子完成部署。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # 允许在 GitHub 网页手动点按钮触发部署
+
+# 同一时间只跑一个部署，避免并发互相踩踏
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取完整代码历史
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 必须完整历史，才能 push 到服务器裸仓库
+
+      - name: 配置服务器 SSH 部署密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 159.75.124.59 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 推送到服务器（触发自动部署）
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+          git remote add prod ssh://root@159.75.124.59/opt/ai-agent-platform.git || \
+            git remote set-url prod ssh://root@159.75.124.59/opt/ai-agent-platform.git
+          echo "==> 推送 $GITHUB_SHA 到服务器 main，服务器将自动构建部署"
+          git push prod HEAD:main
+
+      - name: 部署已触发
+        run: echo "已推送到服务器，服务器 post-receive 钩子正在后台构建部署（约 2-5 分钟上线）。"
