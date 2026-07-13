@@ -39,9 +39,9 @@ describe('媒体生成 - 多厂商 Provider 抽象', () => {
     expect(q.outputUrl).toContain('data:image/svg+xml'); // Mock 占位图
   });
 
-  it('列出 5 个厂商，真实厂商默认未配置、Mock 始终可用', () => {
+  it('列出 6 个厂商，真实厂商默认未配置、Mock 始终可用', () => {
     const list = listMediaProviders();
-    expect(list.length).toBe(5);
+    expect(list.length).toBe(6);
     const real = list.filter((p) => p.name !== 'mock');
     expect(real.every((p) => p.configured === false)).toBe(true);
     expect(list.find((p) => p.name === 'mock')!.configured).toBe(true);

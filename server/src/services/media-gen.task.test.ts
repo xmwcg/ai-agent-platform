@@ -9,9 +9,9 @@ describe('媒体生成 - 异步任务与厂商抽象', () => {
     delete process.env.MONEY_PRINTER_TURBO_URL;
   });
 
-  it('listMediaProviders 含 5 个厂商，Mock 始终可用、真实厂商默认未配置', () => {
+  it('listMediaProviders 含 6 个厂商，Mock 始终可用、真实厂商默认未配置', () => {
     const list = listMediaProviders();
-    expect(list.length).toBe(5);
+    expect(list.length).toBe(6);
     expect(list.find((p) => p.name === 'mock')!.configured).toBe(true);
     expect(list.filter((p) => p.name !== 'mock').every((p) => p.configured === false)).toBe(true);
   });

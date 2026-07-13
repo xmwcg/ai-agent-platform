@@ -3,6 +3,16 @@ import { planGeneratorService } from '../services/plan-generator.service';
 import { fileConvertService, isConversionSupported } from '../services/file-convert.service';
 import { mediaGenService } from '../services/media-gen.service';
 
+// 单元测试对外部大模型做 Mock：避免 CI 无密钥/网络时，方案生成、翻译去调用真实 LLM 导致超时。
+// 真正的模型调用由集成测试/线上环境覆盖。
+jest.mock('../services/ai-text.service', () => ({
+  generateText: jest.fn(async () => ({
+    text: '# 测试方案\n## 大纲\n核心要点一\n核心要点二',
+    provider: 'mock',
+    model: 'mock',
+  })),
+}));
+
 describe('工具模块单元测试', () => {
   describe('翻译服务', () => {
     it('应返回翻译结果与目标语言', async () => {
@@ -24,15 +34,15 @@ describe('工具模块单元测试', () => {
   });
 
   describe('文件转换', () => {
-    it('支持的转换矩阵应识别 docx->pdf', () => {
-      expect(isConversionSupported('docx', 'pdf')).toBe(true);
+    it('支持的转换矩阵应识别 md->html', () => {
+      expect(isConversionSupported('md', 'html')).toBe(true);
     });
     it('不支持的转换应识别 false', () => {
       expect(isConversionSupported('mp4', 'pdf')).toBe(false);
     });
     it('转换应返回输出文件名', async () => {
-      const r = await fileConvertService.convert('doc.docx', 'docx', 'pdf', 'content');
-      expect(r.outputName).toBe('doc.pdf');
+      const r = await fileConvertService.convert('doc.md', 'md', 'html', '# 你好');
+      expect(r.outputName).toBe('doc.html');
     });
     it('不支持的转换应抛错', async () => {
       await expect(fileConvertService.convert('a.mp4', 'mp4', 'pdf')).rejects.toThrow();

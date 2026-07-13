@@ -8,6 +8,11 @@ on:
 jobs:
   server:
     runs-on: ubuntu-latest
+    # 测试所需的非敏感环境变量（仅为让 CI 能跑通登录/加密等逻辑，非生产密钥）
+    env:
+      NODE_ENV: test
+      JWT_SECRET: ci-test-secret-not-for-production-000000
+      ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
     defaults:
       run:
         working-directory: server
