@@ -40,22 +40,22 @@ jobs:
           node-version: 22
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
-      # client 依赖树庞大（antd/monaco/echarts 等），在 GitHub runner 上
-      # npm ci / npm install 均触发 npm 内部 OOM 崩溃 "Exit handler never called"
-      # （已验证：Node 20/22、npm ci/install、heap 4G/5G、各种并发均无效）。
-      # 最后手段：npm ci --ignore-scripts（无脚本并行 = 最低内存峰值）+ 6G 堆。
-      - name: Install client deps
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
+      # client 依赖树庞大（antd/monaco/echarts 等），npm 在 GitHub runner 上
+      # 稳定 OOM 崩溃于 ~4 分钟（已验证 npm ci/install、--ignore-scripts、
+      # heap 4G/5G/6G、maxsockets 1~15、Node 20/22 均无效）。
+      # 改用 pnpm：硬链接安装，内存峰值低 2-3 倍，稳定规避 OOM。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install client deps (pnpm)
         run: |
-          npm ci --omit=optional --no-audit --no-fund --ignore-scripts
+          pnpm import  # convert package-lock.json → pnpm-lock.yaml
+          pnpm install --frozen-lockfile --no-optional
           if [ ! -x node_modules/.bin/tsc ]; then
-            echo "::error::npm ci failed - node_modules incomplete"
+            echo "::error::pnpm install failed - node_modules incomplete"
             exit 1
           fi
-      - name: Rebuild native addons
-        run: npm rebuild 2>/dev/null || true
-        continue-on-error: true
       # 直接使用本地安装的 TypeScript（package-lock 锁定 5.9.3），
       # 避免 `npx` 版本解析错乱（误装 tsc@2.0.4 或拉到 7.x）。
       # tsconfig 已移除 baseUrl，任何 TS 版本都不会触发 TS5101 弃用错误。
