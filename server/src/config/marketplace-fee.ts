@@ -14,6 +14,7 @@ export const MARKETPLACE_FEE = {
     free: 0.30,  // 免费用户：平台抽 30%
     pro: 0.15,   // 专业版：平台抽 15%
     max: 0.10,   // 旗舰版：平台抽 10%
+    team: 0.08,  // 团队版：平台抽 8%（企业客户最优）
   } as Record<string, number>,
 
   /** 最低提现金额（分） */

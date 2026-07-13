@@ -17,7 +17,7 @@ const router = Router();
 
 // 创建订单输入校验（plan 限定已知套餐，period 限定月/年）
 const createOrderSchema: ValidationSchema = {
-  plan: { type: 'string', oneOf: ['free', 'pro', 'max'] },
+  plan: { type: 'string', oneOf: ['free', 'pro', 'max', 'team'] },
   period: { type: 'string', oneOf: ['monthly', 'yearly'] },
   provider: { type: 'string', oneOf: ['mock', 'wechat', 'stripe', 'alipay'] },
 };

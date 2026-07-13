@@ -9,7 +9,7 @@ export interface UserProfile {
   avatar?: string;
   phone?: string;
   wechatOpenid?: string;
-  plan: 'free' | 'pro' | 'max';
+  plan: 'free' | 'pro' | 'max' | 'team';
   membershipExpiresAt?: string;
   credits: number;
   role: 'user' | 'admin';
@@ -103,7 +103,7 @@ export const useAuthStore = create<AuthState>()(
       hasPlan: (plan: string) => {
         const state = get();
         if (!state.user) return false;
-        const plans = ['free', 'pro', 'max'];
+        const plans = ['free', 'pro', 'max', 'team'];
         const userIdx = plans.indexOf(state.user.plan);
         const targetIdx = plans.indexOf(plan);
         return userIdx >= targetIdx;

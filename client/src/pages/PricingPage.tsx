@@ -168,7 +168,7 @@ export default function PricingPage() {
       let res: any;
       if (!isCredits) {
         res = await billingAPI.createOrder({
-          plan: selectedItem.id as 'free' | 'pro' | 'max',
+          plan: selectedItem.id as 'free' | 'pro' | 'max' | 'team',
           period: selectedPeriod,
           provider: payProvider,
         });

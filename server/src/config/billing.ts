@@ -3,9 +3,14 @@
  *
  * 金额单位统一为「分（cent）」，避免浮点误差。
  * limits 中的数值为「单日」配额上限，-1 表示无限制。
+ *
+ * ─── 2026-07 定价重塑：1/10 破局策略 ───
+ * 对标竞品（Coze ¥99/月、Gamma $8–20/月），全系定价压到约 1/10：
+ *   免费版 ¥0 ｜ 专业版 ¥9.9/月 ｜ 旗舰版 ¥19.9/月 ｜ 团队版 ¥99/月
+ * 底气：自带 Key 成本转嫁（毛利→90%+）+ 网关路由最便宜模型 + 轻量架构。
  */
 
-export type PlanId = 'free' | 'pro' | 'max';
+export type PlanId = 'free' | 'pro' | 'max' | 'team';
 
 export type QuotaResource =
   | 'ai_chat' // AI 对话消息数
@@ -36,6 +41,8 @@ export interface Plan {
   features: string[];
   limits: Record<QuotaResource, number>;
   highlighted?: boolean;
+  /** 团队席位（仅团队版 > 1） */
+  seats?: number;
 }
 
 export const PLANS: Record<PlanId, Plan> = {
@@ -72,9 +79,9 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: 'pro',
     name: '专业版',
-    tagline: '高频创作者与团队首选',
-    priceMonthly: 2900,
-    priceYearly: 29000,
+    tagline: '高频创作者性价比之选（竞品 1/10 定价）',
+    priceMonthly: 990, // ¥9.9/月（Coze ¥99 的 1/10）
+    priceYearly: 9900,
     credits: 500,
     features: [
       '每日 500 条 AI 对话',
@@ -105,9 +112,9 @@ export const PLANS: Record<PlanId, Plan> = {
   max: {
     id: 'max',
     name: '旗舰版',
-    tagline: '企业级无限生产力',
-    priceMonthly: 9900,
-    priceYearly: 99000,
+    tagline: '个人无限生产力（竞品 1/5 定价）',
+    priceMonthly: 1990, // ¥19.9/月（Gamma $8–20 的 1/10≈¥）
+    priceYearly: 19900,
     credits: 2000,
     features: [
       '无限 AI 对话',
@@ -134,9 +141,42 @@ export const PLANS: Record<PlanId, Plan> = {
       model_config: 20,
     },
   },
+  team: {
+    id: 'team',
+    name: '团队版',
+    tagline: '多人协作 · 企业级赋能（约竞品团队版 1/10）',
+    priceMonthly: 9900, // ¥99/月（含旗舰权益 + 20 席位）
+    priceYearly: 99000,
+    credits: 5000,
+    seats: 20,
+    features: [
+      '包含旗舰版全部权益',
+      '最多 20 名团队成员',
+      '团队共享知识库与配额池',
+      '团队管理后台与权限分级',
+      '统一账单与成本中心',
+      '优先工单 + 专属客户成功',
+    ],
+    limits: {
+      ai_chat: -1,
+      rag_query: -1,
+      rag_upload: -1,
+      knowledge_create: -1,
+      mcp_create: 20,
+      mcp_call: -1,
+      learning_path: -1,
+      code_explain: -1,
+      translate: -1,
+      file_convert: -1,
+      plan_generate: -1,
+      media_gen: -1,
+      cs_query: -1,
+      model_config: 50,
+    },
+  },
 };
 
-export const PLAN_ORDER: PlanId[] = ['free', 'pro', 'max'];
+export const PLAN_ORDER: PlanId[] = ['free', 'pro', 'max', 'team'];
 
 /** 套餐等级，用于权限比较 */
 export function planRank(plan: PlanId): number {
@@ -185,8 +225,8 @@ export const PLAN_AI_BUDGET_FEN: Record<PlanId, number> = {
   free: 50,    // 约 220 条对话/日的成本上限
   pro: 500,    // 约 2200 条/日
   max: -1,     // 旗舰无限（但仍受日配额闸门约束）
+  team: -1,    // 团队无限（团队成本由席位管理费覆盖）
 };
 
 /** 成本预警阈值：当日成本达到预算的该比例时触发通知告警 */
 export const COST_WARN_RATIO = 0.7;
-

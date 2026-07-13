@@ -20,7 +20,7 @@ export interface IUser extends Document {
   provider: string;
   providerId?: string;
   // 商业变现字段
-  plan: 'free' | 'pro' | 'max';
+  plan: 'free' | 'pro' | 'max' | 'team';
   membershipExpiresAt?: Date;
   credits: number; // 剩余 AI 积分
   // 推荐/分销字段
@@ -101,7 +101,7 @@ const userSchema = new Schema<IUser>(
     // 商业变现字段
     plan: {
       type: String,
-      enum: ['free', 'pro', 'max'],
+      enum: ['free', 'pro', 'max', 'team'],
       default: 'free',
     },
     membershipExpiresAt: {

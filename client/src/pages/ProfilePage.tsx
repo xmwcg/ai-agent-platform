@@ -26,6 +26,7 @@ const PLAN_TAGS: Record<string, { text: string; color: string }> = {
   free: { text: '免费版', color: 'default' },
   pro: { text: '专业版', color: 'blue' },
   max: { text: '旗舰版', color: 'gold' },
+  team: { text: '团队版', color: 'purple' },
 };
 
 export default function ProfilePage() {
