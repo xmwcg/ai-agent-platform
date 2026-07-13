@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npx tsc --noEmit
+      - run: npx -p typescript tsc --noEmit
       - run: npm run lint
 
   superpowers-sync:
