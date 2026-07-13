@@ -36,9 +36,10 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      # 使用本地锁定的 TypeScript 版本（package-lock 中为 5.9.3），
-      # 避免 `npx -p typescript` 拉到最新的 7.x 把 baseUrl 当硬错误（TS5101）。
-      - run: npx tsc --noEmit
+      # 显式锁定 TypeScript 5.9.3（与 package-lock 一致）：
+      # - 避免 `npx -p typescript` 拉到最新 7.x 把 baseUrl 当硬错误（TS5101）
+      # - 避免 `npx tsc` 误装占位包 tsc@2.0.4
+      - run: npx -p typescript@5.9.3 tsc --noEmit
       - run: npm run lint
 
   superpowers-sync:
