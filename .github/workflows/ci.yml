@@ -41,25 +41,22 @@ jobs:
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
       # client 依赖树庞大（antd/monaco/echarts 等），npm ci 在 GitHub runner 上
-      # 偶发 npm 自身崩溃："Exit handler never called"（多为并发解压内存峰值 / 网络争用）。
-      # 关键坑：该崩溃在部分 npm 版本下会「返回退出码 0」，导致 `||` 重试链不触发、
-      # node_modules 安装不完整 → 后续 ./node_modules/.bin/tsc 缺失 → tsc 失败(127)。
-      # 因此改用「带完整性校验的循环」：反复跑 npm ci，直到 tsc 二进制真正存在才视为成功；
-      # 每次不完整都清掉 node_modules 重来，最多 5 次，彻底兜住该假成功崩溃。
-      - name: Install client deps (retry until ready)
+      # 偶发 npm 内部 OOM 崩溃："Exit handler never called"。
+      # 关键坑：该崩溃在部分 npm 版本下「返回退出码 0」，导致 `||` 重试链不触发、
+      # node_modules 不完整 → 后续 tsc 报 127。
+      # 缓解手段：
+      #  - NODE_OPTIONS=4096M 给 npm 更多堆内存（runner 7GB，给 4G 安全）
+      #  - client/.npmrc maxsockets=4 降低并行解压内存峰值
+      #  - `||` 链兜底真实非零退出；完整性检查兜底假成功崩溃，快速失败不盲目重试
+      - name: Install client deps
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: |
-          for i in 1 2 3 4 5; do
-            npm ci --omit=optional --no-audit --no-fund || true
-            if [ -x node_modules/.bin/tsc ]; then
-              echo "install OK on attempt $i"
-              break
-            fi
-            echo "attempt $i incomplete (npm crashed?), retrying..."
-            rm -rf node_modules
-            sleep 5
-          done
+          npm ci --omit=optional --no-audit --no-fund ||
+          npm ci --omit=optional --no-audit --no-fund ||
+          npm ci --omit=optional --no-audit --no-fund
           if [ ! -x node_modules/.bin/tsc ]; then
-            echo "::error::client deps failed to install after retries"
+            echo "::error::npm ci completed but node_modules is incomplete (known npm OOM bug)"
             exit 1
           fi
       # 直接使用 npm ci 安装的本地 TypeScript（package-lock 锁定 5.9.3），
