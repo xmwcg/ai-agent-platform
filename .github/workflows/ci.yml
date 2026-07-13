@@ -41,10 +41,10 @@ jobs:
         with:
           node-version: 20
       - run: npm ci --no-audit --no-fund || npm ci --no-audit --no-fund
-      # 显式锁定 TypeScript 5.9.3（与 package-lock 一致）：
-      # - 避免 `npx -p typescript` 拉到最新 7.x 把 baseUrl 当硬错误（TS5101）
-      # - 避免 `npx tsc` 误装占位包 tsc@2.0.4
-      - run: npx -p typescript@5.9.3 tsc --noEmit
+      # 直接使用 npm ci 安装的本地 TypeScript（package-lock 锁定 5.9.3），
+      # 避免 `npx` 版本解析错乱（误装 tsc@2.0.4 或拉到 7.x）。
+      # tsconfig 已移除 baseUrl，任何 TS 版本都不会触发 TS5101 弃用错误。
+      - run: ./node_modules/.bin/tsc --noEmit
       - run: npm run lint
 
   superpowers-sync:

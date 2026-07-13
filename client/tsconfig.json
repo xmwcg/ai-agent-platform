@@ -20,10 +20,9 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
-    /* Path alias */
-    "baseUrl": ".",
+    /* Path alias（现代 TS 中 paths 不依赖 baseUrl，去掉以避免 TS 7.x 的 baseUrl 弃用错误 TS5101） */
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],
