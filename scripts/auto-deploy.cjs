@@ -189,7 +189,15 @@ function runDaemon() {
               git(['push', REMOTE, BRANCH], (err4) => {
                 if (err4) return finish('❌ git push 失败（服务器部署未触发）');
                 logLine('🚀 已推送到服务器，服务器将自动部署（约 3 分钟）');
-                finish();
+                // 同步备份到 GitHub（失败仅警告，不影响线上部署）
+                git(['push', 'github', BRANCH], (err5) => {
+                  if (err5) {
+                    logLine('⚠️ 服务器已部署，但推送到 GitHub 失败（备份未更新）：' + err5.message);
+                  } else {
+                    logLine('✅ 已同步备份到 GitHub');
+                  }
+                  finish();
+                });
               });
             });
           });
