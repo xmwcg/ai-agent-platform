@@ -5,6 +5,11 @@ on:
     branches: [main, master]
   pull_request:
 
+# 全局提高 Node 内存上限，避免 client 庞大的依赖树（antd 等）
+# 在 runner 上触发 npm 内部崩溃（"Exit handler never called"）。
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+
 jobs:
   server:
     runs-on: ubuntu-latest
@@ -21,7 +26,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+      - run: npm ci --no-audit --no-fund || npm ci --no-audit --no-fund
       - run: npx tsc --noEmit
       - run: npm test
 
@@ -35,7 +40,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+      - run: npm ci --no-audit --no-fund || npm ci --no-audit --no-fund
       # 显式锁定 TypeScript 5.9.3（与 package-lock 一致）：
       # - 避免 `npx -p typescript` 拉到最新 7.x 把 baseUrl 当硬错误（TS5101）
       # - 避免 `npx tsc` 误装占位包 tsc@2.0.4
