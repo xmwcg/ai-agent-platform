@@ -37,29 +37,27 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
       # client 依赖树庞大（antd/monaco/echarts 等），npm ci 在 GitHub runner 上
-      # 偶发 npm 内部 OOM 崩溃："Exit handler never called"。
-      # 关键坑：该崩溃在部分 npm 版本下「返回退出码 0」，导致 `||` 重试链不触发、
-      # node_modules 不完整 → 后续 tsc 报 127。
-      # 缓解手段：
-      #  - NODE_OPTIONS=4096M 给 npm 更多堆内存（runner 7GB，给 4G 安全）
-      #  - client/.npmrc maxsockets=4 降低并行解压内存峰值
-      #  - `||` 链兜底真实非零退出；完整性检查兜底假成功崩溃，快速失败不盲目重试
+      # 稳定触发 npm 内部 OOM 崩溃 "Exit handler never called"（已验证：Node 20
+      # + npm 10.8，无论 maxsockets=3/5/8/15 及 NODE_OPTIONS 4096M 均崩溃于 4 分钟）。
+      # 根因：npm ci 先 rm -rf node_modules 再全量安装，并行解压内存峰值超过了
+      # GitHub runner 的 7GB 限制。
+      # 改用 npm install（不同内部代码路径，增量安装，内存峰值更低）+
+      # Node 22（V8 内存管理更优）+ 5G 堆上限。
       - name: Install client deps
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=5120
         run: |
-          npm ci --omit=optional --no-audit --no-fund ||
-          npm ci --omit=optional --no-audit --no-fund ||
-          npm ci --omit=optional --no-audit --no-fund
+          npm install --omit=optional --no-audit --no-fund --legacy-peer-deps ||
+          npm install --omit=optional --no-audit --no-fund --legacy-peer-deps
           if [ ! -x node_modules/.bin/tsc ]; then
-            echo "::error::npm ci completed but node_modules is incomplete (known npm OOM bug)"
+            echo "::error::npm install failed - node_modules incomplete"
             exit 1
           fi
-      # 直接使用 npm ci 安装的本地 TypeScript（package-lock 锁定 5.9.3），
+      # 直接使用本地安装的 TypeScript（package-lock 锁定 5.9.3），
       # 避免 `npx` 版本解析错乱（误装 tsc@2.0.4 或拉到 7.x）。
       # tsconfig 已移除 baseUrl，任何 TS 版本都不会触发 TS5101 弃用错误。
       - run: ./node_modules/.bin/tsc --noEmit
