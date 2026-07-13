@@ -43,15 +43,15 @@ jobs:
       # client 依赖树庞大（antd 等），npm ci 在 runner 上偶发 npm 内部崩溃
       # ("Exit handler never called"，多为 OOM / 网络并发争用)。
       # 缓解手段：
-      #  - client/.npmrc 已把并发降到 1 并加大重试（maxsockets=1）
       #  - --omit=optional 跳过 esbuild 等可选原生二进制（tsc/lint 用不到），
       #    大幅缩减安装体积与内存占用，避免安装期 OOM
-      #  - 优先使用缓存离线包 + 多次重试
+      #  - client/.npmrc 限制并发（maxsockets=3）并加大重试，降低资源争用
+      #  - 多次重试兜底偶发失败
       # 注意：NODE_OPTIONS 大内存仅留给 tsc/lint 步骤，npm ci 阶段不预留，
       # 避免安装期过度占用内存反而触发 OOM。
       - run: >-
-          npm ci --omit=optional --prefer-offline ||
-          npm ci --omit=optional --prefer-offline ||
+          npm ci --omit=optional ||
+          npm ci --omit=optional ||
           npm ci --omit=optional
       # 直接使用 npm ci 安装的本地 TypeScript（package-lock 锁定 5.9.3），
       # 避免 `npx` 版本解析错乱（误装 tsc@2.0.4 或拉到 7.x）。
