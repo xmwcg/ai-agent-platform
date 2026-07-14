@@ -116,6 +116,10 @@
 
 ---
 
+### 6.7 阶段2 质量治理补充（2026-07-15 续）
+- **巨型文件拆分（续）**：`skills/external-market.ts`（697 行）的静态 `CATALOG` 数据 + 类型定义抽离至 `skills/external-market-catalog.ts`；主文件仅保留校验/获取逻辑（~70 行），对外 `type ExternalMarketEntry` / `CatalogKind` 与 `getCatalog` / `getCatalogEntry` 导出不变。`tsc` 0 错误，external-market 6 用例全过。
+- **`any` 收敛（续）**：`services/sandbox.service.ts` 5 处 `any` 收敛——`catch (e: any)` → `unknown` 并安全提取 `message`；`execFile` 回调去掉 `as any`，直接访问 `ExecFileException` 既有字段（`killed` / `code`），`exitCode` 收敛为 `number`（成功 0 / 数字码原值 / 字符串码归 1）。`tsc` 0 错误，sandbox 24 用例全过。
+
 ## 7. 应急回滚
 
 | 现象 | 处置 |
@@ -131,7 +135,7 @@
 
 - **阶段2 质量治理（进行中）**
   - `any` 持续收敛（其余约 358 处，按鉴权/支付/沙盒等关键路径推进）。
-  - 巨型文件拆分扩展：对 `external-market.ts`(644) / `billing.ts`(627) / `media-gen.service.ts`(612) 等做单文件渐进拆分。
+  - 巨型文件拆分扩展：对 `billing.ts`(627) / `media-gen.service.ts`(612) 等做单文件渐进拆分（`external-market.ts` 已拆出 catalog 数据层）。
   - 前端巨型组件拆分（`ToolsCenterPage` 754 / `WorkflowEditor` 658 / `App` 563 等，最高风险，需客户端构建验证）。
 - **深度硬化**
   - `vm` → `isolated-vm` / 容器隔离 / 专用沙盒微服务。

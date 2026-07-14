@@ -275,14 +275,15 @@ class LocalProvider implements SandboxProvider {
         durationMs: Date.now() - start,
         mode: 'local',
       };
-    } catch (e: any) {
-      const timedOut = /__TIMEOUT__/.test(e.message);
+    } catch (e: unknown) {
+      const em = e instanceof Error ? e.message : String(e);
+      const timedOut = /__TIMEOUT__/.test(em);
       return {
         executionId: genExecutionId(),
         language: req.language,
         status: timedOut ? 'timeout' : 'error',
         stdout: '',
-        stderr: timedOut ? `执行超时（>${cfg.timeoutMs}ms）已被终止。` : e.message || '本地执行失败',
+        stderr: timedOut ? `执行超时（>${cfg.timeoutMs}ms）已被终止。` : em || '本地执行失败',
         exitCode: null,
         durationMs: Date.now() - start,
         mode: 'local',
@@ -300,13 +301,13 @@ function runWithTimeout(
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
     const child = execFile(cmd, args, { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if ((err as any)?.killed) {
+      if (err?.killed) {
         return reject(new Error('__TIMEOUT__'));
       }
-      if (err && (err as any).code === undefined && !(err as any).killed) {
+      if (err && err.code === undefined && !err.killed) {
         return reject(err);
       }
-      resolve({ stdout: stdout || '', stderr: stderr || '', exitCode: (err as any)?.code ?? 0 });
+      resolve({ stdout: stdout || '', stderr: stderr || '', exitCode: err == null ? 0 : typeof err.code === 'number' ? err.code : 1 });
     });
     child.on('error', (e) => reject(e));
   });
@@ -368,13 +369,14 @@ class RemoteProvider implements SandboxProvider {
         durationMs: Date.now() - start,
         mode: 'remote',
       };
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const em = e instanceof Error ? e.message : String(e);
       return {
         executionId: genExecutionId(),
         language: req.language,
         status: 'error',
         stdout: '',
-        stderr: `远程执行器请求失败：${e.message || 'unknown error'}`,
+        stderr: `远程执行器请求失败：${em || 'unknown error'}`,
         exitCode: null,
         durationMs: Date.now() - start,
         mode: 'remote',
