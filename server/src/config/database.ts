@@ -55,6 +55,9 @@ class MemoryRedis {
     this.expirations.set(key, Date.now() + ttl * 1000);
     return 'OK';
   }
+  async incr(key: string): Promise<number> {
+    return this.incrby(key, 1);
+  }
   async incrby(key: string, by: number): Promise<number> {
     this.cleanup(key);
     const cur = Number(this.store.get(key) || 0);
@@ -131,35 +134,64 @@ class MemoryRedis {
   }
 }
 
-let redisClient: any;
-try {
-  redisClient = new Redis(REDIS_URL, {
-    retryStrategy: (times: number) => {
-      const delay = Math.min(times * 50, 2000);
-      console.log(`🔄 Redis reconnecting... attempt ${times}, delay ${delay}ms`);
-      return delay;
-    },
-    maxRetriesPerRequest: 20, // 足够多的重试次数（避免 null 可能的边缘行为）
-    lazyConnect: true,
-    connectTimeout: 5000,
-    // keepAlive 由 OS 默认管理（Docker 桥接网络下自定义 keepalive 可能误判断连）
-    noDelay: true,
-  });
-  // 若 10s 内未连上则降级为内存版（给 Redis 充足的启动时间）
-  const fallbackTimer = setTimeout(() => {
-    if (redisClient.status !== 'ready') {
-      console.warn('⚠️  Redis 不可用（10s 超时），已降级为内存模式（配额/限流仍可用）');
-      redisClient = new MemoryRedis() as any;
-    }
-  }, 10000);
-  redisClient.on('ready', () => { clearTimeout(fallbackTimer); console.log('✅ Redis connected'); });
-  redisClient.on('error', (err: any) => { console.warn(`Redis 连接错误: ${err?.message || err}`); });
-  redisClient.connect().catch((err: any) => { console.warn(`Redis connect 失败: ${err?.message || err}`); });
-} catch {
-  redisClient = new MemoryRedis() as any;
+const memoryRedis = new MemoryRedis();
+
+// 真实 Redis 客户端
+// lazyConnect + 自动重连；启用 TCP keepalive 及时探测并回收僵死（半开）连接，
+// 这是此前「连接僵死但 status 仍为 ready、ping 卡死」的根因所在。
+const realRedis = new Redis(REDIS_URL, {
+  lazyConnect: true,
+  connectTimeout: 5000,
+  maxRetriesPerRequest: 3, // 命令快速失败，避免无限重试挂起
+  retryStrategy: (times: number) => {
+    const delay = Math.min(times * 200, 3000);
+    logger.warn('redis', `连接断开，重连中（第 ${times} 次，delay ${delay}ms）`);
+    return delay; // 始终重试，不放弃
+  },
+  keepAlive: 30, // 30s TCP keepalive，及时探测并回收僵死（半开）连接
+  enableReadyCheck: true,
+  noDelay: true,
+});
+
+realRedis.on('error', (err: any) => {
+  logger.warn('redis', `连接错误: ${err?.message || err}`);
+});
+realRedis.on('end', () => {
+  logger.warn('redis', '连接已断开，retryStrategy 将持续重连');
+});
+
+// 主动发起连接（不阻塞启动；失败由 retryStrategy 兜底重连）
+(realRedis as any).connect?.()
+  ?.catch?.((err: any) => logger.warn('redis', `初始连接失败，将持续重连: ${err?.message || err}`));
+
+function isRedisReady(): boolean {
+  return (realRedis as any).status === 'ready';
 }
 
-export { redisClient };
+/**
+ * Redis 代理：
+ * - 真实连接可用时透传真实 Redis；
+ * - 断开时自动降级内存版（配额/限流仍可用）；
+ * - 一旦真实连接恢复（status 变 ready），后续调用自动切回真实 Redis。
+ *
+ * 取代原「10s 后永久替换为 MemoryRedis」逻辑——该逻辑会导致连接一旦错过
+ * 启动窗口就永久走内存、且无法恢复，也无法区分「真不可用」与「僵死」。
+ */
+const redisClient: any = new Proxy({}, {
+  get(_target, prop: string | symbol) {
+    if (typeof prop === 'symbol') {
+      return (realRedis as any)[prop];
+    }
+    const backend = isRedisReady() ? realRedis : memoryRedis;
+    const value = (backend as any)[prop];
+    if (typeof value === 'function') {
+      return (...args: any[]) => value.apply(backend, args);
+    }
+    return value;
+  },
+});
+
+export { redisClient, realRedis };
 
 // 健康检查
 /**
@@ -203,16 +235,19 @@ export const checkDatabaseHealth = async (): Promise<{ mongodb: boolean; redis: 
   }
   
   // Check Redis（带超时保护）
-  // 仅报告状态，不主动 disconnect/reconnect（避免打断正在使用连接的 queue worker）;
-  // 重连由 ioredis 内置 retryStrategy 负责
+  // 仅对真实连接做 ping；若真实连接僵死（ping 超时），强制断开触发重连，
+  // 避免半开连接一直卡住、健康检查误报且无法自愈。
   try {
-    const isReady = redisClient && redisClient.status === 'ready';
-    if (isReady) {
-      await withTimeout(Promise.resolve(redisClient.ping()), 1500, 'redis');
+    if (isRedisReady()) {
+      await withTimeout(realRedis.ping() as Promise<string>, 1500, 'redis');
+      result.redis = true;
+    } else {
+      result.redis = false;
     }
-    result.redis = isReady;
   } catch (error) {
-    console.error('❌ Redis health check failed:', error);
+    logger.error('database', 'Redis health ping 超时（可能僵死），强制断开以触发重连', error as any);
+    try { (realRedis as any).disconnect?.(); } catch { /* ignore */ }
+    try { (realRedis as any).connect?.().catch?.(() => {}); } catch { /* ignore */ }
     result.redis = false;
   }
   
