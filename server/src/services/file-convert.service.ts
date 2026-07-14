@@ -21,6 +21,12 @@ export interface ConvertResult {
 const TEXT_FAMILY = ['md', 'html', 'txt', 'csv', 'json', 'yaml', 'xml'] as const;
 type TextFmt = (typeof TEXT_FAMILY)[number];
 
+/** 内部：XML 解析中间节点 */
+interface XmlNodeInternal {
+  _children?: Record<string, XmlNodeInternal[]>;
+  [key: string]: unknown;
+}
+
 // 支持矩阵（文本族内部任意互转）
 const CONVERSION_MATRIX: { from: string[]; to: string[]; label: string }[] = [
   { from: [...TEXT_FAMILY], to: [...TEXT_FAMILY], label: '文本格式互转（md/html/txt/csv/json/yaml/xml）' },
@@ -157,15 +163,15 @@ function parseCsv(text: string): string[][] {
 }
 function jsonToCsv(json: string): string {
   const data = JSON.parse(json);
-  const arr = Array.isArray(data) ? data : [data];
+  const arr: Record<string, unknown>[] = Array.isArray(data) ? data : [data];
   if (arr.length === 0) return '';
   const keys = Array.from(new Set(arr.flatMap((o) => o && typeof o === 'object' ? Object.keys(o) : [])));
-  const esc = (v: any) => {
+  const esc = (v: unknown) => {
     const s = v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = [keys.join(',')];
-  for (const o of arr) lines.push(keys.map((k) => esc((o as any)[k])).join(','));
+  for (const o of arr) lines.push(keys.map((k) => esc(o[k])).join(','));
   return lines.join('\n');
 }
 
@@ -181,12 +187,12 @@ function yamlToJson(yaml: string): string {
   return JSON.stringify(result, null, 2);
 }
 
-function parseYamlBlock(lines: string[], idx: number, baseIndent: number): { value: any; next: number } {
+function parseYamlBlock(lines: string[], idx: number, baseIndent: number): { value: unknown; next: number } {
   // 判断是否为序列
   const first = lines[idx];
   const seqMatch = first.trim().match(/^-\s+(.*)$/);
   if (seqMatch) {
-    const arr: any[] = [];
+    const arr: unknown[] = [];
     let i = idx;
     while (i < lines.length) {
       const l = lines[i];
@@ -208,7 +214,7 @@ function parseYamlBlock(lines: string[], idx: number, baseIndent: number): { val
     return { value: arr, next: i };
   }
   // 映射
-  const obj: Record<string, any> = {};
+  const obj: Record<string, unknown> = {};
   let i = idx;
   while (i < lines.length) {
     const l = lines[i];
@@ -232,7 +238,7 @@ function parseYamlBlock(lines: string[], idx: number, baseIndent: number): { val
   }
   return { value: obj, next: i };
 }
-function coerce(v: string): any {
+function coerce(v: string): string | number | boolean | null {
   if (v === 'true') return true;
   if (v === 'false') return false;
   if (v === 'null' || v === '~') return null;
@@ -245,16 +251,16 @@ function xmlToJson(xml: string): string {
   const obj = parseXml(xml);
   return JSON.stringify(obj, null, 2);
 }
-function parseXml(xml: string): any {
+function parseXml(xml: string): unknown {
   const tagRe = /<(\/?)([a-zA-Z0-9_:-]+)([^>]*?)(\/?)>/g;
   let m: RegExpExecArray | null;
-  const root: any = {};
-  let cur: any = root;
-  const stack: any[] = [];
+  const root: XmlNodeInternal = {};
+  let cur: XmlNodeInternal = root;
+  const stack: XmlNodeInternal[] = [];
   while ((m = tagRe.exec(xml))) {
     const [, closing, name, attrs, selfClose] = m;
     if (closing) { cur = stack.pop() || root; continue; }
-    const node: any = {};
+    const node: XmlNodeInternal = {};
     const attrRe = /([a-zA-Z0-9_:-]+)="([^"]*)"/g;
     let am: RegExpExecArray | null;
     while ((am = attrRe.exec(attrs))) node['@' + am[1]] = am[2];
@@ -265,22 +271,22 @@ function parseXml(xml: string): any {
   // 折叠：去掉 _children 包装，提取文本
   return fold(cur);
 }
-function fold(node: any): any {
+function fold(node: XmlNodeInternal | null | undefined): unknown {
   if (!node || !node._children) return node;
-  const out: any = {};
-  for (const [k, arr] of Object.entries(node._children) as [string, any][]) {
-    out[k] = arr.map((n: any) => {
+  const out: Record<string, unknown> = {};
+  for (const [k, arr] of Object.entries(node._children) as [string, XmlNodeInternal[]][]) {
+    out[k] = arr.map((n: XmlNodeInternal) => {
       const { _children, ...rest } = n;
       const child = fold(n);
-      return Object.keys(child).length ? child : (Object.keys(rest).length ? rest : '');
+      return Object.keys(child as Record<string, unknown>).length ? child : (Object.keys(rest).length ? rest : '');
     });
-    if (out[k].length === 1) out[k] = out[k][0];
+    if ((out[k] as unknown[]).length === 1) out[k] = (out[k] as unknown[])[0];
   }
   return out;
 }
 function jsonToXml(json: string): string {
   const data = JSON.parse(json);
-  const ser = (v: any, tag: string): string => {
+  const ser = (v: unknown, tag: string): string => {
     if (v === null || v === undefined) return `<${tag}/>`;
     if (typeof v === 'object') {
       const inner = Object.entries(v).map(([k, val]) => ser(val, k)).join('');

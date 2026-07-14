@@ -136,6 +136,15 @@
 - **测试安全网**：新增 `services/rag-pipeline.test.ts`（7 用例）覆盖分块逻辑（maxChunks 上限 / 空文本 / 重叠触发）/ txt 解析 / 不支持格式报错 / `DEFAULT_CONFIG` 默认值。`tsc` 0 错误，rag-pipeline 7 用例全过。
 - **依赖澄清**：`mammoth`/`pdf-parse`/`cheerio` 在 RAG 路径中被动态 import 实际使用，**非**无用依赖（纠正此前路线图对它们的猜测）。
 
+### 6.10 阶段2 质量治理补充（file-convert any 收敛 + 依赖确认）
+- **`any` 收敛**：`services/file-convert.service.ts` 全部 17 处 `any` 收敛为具体/`unknown` 类型：
+  - `jsonToCsv` 的 `arr`→`Record<string,unknown>[]`，`esc`→`unknown`，去掉 `(o as any)` 断言。
+  - `parseYamlBlock` 返回值 `{value:unknown}`、`arr:unknown[]`、`obj:Record<string,unknown>`；`coerce`→`string|number|boolean|null` 联合类型。
+  - `parseXml`/`fold`：新增 `XmlNodeInternal` 接口（含 `_children?:Record<string,XmlNodeInternal[]>`）替代全部 8 处 `any` 节点类型。
+  - `jsonToXml` 的 `ser` 回调→`unknown`。
+  - `tsc` 0 错误，纯类型变更，运行时行为不变。
+- **依赖确认**：扫 `server/package.json` 全部 19 个生产依赖 + 17 个开发依赖，逐一核实引用——**无未用依赖**。`cos-nodejs-sdk-v5` → `lib/object-storage.ts`（COS 存储）；`mammoth`/`pdf-parse`/`cheerio` → rag-pipeline 动态 import；所有的 `@types/*` 与对应依赖严格配对。
+
 ## 7. 应急回滚
 
 | 现象 | 处置 |
