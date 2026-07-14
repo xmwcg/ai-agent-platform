@@ -127,6 +127,15 @@
   - `services/media-gen.service.ts` 仅留编排层（`PROVIDERS`/`listMediaProviders`/`selectMediaProvider`/`MediaGenService`），并 `re-export` 原 `type` 与 `CloudbaseImageProvider/HunyuanProvider/KelingProvider/JimengProvider`，**对外 API 完全不变**。
 - **`any` 收敛（5 处）**：`CloudbaseImageProvider` 的 `result:any` → `MediaGenResult & {imageBase64?;imageUrl?}`，`queryTask` 用 `CloudbaseStoredTask` 类型替代 `as any`；`HunyuanProvider.body:Record<string,any>` → `Record<string,unknown>`；`params_type_from_status(d:any)` → `unknown` 安全提取；`MoneyPrinterTurboProvider.catch(e:any)` → `unknown` 安全提取 `message`。`tsc` 0 错误，media-gen 相关 5 套件 / 22 用例全过。
 
+### 6.9 阶段2 质量治理补充（rag-pipeline 拆分 + 测试安全网）
+- **巨型文件拆分**：`services/rag-pipeline.service.ts`（496 行）按「类型层 / Parser / Chunker / 编排层」四层拆分：
+  - `services/rag-pipeline.types.ts`：3 个接口（`ParsedDocument`/`ChunkResult`/`PipelineResult`）+ `DEFAULT_CONFIG`。
+  - `services/rag-pipeline.parser.ts`：`DocumentParser`（解析 pdf/docx/html/txt；`mammoth`/`pdf-parse`/`cheerio` 动态导入保留，避免启动期加载）。
+  - `services/rag-pipeline.chunker.ts`：`DocumentChunker`（基于段落的语义分块 + 重叠）。
+  - `services/rag-pipeline.service.ts` 仅留 `RAGPipelineService` 编排层 + 导出 `ragPipelineService` 单例 + `export default RAGPipelineService`，**对外 API 完全不变**（外部仅 `routes/rag-pipeline.ts` 引用单例）。
+- **测试安全网**：新增 `services/rag-pipeline.test.ts`（7 用例）覆盖分块逻辑（maxChunks 上限 / 空文本 / 重叠触发）/ txt 解析 / 不支持格式报错 / `DEFAULT_CONFIG` 默认值。`tsc` 0 错误，rag-pipeline 7 用例全过。
+- **依赖澄清**：`mammoth`/`pdf-parse`/`cheerio` 在 RAG 路径中被动态 import 实际使用，**非**无用依赖（纠正此前路线图对它们的猜测）。
+
 ## 7. 应急回滚
 
 | 现象 | 处置 |
@@ -142,7 +151,7 @@
 
 - **阶段2 质量治理（进行中）**
   - `any` 持续收敛（其余约 358 处，按鉴权/支付/沙盒等关键路径推进）。
-  - 巨型文件拆分扩展：对 `billing.ts`(627 路由) / `rag-pipeline.service.ts`(496) 等做单文件渐进拆分（`external-market.ts` 已拆出 catalog 数据层；`media-gen.service.ts` 已拆为 shared+providers+编排三层）。
+  - 巨型文件拆分扩展：对 `billing.ts`(627 路由) 做单文件渐进拆分（`external-market.ts` 已拆出 catalog 数据层；`media-gen.service.ts` 已拆为 shared+providers+编排三层；`rag-pipeline.service.ts` 已拆为 types+parser+chunker+编排四层）。
   - 前端巨型组件拆分（`ToolsCenterPage` 754 / `WorkflowEditor` 658 / `App` 563 等，最高风险，需客户端构建验证）。
 - **深度硬化**
   - `vm` → `isolated-vm` / 容器隔离 / 专用沙盒微服务。
