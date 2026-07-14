@@ -1,0 +1,45 @@
+#!/bin/bash
+# ============================================================
+# 通用自动部署钩子 · post-commit（受版本控制，随仓库走）
+# ------------------------------------------------------------
+# 作用：在 main 分支每次 commit 后，自动推送到部署真源
+#       （默认 cnb.cool 的 cnb remote），由服务器 watcher
+#       每分钟轮询并自动拉取部署。你无需手动 git push。
+#
+# 通用化设计（换任意电脑均可用）：
+#   1) 本文件位于 scripts/git-hooks/ 内，受 git 版本控制，
+#      clone 到新电脑就会带上（旧的 .git/hooks/ 不会随仓库走）。
+#   2) 新电脑只需运行一次 scripts/setup-auto-deploy.(ps1|sh)
+#      即可通过 core.hooksPath 让 git 使用本目录的钩子。
+#   3) 部署 remote 名可用 git config 覆盖，默认 cnb：
+#        git config deploy.remote <remoteName>
+#      部署分支默认 main：
+#        git config deploy.branch <branchName>
+#
+# 非阻塞：推送失败不回滚 commit，仅提示，不影响本地开发。
+# ============================================================
+set -uo pipefail
+
+DEPLOY_REMOTE=$(git config --get deploy.remote 2>/dev/null || echo "cnb")
+DEPLOY_BRANCH=$(git config --get deploy.branch 2>/dev/null || echo "main")
+
+CUR_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ "$CUR_BRANCH" != "$DEPLOY_BRANCH" ]; then
+  echo "[post-commit] 当前分支 '$CUR_BRANCH' 非部署分支 '$DEPLOY_BRANCH'，跳过自动推送"
+  exit 0
+fi
+
+# 部署 remote 不存在则跳过（提示用户先跑 setup 脚本）
+if ! git remote get-url "$DEPLOY_REMOTE" >/dev/null 2>&1; then
+  echo "[post-commit] 未找到部署 remote '$DEPLOY_REMOTE'，跳过自动推送。"
+  echo "[post-commit] 请先运行：scripts/setup-auto-deploy.(ps1|sh) 完成一次性配置。"
+  exit 0
+fi
+
+echo "[post-commit] 自动推送 $DEPLOY_REMOTE $DEPLOY_BRANCH → 触发服务器自动部署 ..."
+if git push "$DEPLOY_REMOTE" "$DEPLOY_BRANCH" 2>&1; then
+  echo "[post-commit] 已推送。服务器将在 ~1 分钟内自动拉取并部署。"
+else
+  echo "[post-commit] 推送失败（非致命）。请检查网络/凭据，或稍后手动执行: git push $DEPLOY_REMOTE $DEPLOY_BRANCH"
+fi
+exit 0
