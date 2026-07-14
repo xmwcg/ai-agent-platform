@@ -16,7 +16,7 @@ import { CorsOptions } from 'cors';
  */
 
 // 平台公网来源兜底：即便 CLIENT_URL 未配置，也不会把站点锁死在 localhost
-const FALLBACK_ORIGINS = [
+export const FALLBACK_ORIGINS = [
   'http://localhost:5173',
   'https://aibak.site',
   'http://aibak.site',

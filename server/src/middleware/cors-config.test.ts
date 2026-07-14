@@ -1,15 +1,21 @@
-import { parseAllowedOrigins, isOriginAllowed, buildCorsOptions } from './cors-config';
+import {
+  parseAllowedOrigins,
+  isOriginAllowed,
+  buildCorsOptions,
+  FALLBACK_ORIGINS,
+} from './cors-config';
 
 describe('cors-config (L6)', () => {
-  it('parseAllowedOrigins: 缺省回退本地开发地址', () => {
-    expect(parseAllowedOrigins(undefined)).toEqual(['http://localhost:5173']);
+  it('parseAllowedOrigins: 缺省返回兜底公网来源（锁死防护）', () => {
+    expect(parseAllowedOrigins(undefined)).toEqual(FALLBACK_ORIGINS);
   });
 
-  it('parseAllowedOrigins: 逗号分隔多来源并去空白', () => {
+  it('parseAllowedOrigins: 逗号分隔多来源并去空白，且并入兜底来源', () => {
     expect(parseAllowedOrigins('https://a.com, https://b.com ,https://c.com')).toEqual([
       'https://a.com',
       'https://b.com',
       'https://c.com',
+      ...FALLBACK_ORIGINS,
     ]);
   });
 
