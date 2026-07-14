@@ -57,18 +57,17 @@ describe('sandbox.service pure functions', () => {
     });
   });
 
-  describe('selectSandboxMode', () => {
+  describe('selectSandboxMode（阶段1c：local 默认禁用）', () => {
     it('默认 mock', () => {
       expect(selectSandboxMode(undefined, {})).toBe('mock');
     });
-    it('显式模式优先', () => {
-      expect(selectSandboxMode('local', { mode: 'mock' })).toBe('local');
+    it('local 默认降级为 mock（需 SANDBOX_LOCAL_ENABLED=true 才生效）', () => {
+      expect(selectSandboxMode('local', { mode: 'mock' })).toBe('mock');
+      expect(selectSandboxMode(undefined, { mode: 'local' })).toBe('mock');
+    });
+    it('remote / mock 不受影响', () => {
       expect(selectSandboxMode('remote', {})).toBe('remote');
-    });
-    it('env 设置 local', () => {
-      expect(selectSandboxMode(undefined, { mode: 'local' })).toBe('local');
-    });
-    it('remote 需同时配置 url', () => {
+      expect(selectSandboxMode('mock', {})).toBe('mock');
       expect(selectSandboxMode(undefined, { mode: 'remote' })).toBe('mock');
       expect(selectSandboxMode(undefined, { mode: 'remote', remoteUrl: 'http://x' })).toBe('remote');
     });
@@ -145,5 +144,75 @@ describe('sandbox.service providers', () => {
     expect(ps.map((p) => p.mode).sort()).toEqual(['local', 'mock', 'remote']);
     const mock = ps.find((p) => p.mode === 'mock')!;
     expect(mock.configured).toBe(true);
+  });
+});
+
+describe('sandbox.service · mode:local 请求（默认降级为 mock，阶段1c）', () => {
+  it('默认：mode:local 请求被降级为 mock 执行（不真正在本机执行）', async () => {
+    const res = await sandboxService.run({
+      language: 'javascript',
+      code: "console.log('local works')",
+      mode: 'local',
+    });
+    expect(res.mode).toBe('mock');
+    expect(res.status).toBe('success');
+    expect(res.stdout).toContain('local works');
+  });
+
+  it('默认：危险代码在降级后仍被 deny-list 拦截', async () => {
+    const res = await sandboxService.run({
+      language: 'python',
+      code: 'import os\nos.system("rm -rf /")',
+      mode: 'local',
+    });
+    expect(res.mode).toBe('mock');
+    expect(res.status).toBe('denied');
+    expect(res.deniedPatterns!.length).toBeGreaterThan(0);
+  });
+});
+
+describe('sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=true）', () => {
+  const ORIG = process.env.SANDBOX_LOCAL_ENABLED;
+  let Svc: any;
+
+  beforeAll(() => {
+    process.env.SANDBOX_LOCAL_ENABLED = 'true';
+    jest.isolateModules(() => {
+      Svc = require('./sandbox.service').sandboxService;
+    });
+    process.env.SANDBOX_LOCAL_ENABLED = ORIG;
+  });
+
+  it('启用后：mode:local 真正在本机执行并返回 stdout', async () => {
+    const res = await Svc.run({
+      language: 'javascript',
+      code: "console.log('real local')",
+      mode: 'local',
+    });
+    expect(res.mode).toBe('local');
+    expect(res.status).toBe('success');
+    expect(res.stdout).toContain('real local');
+    expect(res.exitCode).toBe(0);
+  });
+
+  it('启用后：危险代码仍被硬拦截（denied）', async () => {
+    const res = await Svc.run({
+      language: 'python',
+      code: 'import os\nos.system("rm -rf /")',
+      mode: 'local',
+    });
+    expect(res.mode).toBe('local');
+    expect(res.status).toBe('denied');
+  });
+
+  it('启用后：代码抛错返回 error 状态', async () => {
+    const res = await Svc.run({
+      language: 'javascript',
+      code: "throw new Error('boom')",
+      mode: 'local',
+    });
+    expect(res.mode).toBe('local');
+    expect(res.status).toBe('error');
+    expect(res.exitCode).not.toBe(0);
   });
 });

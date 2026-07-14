@@ -5,6 +5,20 @@ import { EventEmitter } from 'events';
 import { MCPServer } from '../models/MCPServer';
 import { logger } from '../lib/logger';
 
+// ── P0 止血：stdio 命令白名单（消除服务端任意命令执行）──
+// 仅允许管理员在 MCP_ALLOWED_STDIO_COMMANDS 中显式声明的命令；
+// 默认仅 'node' / 'npx'，杜绝 `bash -c`、任意二进制等危险调用。
+const ALLOWED_STDIO_COMMANDS = (process.env.MCP_ALLOWED_STDIO_COMMANDS || 'node,npx')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isAllowedStdioCommand(command?: string): boolean {
+  if (!command) return false;
+  const base = command.split(/[\\/]/).pop() || command; // 取 basename，防止通过绝对路径绕过
+  return ALLOWED_STDIO_COMMANDS.includes(base);
+}
+
 export interface MCPServerConfig {
   id: string;
   name: string;
@@ -143,6 +157,14 @@ class MCPService extends EventEmitter {
     const config = this.servers.get(id);
     if (!config || config.transport !== 'stdio') {
       throw new Error(`Server ${id} not found or not stdio transport`);
+    }
+
+    // P0 止血：命令白名单校验（拒绝未显式声明的命令，含绝对路径绕过）
+    if (!isAllowedStdioCommand(config.command)) {
+      config.status = 'error';
+      this.servers.set(id, config);
+      logger.error('mcp', `stdio 命令 "${config.command}" 不在白名单，拒绝连接（允许：${ALLOWED_STDIO_COMMANDS.join(', ')}）`);
+      throw new Error(`MCP stdio 命令 "${config.command}" 不在白名单，已被拒绝（允许的命令：${ALLOWED_STDIO_COMMANDS.join(', ')}）`);
     }
 
     try {

@@ -9,6 +9,71 @@ import { ragService } from './rag';
 import { embeddingService } from './embedding';
 import { logger } from '../lib/logger';
 import crypto from 'crypto';
+import vm from 'vm';
+
+// ── 受限表达式 / 代码沙盒（P0 止血：替换 new Function 任意代码执行）──
+// condition 节点使用受限表达式求值；code 节点默认禁用，需管理员显式开启。
+// 主防线为 vm 受限 context（仅暴露 input，不暴露 process / require 等宿主全局）。
+// 已知限制：标识符黑名单可被 Unicode 转义绕过，深度硬化见阶段2 安全文档。
+const CODE_NODE_ENABLED = process.env.WORKFLOW_CODE_NODE_ENABLED === 'true';
+
+const FORBIDDEN_TOKENS = /\b(constructor|__proto__|prototype|process|require|module|exports|global|globalThis|eval|Function|import|export|while|for|switch|case|break|continue|class|extends|new|delete|instanceof|typeof|void|with|this|window|document|fetch|XMLHttpRequest|http|https|fs|child_process|spawn|exec)\b/;
+
+function createSandbox(input: any): vm.Context {
+  const sandbox: Record<string, any> = { input };
+  return vm.createContext(sandbox);
+}
+
+function safeEvaluateExpression(
+  expression: string,
+  input: any,
+  timeoutMs = 100
+): { ok: boolean; value?: any; error?: string } {
+  if (typeof expression !== 'string' || expression.trim() === '') {
+    return { ok: false, error: '空表达式' };
+  }
+  if (FORBIDDEN_TOKENS.test(expression)) {
+    return { ok: false, error: '表达式含不允许的语法或标识符' };
+  }
+  const sandbox = createSandbox(input);
+  try {
+    const result = vm.runInContext(
+      `(function(input){ "use strict"; return (${expression}); })(input)`,
+      sandbox,
+      { timeout: timeoutMs }
+    );
+    return { ok: true, value: result };
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+}
+
+function safeExecuteCode(
+  code: string,
+  input: any,
+  timeoutMs = 1000
+): { ok: boolean; value?: any; error?: string; disabled?: boolean } {
+  if (!CODE_NODE_ENABLED) {
+    return { ok: false, disabled: true, error: '代码执行节点已按安全策略禁用' };
+  }
+  if (typeof code !== 'string' || code.trim() === '') {
+    return { ok: false, error: '空代码' };
+  }
+  if (FORBIDDEN_TOKENS.test(code)) {
+    return { ok: false, error: '代码含不允许的语法或标识符' };
+  }
+  const sandbox = createSandbox(input);
+  try {
+    const result = vm.runInContext(
+      `(function(input){ "use strict"; ${code} })(input)`,
+      sandbox,
+      { timeout: timeoutMs }
+    );
+    return { ok: true, value: result };
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+}
 
 // ── 执行上下文 ───────────────────────────────────────
 
@@ -266,14 +331,14 @@ class WorkflowEngine {
         case 'condition': {
           const config = node.data.config || {};
           const condition = config.condition || '';
-          // 简单条件评估（支持 {{input}} 替换）
-          const evaluatedCondition = condition.replace(/\{\{input\}\}/g, String(input));
-          try {
-            const fn = new Function('input', `return ${evaluatedCondition}`);
-            const result = fn(input);
-            execution.output = { conditionResult: result, branch: result ? config.trueBranch : config.falseBranch };
+          // 受限表达式求值（不再做 {{input}} 字符串插值，避免代码注入；
+          // 表达式通过 input 变量访问输入，在 vm 受限 context 中执行）
+          const result = safeEvaluateExpression(condition, input);
+          if (result.ok) {
+            execution.output = { conditionResult: result.value, branch: result.value ? config.trueBranch : config.falseBranch };
             execution.status = 'success';
-          } catch {
+          } else {
+            // 语法错误或含危险标识符：安全回退为 falseBranch，绝不执行未授权代码
             execution.output = { conditionResult: false, branch: config.falseBranch };
             execution.status = 'success';
           }
@@ -282,14 +347,19 @@ class WorkflowEngine {
 
         case 'code': {
           const config = node.data.config || {};
-          try {
-            const fn = new Function('input', config.code || 'return input;');
-            execution.output = fn(input);
-            execution.status = 'success';
-          } catch (e: any) {
-            execution.output = `执行错误: ${e.message}`;
+          // P0 止血：code 节点默认禁用，需管理员显式配置 WORKFLOW_CODE_NODE_ENABLED=true
+          const res = safeExecuteCode(config.code || 'return input;', input);
+          if (res.disabled) {
+            execution.output = '代码执行节点已禁用（安全策略）。如需启用，请联系管理员配置 WORKFLOW_CODE_NODE_ENABLED=true，且仅用于可信工作流。';
             execution.status = 'error';
-            execution.error = e.message;
+            execution.error = res.error;
+          } else if (res.ok) {
+            execution.output = res.value;
+            execution.status = 'success';
+          } else {
+            execution.output = `执行错误: ${res.error}`;
+            execution.status = 'error';
+            execution.error = res.error;
           }
           break;
         }

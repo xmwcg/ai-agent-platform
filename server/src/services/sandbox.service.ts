@@ -18,6 +18,11 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import axios from 'axios';
 
+// ── P0 止血：local 模式默认禁用 ──
+// 真实本机执行（无容器隔离）需管理员显式设置 SANDBOX_LOCAL_ENABLED=true，
+// 且仍受 detectDangerousPatterns 静态拦截兜底。默认降级为 mock。
+const LOCAL_ENABLED = process.env.SANDBOX_LOCAL_ENABLED === 'true';
+
 export type SandboxLanguage = 'python' | 'javascript' | 'typescript' | 'bash';
 export type SandboxMode = 'mock' | 'local' | 'remote';
 export type SandboxStatus = 'success' | 'error' | 'timeout' | 'denied';
@@ -136,8 +141,15 @@ export function selectSandboxMode(
   config: SandboxEnvConfig = process.env
 ): SandboxMode {
   const cfg = readSandboxConfig(config);
-  if (explicit && ['mock', 'local', 'remote'].includes(explicit)) return explicit;
-  if (cfg.mode === 'local') return 'local';
+  if (explicit && ['mock', 'local', 'remote'].includes(explicit)) {
+    // local 真实执行默认禁用，降级为 mock
+    if (explicit === 'local' && !LOCAL_ENABLED) return 'mock';
+    return explicit;
+  }
+  if (cfg.mode === 'local') {
+    if (!LOCAL_ENABLED) return 'mock';
+    return 'local';
+  }
   if (cfg.mode === 'remote' && cfg.remoteUrl) return 'remote';
   return 'mock';
 }
