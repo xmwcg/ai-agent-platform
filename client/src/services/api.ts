@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { message } from 'antd';
 
 // 创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
@@ -44,6 +45,24 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    const err = error as AxiosError<{ error?: string; message?: string }>;
+    const status = err.response?.status;
+    // ─── 全局统一收口「无 Token / Token 失效 / 无授权」───
+    // 此前响应拦截器只 console.error，token 过期后所有请求拿 401 却无处理，
+    // 用户被卡在「无授权」死循环。这里统一清理登录态并跳转登录页。
+    if (status === 401) {
+      const path = window.location.pathname;
+      // 避免在登录/注册页自身发生 401 时反复跳转
+      if (path !== '/login' && path !== '/register') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('auth-storage');
+        message.error('登录已过期，请重新登录');
+        window.location.href = `/login?redirect=${encodeURIComponent(path + window.location.search)}`;
+        // 挂起该 Promise，避免后续 catch 重复报错
+        return new Promise(() => {});
+      }
+    }
     console.error('❌ API Error:', extractApiError(error));
     return Promise.reject(error);
   }

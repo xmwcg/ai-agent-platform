@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Typography } from 'antd';
 import {
-  ThunderboltOutlined, WechatOutlined, MailOutlined, GlobalOutlined,
+  ThunderboltOutlined, WechatOutlined, MailOutlined, GlobalOutlined, LinkOutlined,
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -40,6 +40,14 @@ const FOOTER_GROUPS: { title: string; links: { label: string; path: string; exte
       { label: 'Cookies 政策', path: '/cookies' },
     ],
   },
+];
+
+// 友情链接（与平台强相关的真实生态站点，可自由增删）
+const FRIENDLY_LINKS: { label: string; url: string }[] = [
+  { label: '腾讯云 CloudBase', url: 'https://www.cloudbase.net' },
+  { label: '腾讯混元大模型', url: 'https://hunyuan.tencent.com' },
+  { label: 'DeepSeek', url: 'https://www.deepseek.com' },
+  { label: '微信开放平台', url: 'https://open.weixin.qq.com' },
 ];
 
 export default function AppFooter() {
@@ -142,6 +150,38 @@ export default function AppFooter() {
             <WechatOutlined style={{ color: '#07c160' }} /> 扫码联系我们
           </div>
         </div>
+      </div>
+
+      {/* 友情链接 */}
+      <div style={{
+        marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--border-light)',
+        display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginRight: 4 }}>
+          友情链接
+        </span>
+        {FRIENDLY_LINKS.map((l) => (
+          <span
+            key={l.label}
+            onClick={() => window.open(l.url, '_blank', 'noopener,noreferrer')}
+            style={{
+              fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '3px 10px', borderRadius: 8,
+              border: '1px solid var(--border-light)', transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--brand-primary)';
+              e.currentTarget.style.borderColor = 'var(--brand-primary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-secondary)';
+              e.currentTarget.style.borderColor = 'var(--border-light)';
+            }}
+          >
+            <LinkOutlined style={{ fontSize: 11 }} /> {l.label}
+          </span>
+        ))}
       </div>
 
       {/* 版权栏 */}
