@@ -1,11 +1,10 @@
 name: Deploy to Server
 
-# 当 main 分支有新提交（含手机端在 GitHub 直接改代码）时，
-# 自动把代码推送到服务器裸仓库，触发服务器 post-receive 钩子完成部署。
+# 部署主源已切换为 cnb.cool（服务器 cnb-watcher.sh 主动轮询拉取部署，规避安全组入站拦截）。
+# 本工作流保留为手动兜底：仅当 cnb.cool 不可用时，才在 GitHub 网页手动点按钮触发部署。
+# 注意：不再监听 push 自动触发，避免与 cnb.cool 主源拉取部署造成双部署/竞争。
 on:
-  push:
-    branches: [main]
-  workflow_dispatch: {}   # 允许在 GitHub 网页手动点按钮触发部署
+  workflow_dispatch: {}   # 仅手动触发
 
 # 同一时间只跑一个部署，避免并发互相踩踏
 concurrency:
