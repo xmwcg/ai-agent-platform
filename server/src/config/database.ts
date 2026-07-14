@@ -159,6 +159,9 @@ realRedis.on('error', (err: any) => {
 realRedis.on('end', () => {
   logger.warn('redis', '连接已断开，retryStrategy 将持续重连');
 });
+realRedis.on('ready', () => {
+  logger.info('redis', 'Redis connected');
+});
 
 // 主动发起连接（不阻塞启动；失败由 retryStrategy 兜底重连）
 (realRedis as any).connect?.()
@@ -166,6 +169,30 @@ realRedis.on('end', () => {
 
 function isRedisReady(): boolean {
   return (realRedis as any).status === 'ready';
+}
+
+/**
+ * 独立探测 Redis 可用性：每次新建短连接并 ping，避免主连接僵死（半开）污染
+ * 健康状态。探测不重试、快速判定，真实反映 Redis 是否可达；主连接自身由
+ * retryStrategy + keepalive 自愈（僵死时 app 自动降级内存版，恢复后自动切回）。
+ */
+async function probeRedisHealth(): Promise<boolean> {
+  const probe = new Redis(REDIS_URL, {
+    lazyConnect: true,
+    connectTimeout: 3000,
+    maxRetriesPerRequest: 1,
+    retryStrategy: () => null, // 探测不重试，快速失败
+    keepAlive: 30,
+  });
+  try {
+    await probe.connect();
+    const pong = await withTimeout(probe.ping() as Promise<string>, 1500, 'redis');
+    return pong === 'PONG';
+  } catch {
+    return false;
+  } finally {
+    try { (probe as any).disconnect?.(); } catch { /* ignore */ }
+  }
 }
 
 /**
@@ -234,20 +261,12 @@ export const checkDatabaseHealth = async (): Promise<{ mongodb: boolean; redis: 
     console.error('❌ MongoDB health check failed:', error);
   }
   
-  // Check Redis（带超时保护）
-  // 仅对真实连接做 ping；若真实连接僵死（ping 超时），强制断开触发重连，
-  // 避免半开连接一直卡住、健康检查误报且无法自愈。
+  // Check Redis：用独立探测连接（每次新建），真实反映 Redis 可用性，
+  // 不受主连接僵死影响；主连接自身由 retryStrategy + keepalive 自愈。
   try {
-    if (isRedisReady()) {
-      await withTimeout(realRedis.ping() as Promise<string>, 1500, 'redis');
-      result.redis = true;
-    } else {
-      result.redis = false;
-    }
+    result.redis = await probeRedisHealth();
   } catch (error) {
-    logger.error('database', 'Redis health ping 超时（可能僵死），强制断开以触发重连', error as any);
-    try { (realRedis as any).disconnect?.(); } catch { /* ignore */ }
-    try { (realRedis as any).connect?.().catch?.(() => {}); } catch { /* ignore */ }
+    logger.error('database', 'Redis health check failed', error as any);
     result.redis = false;
   }
   
