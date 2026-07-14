@@ -42,6 +42,7 @@ interface SlowLog {
   path: string;
   durationMs: number;
   ip: string;
+  requestId?: string;
 }
 
 // ─── 全局指标 ───
@@ -125,6 +126,7 @@ export function apmMiddleware(req: Request, res: Response, next: NextFunction): 
         path: req.path,
         durationMs,
         ip: (req.ip || (req.headers['x-forwarded-for'] as string) || 'unknown').split(',')[0].trim(),
+        requestId: (req as Request & { requestId?: string }).requestId,
       };
       metrics.slowLogs.unshift(slow);
       if (metrics.slowLogs.length > MAX_SLOW_LOGS) metrics.slowLogs.pop();

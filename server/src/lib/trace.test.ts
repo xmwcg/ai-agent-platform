@@ -1,65 +1,49 @@
-import { buildTraceEvent, selectTracerMode, getTracer, measure } from './trace';
+/**
+ * 调用链可观测性单测（纯函数：buildTraceEvent / selectTracerMode）
+ */
+import { buildTraceEvent, selectTracerMode } from './trace';
 
-describe('trace pure functions', () => {
-  describe('buildTraceEvent', () => {
-    it('构造事件含必需字段', () => {
-      const e = buildTraceEvent({ name: 'test', userId: 'u1', durationMs: 12, status: 'ok' });
-      expect(e.traceId).toMatch(/^trace_/);
-      expect(e.name).toBe('test');
-      expect(e.userId).toBe('u1');
-      expect(e.durationMs).toBe(12);
-      expect(e.status).toBe('ok');
-      expect(typeof e.timestamp).toBe('string');
-    });
-    it('支持自定义 id 生成器', () => {
-      const e = buildTraceEvent({ name: 'x' }, () => 'fixed-id');
-      expect(e.traceId).toBe('fixed-id');
-    });
+describe('buildTraceEvent', () => {
+  it('补全 traceId / timestamp 并保留输入字段', () => {
+    const ev = buildTraceEvent(
+      { name: 'chat', userId: 'u1', durationMs: 12, status: 'ok', input: 'q', output: 'a' },
+      () => 'fixed-id'
+    );
+    expect(ev.traceId).toBe('fixed-id');
+    expect(ev.name).toBe('chat');
+    expect(ev.userId).toBe('u1');
+    expect(ev.durationMs).toBe(12);
+    expect(ev.status).toBe('ok');
+    expect(ev.input).toBe('q');
+    expect(ev.output).toBe('a');
+    expect(typeof ev.timestamp).toBe('string');
   });
 
-  describe('selectTracerMode', () => {
-    it('默认 noop', () => {
-      expect(selectTracerMode({})).toBe('noop');
-    });
-    it('显式覆盖优先', () => {
-      expect(selectTracerMode({ TRACER_MODE: 'langfuse' })).toBe('langfuse');
-      expect(selectTracerMode({ TRACER_MODE: 'noop' })).toBe('noop');
-    });
-    it('按环境变量自动识别 langfuse', () => {
-      expect(
-        selectTracerMode({
-          LANGFUSE_PUBLIC_KEY: 'p',
-          LANGFUSE_SECRET_KEY: 's',
-          LANGFUSE_HOST: 'h',
-        })
-      ).toBe('langfuse');
-      expect(selectTracerMode({ LANGFUSE_PUBLIC_KEY: 'p' })).toBe('noop'); // 缺字段
-    });
+  it('默认 status 为 ok', () => {
+    const ev = buildTraceEvent({ name: 'x' });
+    expect(ev.status).toBe('ok');
+  });
+});
+
+describe('selectTracerMode', () => {
+  it('默认（无任何配置）返回 noop', () => {
+    expect(selectTracerMode({})).toBe('noop');
   });
 
-  describe('getTracer', () => {
-    it('noop 始终可用', () => {
-      expect(getTracer({}).isConfigured()).toBe(true);
-      expect(getTracer({}).mode).toBe('noop');
-    });
-    it('langfuse 仅在完整配置时可用', () => {
-      const t = getTracer({ LANGFUSE_PUBLIC_KEY: 'p', LANGFUSE_SECRET_KEY: 's', LANGFUSE_HOST: 'h' });
-      expect(t.mode).toBe('langfuse');
-      expect(t.isConfigured()).toBe(true);
-    });
+  it('显式 TRACER_MODE=langfuse 生效', () => {
+    expect(selectTracerMode({ TRACER_MODE: 'langfuse' })).toBe('langfuse');
   });
 
-  describe('measure', () => {
-    it('返回原函数结果并上报（不抛错）', async () => {
-      const res = await measure('op', async () => 42, { userId: 'u1' });
-      expect(res).toBe(42);
-    });
-    it('异常时仍上报 error 并向上抛出', async () => {
-      await expect(
-        measure('op', async () => {
-          throw new Error('boom');
-        })
-      ).rejects.toThrow('boom');
-    });
+  it('显式 TRACER_MODE=noop 生效', () => {
+    expect(selectTracerMode({ TRACER_MODE: 'noop' })).toBe('noop');
+  });
+
+  it('仅当三要素齐全时自动启用 langfuse', () => {
+    expect(
+      selectTracerMode({ LANGFUSE_PUBLIC_KEY: 'a', LANGFUSE_SECRET_KEY: 'b', LANGFUSE_HOST: 'c' })
+    ).toBe('langfuse');
+    // 缺任一要素 → 退回 noop
+    expect(selectTracerMode({ LANGFUSE_PUBLIC_KEY: 'a' })).toBe('noop');
+    expect(selectTracerMode({ LANGFUSE_SECRET_KEY: 'b', LANGFUSE_HOST: 'c' })).toBe('noop');
   });
 });

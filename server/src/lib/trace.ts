@@ -146,7 +146,7 @@ export async function measure<T>(
       })
     );
     return result;
-  } catch (e: any) {
+  } catch (e: unknown) {
     tracer.trace(
       buildTraceEvent({
         name,
@@ -154,7 +154,7 @@ export async function measure<T>(
         durationMs: Date.now() - start,
         status: 'error',
         input: opts.input,
-        output: e?.message,
+        output: e instanceof Error ? e.message : String(e),
         meta: opts.meta,
       })
     );

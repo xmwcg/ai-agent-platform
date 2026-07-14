@@ -635,10 +635,63 @@ const CATALOG: ExternalMarketEntry[] = [
   },
 ];
 
+/**
+ * 开放市场供应链护栏（纯函数，可单测）
+ * ----------------------------------------------------------------
+ * 即便未来开放用户提交外部 skill / MCP，也须经此校验，杜绝：
+ * - command 不在白名单（如 bash / curl 任意执行）；
+ * - args 含 shell 元字符或危险 flag（`; | &`\`$()`、`-e`/`--eval`、`rm -rf`）；
+ * - officialUrl 为非 http(s) 的非常规协议（如 `javascript:`）。
+ * 当前策展目录应全部通过；任何未通过项在 getCatalog 时被过滤，不参与安装。
+ */
+export const ALLOWED_MARKET_COMMANDS = ['node', 'npx'];
+
+export interface MarketEntryValidation {
+  valid: boolean;
+  reasons: string[];
+}
+
+const SHELL_META_RE = /[;&|`$()<>\\]/;
+const DANGEROUS_FLAG_RE = /^-{1,2}e(val)?$/;
+const DANGEROUS_SUBSTR_RE = /rm\s+-rf/i;
+
+export function validateExternalMarketEntry(entry: ExternalMarketEntry): MarketEntryValidation {
+  const reasons: string[] = [];
+  if (!entry.id || !entry.name) reasons.push('缺少 id / name');
+  if (!entry.source || entry.source.trim().length === 0) reasons.push('source 为空');
+
+  if (entry.officialUrl && !/^https?:\/\//i.test(entry.officialUrl)) {
+    reasons.push(`officialUrl 必须为 http(s)：${entry.officialUrl}`);
+  }
+
+  if (entry.kind === 'mcp' && entry.mcpConfig) {
+    const cmd = entry.mcpConfig.command;
+    if (!ALLOWED_MARKET_COMMANDS.includes(cmd)) {
+      reasons.push(`command 不在白名单：${cmd}`);
+    }
+    for (const arg of entry.mcpConfig.args ?? []) {
+      if (typeof arg !== 'string') continue;
+      if (
+        SHELL_META_RE.test(arg) ||
+        DANGEROUS_FLAG_RE.test(arg) ||
+        DANGEROUS_SUBSTR_RE.test(arg)
+      ) {
+        reasons.push(`args 含危险片段：${arg}`);
+        break;
+      }
+    }
+  }
+
+  return { valid: reasons.length === 0, reasons };
+}
+
 export function getCatalog(): ExternalMarketEntry[] {
-  return CATALOG;
+  // 供应链护栏：过滤掉任何未通过校验的条目
+  return CATALOG.filter((e) => validateExternalMarketEntry(e).valid);
 }
 
 export function getCatalogEntry(id: string): ExternalMarketEntry | undefined {
-  return CATALOG.find((e) => e.id === id);
+  const entry = CATALOG.find((e) => e.id === id);
+  if (!entry) return undefined;
+  return validateExternalMarketEntry(entry).valid ? entry : undefined;
 }
