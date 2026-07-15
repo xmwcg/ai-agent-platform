@@ -7,6 +7,10 @@
  * - enforceQuota 由具体测试文件按需再 mock（默认放行），从而能进入 handler 验证归属/参数校验。
  */
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-do-not-use-in-prod';
+// 字段级加密密钥：与 JWT_SECRET 同理，测试内固定一个 64-hex 占位值，
+// 使依赖 encryptField/decryptField 的用例（如短信验证码自动注册）可走通。
+process.env.ENCRYPTION_KEY =
+  process.env.ENCRYPTION_KEY || '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
 process.env.NODE_ENV = 'test';
 process.env.ENABLE_MOCK_MODE = 'true';
 
