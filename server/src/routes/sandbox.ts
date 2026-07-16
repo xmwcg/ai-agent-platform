@@ -2,10 +2,10 @@
  * 实践沙盒路由
  *
  * POST /api/sandbox/run   执行一段代码并返回 stdout/stderr/exitCode（requireAuth）
- * GET  /api/sandbox/status 返回当前沙盒模式、可用 Provider、支持的语言（requireAuth）
+ * GET  /api/sandbox/status 返回当前沙盒模式、可用 Provider、支持的语言（公开，能力探测，无需登录）
  */
 import { Router, Request, Response } from 'express';
-import { AuthRequest, requireAuth } from '../middleware/auth';
+import { AuthRequest, requireAuth, optionalAuth } from '../middleware/auth';
 import { sandboxService } from '../services/sandbox.service';
 import { SUPPORTED_LANGUAGES } from '../services/sandbox.service';
 import { sendError } from '../lib/http-error';
@@ -33,7 +33,7 @@ router.post('/run', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/status', requireAuth, async (_req: AuthRequest, res: Response) => {
+router.get('/status', optionalAuth, async (_req: AuthRequest, res: Response) => {
   try {
     const providers = sandboxService.providers();
     res.json({

@@ -17,6 +17,8 @@ import { CorsOptions } from 'cors';
 
 // 平台公网来源兜底：即便 CLIENT_URL 未配置，也不会把站点锁死在 localhost
 export const FALLBACK_ORIGINS = [
+  'http://localhost',
+  'https://localhost',
   'http://localhost:5173',
   'https://aibak.site',
   'http://aibak.site',
@@ -57,8 +59,15 @@ export function isOriginAllowed(origin: string | undefined, allowed: string[]): 
 
 export function buildCorsOptions(clientUrl?: string): CorsOptions {
   const allowed = parseAllowedOrigins(clientUrl);
+  // 未显式配置 CLIENT_URL 且非生产环境：本地/调试便利，放行任意来源（缺失不锁死）。
+  // 生产环境若未配置 CLIENT_URL，仍走严格白名单 + FALLBACK_ORIGINS 兜底，不放全站。
+  const unrestricted = !clientUrl && process.env.NODE_ENV !== 'production';
   return {
     origin(origin, callback) {
+      if (unrestricted) {
+        callback(null, true);
+        return;
+      }
       if (isOriginAllowed(origin, allowed)) {
         callback(null, true);
       } else {

@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import { apiLimiter, aiLimiter } from './middleware/rate-limit';
-import { buildCorsOptions } from './middleware/cors-config';
+import { buildCorsOptions, parseAllowedOrigins } from './middleware/cors-config';
 import { buildHelmetOptions } from './middleware/security-headers';
 
 // 导入数据库配置
@@ -77,7 +77,13 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // 中间件
-app.use(cors(buildCorsOptions(process.env.CLIENT_URL)));
+const clientUrl = process.env.CLIENT_URL;
+const corsMode =
+  !clientUrl && process.env.NODE_ENV !== 'production'
+    ? '开发模式放行全部来源（未配置 CLIENT_URL）'
+    : `白名单: ${parseAllowedOrigins(clientUrl).join(', ')}`;
+logger.info('index', `CORS 配置 → ${corsMode}`);
+app.use(cors(buildCorsOptions(clientUrl)));
 app.use(helmet(buildHelmetOptions(process.env.NODE_ENV)));
 app.use(compression());
 
