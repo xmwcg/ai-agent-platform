@@ -10,7 +10,9 @@ main:
           script: |
             REPO_NAME=${CNB_REPO_SLUG##*/}
             git remote add github https://${GH_TOKEN}@github.com/xmwcg/${REPO_NAME}.git || true
-            git push github main --force
+            # 先普通推送；仅当快进失败（如历史上做过 rebase/强推）才用 --force-with-lease 受控强推，
+            # 避免盲目 --force 误删 GitHub 上的提交。
+            git push github main || git push github main --force-with-lease
   "crontab: 0 */4 * * *":
     - name: sync-from-github
       docker:
