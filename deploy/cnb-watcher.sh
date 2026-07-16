@@ -101,7 +101,9 @@ deploy_sha() {
   log "开始部署 $sha"
   (
     export APP_COMMIT_SHA="$sha"
-    export DEPLOY_RUN_TESTS=1
+    # 服务器侧不再跑 npm test：集成测试会绑定 3000 端口（与生产容器冲突），
+    # 且依赖 mock provider 等 CI 专属环境；完整测试已在 CNB server-quality-gate 中验证。
+    export DEPLOY_RUN_TESTS=
     bash "$GIT_WORK_TREE/deploy/push-deploy.sh"
   ) >>"$DEPLOY_LOG" 2>&1 || return 1
   verify_release "$sha" || return 1
