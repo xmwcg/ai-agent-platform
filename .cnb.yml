@@ -1,30 +1,101 @@
 main:
   push:
-    - name: sync-to-github
+    - name: production-release
       docker:
-        image: alpine/git
+        image: node:20-bookworm
       imports:
         - https://cnb.cool/aibak.site/cnb-github-migration-guide/-/blob/main/secrets.yml
+      env:
+        PRODUCTION_BASE_URL: https://aibak.site
+        DEPLOY_BRANCH: deploy/production
       stages:
-        - name: push
+        - name: server-quality-gate
           script: |
-            REPO_NAME=${CNB_REPO_SLUG##*/}
-            git remote add github https://${GH_TOKEN}@github.com/xmwcg/${REPO_NAME}.git || true
-            # 先普通推送；仅当快进失败（如历史上做过 rebase/强推）才用 --force-with-lease 受控强推，
-            # 避免盲目 --force 误删 GitHub 上的提交。
-            git push github main || git push github main --force-with-lease
-  "crontab: 0 */4 * * *":
-    - name: sync-from-github
-      docker:
-        image: alpine/git
-      imports:
-        - https://cnb.cool/aibak.site/cnb-github-migration-guide/-/blob/main/secrets.yml
-      stages:
-        - name: fetch-and-merge
-          script: |
-            REPO_NAME=${CNB_REPO_SLUG##*/}
-            git remote add github https://${GH_TOKEN}@github.com/xmwcg/${REPO_NAME}.git || true
-            git fetch github main
-            git merge FETCH_HEAD -m "sync: merge from github" || true
-            git push origin main
+            set -euo pipefail
+            cd server
+            npm ci --no-audit --no-fund
+            npx tsc --noEmit
+            npm test
 
+        - name: client-quality-gate
+          script: |
+            set -euo pipefail
+            cd client
+            npm install --no-audit --no-fund
+            npm run build
+            npm test
+
+        - name: repository-consistency-gate
+          script: |
+            set -euo pipefail
+            node scripts/check-superpowers-sync.cjs
+
+        - name: mirror-github-safely
+          script: |
+            set -euo pipefail
+            test -n "${GH_TOKEN:-}" || { echo "GH_TOKEN 未配置"; exit 1; }
+
+            export GIT_TERMINAL_PROMPT=0
+            git config user.name "cnb-release-bot"
+            git config user.email "cnb-release-bot@users.noreply.github.com"
+            git fetch --unshallow origin >/dev/null 2>&1 || true
+            git remote remove github-mirror >/dev/null 2>&1 || true
+            git remote add github-mirror "https://x-access-token:${GH_TOKEN}@github.com/xmwcg/${CNB_REPO_NAME}.git"
+
+            if git fetch --prune github-mirror main; then
+              github_sha=$(git rev-parse refs/remotes/github-mirror/main)
+              if git merge-base --is-ancestor "$github_sha" "$CNB_COMMIT"; then
+                echo "GitHub main 可快进，执行普通 push"
+                git push github-mirror "$CNB_COMMIT:refs/heads/main"
+              elif git diff --quiet "$github_sha" "$CNB_COMMIT"; then
+                echo "GitHub 与 CNB 内容一致但历史不同，执行受控 force-with-lease"
+                git push github-mirror "$CNB_COMMIT:refs/heads/main" \
+                  --force-with-lease="refs/heads/main:$github_sha"
+              else
+                echo "GitHub main 含 CNB 未包含的独立改动，拒绝覆盖。请先人工合并回 CNB。"
+                exit 1
+              fi
+            else
+              echo "GitHub main 尚不存在，创建镜像分支"
+              git push github-mirror "$CNB_COMMIT:refs/heads/main"
+            fi
+
+            mirrored_sha=$(git ls-remote github-mirror refs/heads/main | awk '{print $1}')
+            test "$mirrored_sha" = "$CNB_COMMIT" || {
+              echo "GitHub 镜像校验失败: expected=$CNB_COMMIT actual=$mirrored_sha"
+              exit 1
+            }
+
+        - name: promote-production-ref
+          script: |
+            set -euo pipefail
+            test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
+
+            export GIT_TERMINAL_PROMPT=0
+            cnb_url="https://${CNB_TOKEN_USER_NAME}:${CNB_TOKEN}@${CNB_WEB_HOST}/${CNB_REPO_SLUG}.git"
+            git remote remove cnb-release >/dev/null 2>&1 || true
+            git remote add cnb-release "$cnb_url"
+
+            if git fetch cnb-release "$DEPLOY_BRANCH"; then
+              deployed_sha=$(git rev-parse FETCH_HEAD)
+              git merge-base --is-ancestor "$deployed_sha" "$CNB_COMMIT" || {
+                echo "生产发布分支发生非快进分叉，拒绝自动覆盖"
+                exit 1
+              }
+            fi
+
+            git push cnb-release "$CNB_COMMIT:refs/heads/$DEPLOY_BRANCH"
+            promoted_sha=$(git ls-remote cnb-release "refs/heads/$DEPLOY_BRANCH" | awk '{print $1}')
+            test "$promoted_sha" = "$CNB_COMMIT" || {
+              echo "CNB 生产发布分支校验失败: expected=$CNB_COMMIT actual=$promoted_sha"
+              exit 1
+            }
+
+        - name: verify-production-release
+          script: |
+            set -euo pipefail
+            node deploy/verify-release.mjs \
+              --base-url "$PRODUCTION_BASE_URL" \
+              --expected-sha "$CNB_COMMIT" \
+              --timeout-seconds 900 \
+              --interval-seconds 15

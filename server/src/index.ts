@@ -193,6 +193,7 @@ app.get('/api/health', async (req: Request, res: Response) => {
     status: 'healthy',
     mongodb: health.mongodb ? 'connected' : 'disconnected',
     redis: health.redis ? 'connected' : 'disconnected',
+    revision: process.env.APP_COMMIT_SHA || 'unknown',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
   });
