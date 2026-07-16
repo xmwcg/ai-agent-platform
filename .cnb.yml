@@ -11,7 +11,7 @@ main:
       stages:
         - name: server-quality-gate
           script: |
-            set -euo pipefail
+            set -eu
             cd server
             npm ci --no-audit --no-fund
             npx tsc --noEmit
@@ -19,7 +19,7 @@ main:
 
         - name: client-quality-gate
           script: |
-            set -euo pipefail
+            set -eu
             cd client
             npm install --no-audit --no-fund
             npm run build
@@ -27,12 +27,12 @@ main:
 
         - name: repository-consistency-gate
           script: |
-            set -euo pipefail
+            set -eu
             node scripts/check-superpowers-sync.cjs
 
         - name: mirror-github-safely
           script: |
-            set -euo pipefail
+            set -eu
             test -n "${GH_TOKEN:-}" || { echo "GH_TOKEN 未配置"; exit 1; }
 
             export GIT_TERMINAL_PROMPT=0
@@ -68,7 +68,7 @@ main:
 
         - name: promote-production-ref
           script: |
-            set -euo pipefail
+            set -eu
             test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
 
             export GIT_TERMINAL_PROMPT=0
@@ -93,7 +93,7 @@ main:
 
         - name: notify-webhook
           script: |
-            set -uo pipefail
+            set -u
             # 最佳努力通知生产服务器立即检查 deploy/production
             # 即使 webhook 失败，systemd timer 也会在 1 分钟内兜底轮询
             node -e '
@@ -136,7 +136,7 @@ main:
 
         - name: verify-production-release
           script: |
-            set -euo pipefail
+            set -eu
             node deploy/verify-release.mjs \
               --base-url "$PRODUCTION_BASE_URL" \
               --expected-sha "$CNB_COMMIT" \
