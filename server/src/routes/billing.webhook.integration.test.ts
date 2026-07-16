@@ -21,6 +21,24 @@ const BASE = '/api/billing';
 let token: string;
 let testUserId: string;
 
+function isMongoClientAlreadyClosed(error: unknown): boolean {
+  return error instanceof Error
+    && (error.name === 'MongoClientClosedError' || /client was closed/i.test(error.message));
+}
+
+async function disconnectTestMongoose(): Promise<void> {
+  if (mongoose.connection.readyState === 0) return;
+
+  try {
+    await mongoose.disconnect();
+  } catch (error) {
+    // mongodb-memory-server/Jest teardown can race with a driver-side close after
+    // every request has completed. An already-closed client is the desired final
+    // state; all other disconnect failures must still fail the suite.
+    if (!isMongoClientAlreadyClosed(error)) throw error;
+  }
+}
+
 // ═══════════════ Setup / Teardown ═══════════════
 
 beforeAll(async () => {
@@ -32,9 +50,7 @@ beforeAll(async () => {
   const uri = mongoServer.getUri();
 
   // 断开旧连接后重连
-  if (mongoose.connection.readyState !== 0) {
-    await mongoose.disconnect();
-  }
+  await disconnectTestMongoose();
   await mongoose.connect(uri);
 
   // 创建测试用户
@@ -49,9 +65,12 @@ beforeAll(async () => {
 }, 60000);
 
 afterAll(async () => {
-  await mongoose.disconnect();
-  if (mongoServer) await mongoServer.stop();
-}, 10000);
+  try {
+    await disconnectTestMongoose();
+  } finally {
+    if (mongoServer) await mongoServer.stop();
+  }
+}, 30000);
 
 beforeEach(async () => {
   // 清理测试数据
