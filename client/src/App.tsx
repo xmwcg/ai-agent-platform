@@ -74,6 +74,7 @@ const MENU_GROUPS = [
     children: [
       { key: '/team', icon: <TeamOutlined />, label: '团队权限' },
       { key: '/diagnostics', icon: <DashboardOutlined />, label: '部署自检' },
+      { key: '/ops-dashboard', icon: <BarChartOutlined />, label: '运营看板' },
       { key: '/pricing', icon: <CrownOutlined />, label: '会员升级' },
       { key: '/points-center', icon: <GiftOutlined />, label: '积分中心' },
       { key: '/distribution', icon: <ShareAltOutlined />, label: '分销中心' },

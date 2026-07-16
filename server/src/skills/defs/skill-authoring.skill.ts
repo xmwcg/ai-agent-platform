@@ -24,7 +24,7 @@ export const skillAuthoringSkill: Skill = {
     criticalRules: [
       '必须走统一 AI 网关（route），不直接调用厂商 SDK',
       '产出的 manifest 必须含 division / quotaResource / marketable 等关键字段',
-      'invoke 骨架必须调用对应 service，并预留 Mock 兜底分支',
+      'invoke 骨架必须调用对应 service；生产失败必须显式返回错误，不得生成虚假结果',
     ],
     successMetrics: ['产出可编译的 Skill 骨架', '字段齐全可经 registry 注册'],
     quotaResource: 'ai_chat',
@@ -35,9 +35,9 @@ export const skillAuthoringSkill: Skill = {
     acceptanceCriteria: [
       '输入 goal + division 后返回合法 manifest',
       '返回可直接粘贴的 invoke 骨架代码',
-      '无可用 provider 时回退 Mock 并给出提示',
+      '无可用真实 provider 时明确失败并提示配置真实厂商',
     ],
-    qualityCriteria: ['Mock 模式下零依赖可跑通', '生成内容不泄露密钥'],
+    qualityCriteria: ['生产环境不返回 Mock 结果', '生成内容不泄露密钥'],
     references: ['obra/superpowers#writing-skills', 'agency-agents skill protocol'],
   },
   async invoke(ctx) {
@@ -47,7 +47,7 @@ export const skillAuthoringSkill: Skill = {
     const system = `你是 AI Agent Platform 的技能架构师。基于 agency-agents 技能协议（Skill = manifest + invoke），
 输出一个可被后端 skills/defs/*.skill.ts 直接注册的技能定义骨架。
 manifest 必含：id(kebab-case)、name、description、division、color、coreMission、criticalRules[]、successMetrics[]、quotaResource、minRole、requireAuth、marketable。
-invoke 必须调用对应 service 并预留 Mock 兜底。只输出 JSON：{ manifest: {...}, invokeSkeleton: "ts 代码字符串" }。`;
+invoke 必须调用对应 service，生产失败时显式返回错误且不得伪造结果。只输出 JSON：{ manifest: {...}, invokeSkeleton: "ts 代码字符串" }。`;
 
     let draft: any = null;
     try {
@@ -72,7 +72,7 @@ invoke 必须调用对应 service 并预留 Mock 兜底。只输出 JSON：{ man
     } catch (e: any) {
       return {
         ok: false,
-        error: `技能骨架生成失败：${e.message}（请确认已配置厂商 Key 或启用 ENABLE_MOCK_MODE）`,
+        error: `技能骨架生成失败：${e.message}（请确认已配置真实厂商 Key）`,
       };
     }
 
@@ -85,12 +85,15 @@ invoke 必须调用对应 service 并预留 Mock 兜底。只输出 JSON：{ man
       const skeleton =
         typeof draft.invokeSkeleton === 'string' && draft.invokeSkeleton.trim()
           ? draft.invokeSkeleton
-          : '// TODO: 调用对应 service 实现，并预留 Mock 兜底分支';
+          : '// TODO: 调用对应真实 service；依赖未配置或调用失败时返回明确错误，生产环境禁止 Mock 兜底';
       tsFile = `import type { Skill } from '../types';\n\n// 由 skill-authoring 生成（superpowers writing-skills 等价物）\nexport const ${varName}: Skill = {\n  manifest: ${manifestJson},\n  async invoke(ctx) {\n    ${skeleton}\n  },\n};\n`;
     } else {
-      tsFile = `// 生成结果未解析为结构化 manifest，原始回复：\n/*\n${
-        draft && draft.raw ? draft.raw : JSON.stringify(draft, null, 2)
-      }\n*/`;
+      return {
+        ok: false,
+        status: 502,
+        code: 'SKILL_AUTHORING_INVALID_RESPONSE',
+        error: 'AI Provider 返回的技能骨架缺少有效 manifest.id，已拒绝生成不可执行的占位技能',
+      };
     }
 
     return {

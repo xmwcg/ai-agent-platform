@@ -1,7 +1,7 @@
 /**
  * text2img 路由集成测试（成本防护）
  * 不依赖真实 DB / Redis，mock 掉 MediaTask、media-gen.service、redisClient。
- * 重点验证：① 服务端数量/分辨率封顶；② 匿名用户每日限次真实生成后转 Mock。
+ * 重点验证：① 服务端数量/分辨率封顶；② 匿名用户每日限次；③ 生产超限拒绝 Mock。
  */
 import express from 'express';
 import request from 'supertest';
@@ -96,7 +96,7 @@ describe('匿名用户每日限次真实生成', () => {
     expect(Number(store.get(ipKey))).toBe(1); // 计数已写入
   });
 
-  it('已达上限：强制 Mock，不再垫付', async () => {
+  it('非生产已达上限：可转 Mock 演示，不再垫付', async () => {
     store.clear();
     store.set(ipKey, '3'); // 预置到上限
     const res = await request(app)
@@ -107,6 +107,25 @@ describe('匿名用户每日限次真实生成', () => {
     expect(res.body.data.provider).toBe('mock');
     expect(res.body.data.anonRealLeft).toBe(0);
     expect(Number(store.get(ipKey))).toBe(3); // 计数不再增长
+  });
+
+  it('生产已达上限：返回 429，绝不调用 Mock 或生成假图片', async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    store.clear();
+    store.set(ipKey, '3');
+    try {
+      const res = await request(app)
+        .post('/generate')
+        .set('X-Forwarded-For', XFF)
+        .send({ prompt: '狗' });
+      expect(res.status).toBe(429);
+      expect(res.body.code).toBe('ANON_MEDIA_QUOTA_EXCEEDED');
+      expect(generateSpy).not.toHaveBeenCalled();
+      expect(Number(store.get(ipKey))).toBe(3);
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
   });
 });
 

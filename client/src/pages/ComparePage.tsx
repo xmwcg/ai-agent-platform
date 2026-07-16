@@ -51,21 +51,13 @@ export default function ComparePage() {
       const res: any = await apiClient.get('/compare/items', {
         params: { type: selectedType === 'all' ? undefined : selectedType }
       });
-      if (res.data) {
-        setItems(res.data);
-      } else {
-        // 模拟数据
-        setItems([
-          { id: 'gpt-4o', name: 'GPT-4o', type: 'model', provider: 'OpenAI', description: 'OpenAI 最新旗舰多模态模型' },
-          { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', type: 'model', provider: 'Anthropic', description: 'Anthropic 平衡型模型，擅长推理' },
-          { id: 'deepseek-v3', name: 'DeepSeek V3', type: 'model', provider: 'DeepSeek', description: '国产开源 MoE 模型，性价比极高' },
-          { id: 'deepseek-r1', name: 'DeepSeek R1', type: 'model', provider: 'DeepSeek', description: '推理专用模型，数学/代码能力强' },
-          { id: 'hunyuan-pro', name: '腾讯混元 Pro', type: 'model', provider: '腾讯', description: '腾讯自研大模型，中文理解优秀' },
-          { id: 'qwen-max', name: '通义千问 Max', type: 'model', provider: '阿里云', description: '阿里云旗舰模型，中文能力均衡' },
-        ]);
+      if (!Array.isArray(res?.data)) {
+        throw new Error('对比项数据格式无效');
       }
-    } catch {
-      message.error('加载对比项失败');
+      setItems(res.data);
+    } catch (error) {
+      setItems([]);
+      message.error(extractApiError(error, '加载对比项失败'));
     }
   };
 

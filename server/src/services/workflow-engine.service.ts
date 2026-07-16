@@ -283,8 +283,8 @@ class WorkflowEngine {
             execution.output = result.reply;
             execution.status = 'success';
           } catch (e) {
-            execution.output = `[AI 对话失败]`;
-            execution.status = 'success'; // 降级不阻塞
+            execution.status = 'error';
+            execution.error = e instanceof Error ? e.message : '人工智能对话执行失败';
           }
           break;
         }
@@ -304,8 +304,8 @@ class WorkflowEngine {
             }));
             execution.status = 'success';
           } catch (e) {
-            execution.output = [];
-            execution.status = 'success'; // 降级
+            execution.status = 'error';
+            execution.error = e instanceof Error ? e.message : '知识检索执行失败';
           }
           break;
         }
@@ -322,8 +322,8 @@ class WorkflowEngine {
             execution.output = result.reply;
             execution.status = 'success';
           } catch (e) {
-            execution.output = text;
-            execution.status = 'success';
+            execution.status = 'error';
+            execution.error = e instanceof Error ? e.message : '翻译执行失败';
           }
           break;
         }
@@ -365,13 +365,9 @@ class WorkflowEngine {
         }
 
         case 'skill': {
-          // 技能占位：实际调用 skills 注册表
-          execution.output = {
-            executed: false,
-            message: '技能节点需要配置具体技能名称。在画布右侧属性面板中配置。',
-            input,
-          };
-          execution.status = 'success';
+          // 统一工作流技能节点尚未接入技能注册表，不得将空壳节点标记为成功。
+          execution.status = 'error';
+          execution.error = '技能节点尚未接入真实技能执行器';
           break;
         }
 

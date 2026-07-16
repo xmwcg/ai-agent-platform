@@ -87,14 +87,9 @@ export default function Login() {
     if (!/^1[3-9]\d{9}$/.test(phone)) { message.warning('请输入正确的手机号'); return; }
     setSending(true);
     try {
-      const res: any = await apiClient.post('/auth/sms/send', { phone });
+      await apiClient.post('/auth/sms/send', { phone });
       setCountdown(60);
-      // 开发态 Mock：后端回显 devCode，便于联调；生产接真实短信服务商后无此字段
-      if (res.devCode) {
-        message.success(`验证码已发送（演示码：${res.devCode}）`);
-      } else {
-        message.success('验证码已发送，请查收短信');
-      }
+      message.success('验证码已发送，请查收短信');
     } catch (err) {
       message.error(extractApiError(err, '发送失败'));
     } finally {
@@ -114,21 +109,15 @@ export default function Login() {
     }
   };
 
-  // ─── 微信扫码登录（配置即生效；未配置走演示模式） ───
+  // ─── 微信扫码登录（仅后端确认真实配置可用时展示） ───
   const startWechatLogin = async () => {
     setWxLoading(true);
     setWxNotice(null);
     try {
       const res: any = await apiClient.get('/auth/wechat/qr');
-      const { mock, authorizeUrl, state } = res;
-      if (mock || !authorizeUrl || authorizeUrl.startsWith('mock://')) {
-        // 未配置：演示模式，直接用 mock code 换取 token 体验流程
-        setWxNotice('微信登录尚未在服务器端配置（当前为演示模式）。部署时请在 server/.env 填入 WECHAT_OPEN_APPID 与 WECHAT_OPEN_SECRET 即可启用真实扫码。');
-        const cb: any = await apiClient.get('/auth/wechat/callback', {
-          params: { code: 'mock', state, format: 'json' },
-        });
-        if (cb.token) finishLogin(cb.token, cb.user);
-        return;
+      const { mock, authorizeUrl } = res;
+      if (mock || typeof authorizeUrl !== 'string' || !authorizeUrl.startsWith('https://open.weixin.qq.com/')) {
+        throw new Error('微信登录未配置真实授权地址');
       }
       // 已配置：打开微信授权页（自带二维码），扫码后回调页 postMessage 回传 token
       const popup = window.open(
@@ -205,7 +194,7 @@ export default function Login() {
         onClick={startWechatLogin}
         style={{ background: '#07c160', borderColor: '#07c160', height: 48 }}
       >
-        {wxNotice ? '演示登录' : '微信扫码登录'}
+        微信扫码登录
       </Button>
       <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
         扫码后自动创建/绑定账号，安全便捷

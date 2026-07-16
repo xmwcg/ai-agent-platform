@@ -5,37 +5,46 @@ import { logger } from '../lib/logger';
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-agent-platform';
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const isProduction = () => process.env.NODE_ENV === 'production';
+const mongoUri = () => process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-agent-platform';
+const redisUrl = () => process.env.REDIS_URL || 'redis://localhost:6379';
+let mongoListenersRegistered = false;
 
-// MongoDB 连接（可选）
+// MongoDB 连接：生产环境必须成功，开发/测试可显式跳过。
 export const connectMongoDB = async (): Promise<Connection> => {
   if (!process.env.MONGODB_URI || process.env.MOCK_MODE === 'true') {
-    logger.warn('database', 'MongoDB connection skipped (MOCK_MODE or no URI)');
+    if (isProduction()) {
+      throw new Error('生产环境必须配置并连接 MONGODB_URI，且 MOCK_MODE 不得启用');
+    }
+    logger.warn('database', 'MongoDB connection skipped outside production');
     return mongoose.connection;
   }
 
+  const uri = mongoUri();
   try {
-    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
-    logger.info('database', 'MongoDB connected successfully', { uri: MONGODB_URI.replace(/\/\/.*@/, '//<credentials>@') });
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
+    logger.info('database', 'MongoDB connected successfully', { uri: uri.replace(/\/\/.*@/, '//<credentials>@') });
 
-    mongoose.connection.on('error', (err) => {
-      logger.error('database', 'MongoDB connection error', err);
-    });
-
-    mongoose.connection.on('disconnected', () => {
-      logger.warn('database', 'MongoDB disconnected, trying to reconnect...');
-    });
+    if (!mongoListenersRegistered) {
+      mongoListenersRegistered = true;
+      mongoose.connection.on('error', (err) => {
+        logger.error('database', 'MongoDB connection error', err);
+      });
+      mongoose.connection.on('disconnected', () => {
+        logger.error('database', 'MongoDB disconnected');
+      });
+    }
 
     return mongoose.connection;
   } catch (error: any) {
     logger.error('database', `Failed to connect to MongoDB: ${error.message}`);
-    logger.warn('database', 'Server will continue without MongoDB (mock mode)');
-    return mongoose.connection; // 不崩溃，继续运行
+    if (isProduction()) throw error;
+    logger.warn('database', 'MongoDB unavailable outside production; continuing for local/test use');
+    return mongoose.connection;
   }
 };
 
-// Redis 连接（带内存降级：连接失败时自动切换到 Map 实现，保证无 Redis 环境可运行）
+// Redis 连接：生产环境必须使用真实 Redis；仅开发/测试允许进程内存替身。
 class MemoryRedis {
   private store = new Map<string, string>();
   private expirations = new Map<string, number>();
@@ -136,19 +145,17 @@ class MemoryRedis {
 
 const memoryRedis = new MemoryRedis();
 
-// 真实 Redis 客户端
-// lazyConnect + 自动重连；启用 TCP keepalive 及时探测并回收僵死（半开）连接，
-// 这是此前「连接僵死但 status 仍为 ready、ping 卡死」的根因所在。
-const realRedis = new Redis(REDIS_URL, {
+// 真实 Redis 客户端。仅由 connectRedis() 在启动门禁中主动连接。
+const realRedis = new Redis(redisUrl(), {
   lazyConnect: true,
   connectTimeout: 5000,
-  maxRetriesPerRequest: 3, // 命令快速失败，避免无限重试挂起
+  maxRetriesPerRequest: 3,
   retryStrategy: (times: number) => {
     const delay = Math.min(times * 200, 3000);
     logger.warn('redis', `连接断开，重连中（第 ${times} 次，delay ${delay}ms）`);
-    return delay; // 始终重试，不放弃
+    return delay;
   },
-  keepAlive: 30, // 30s TCP keepalive，及时探测并回收僵死（半开）连接
+  keepAlive: 30,
   enableReadyCheck: true,
   noDelay: true,
 });
@@ -157,59 +164,67 @@ realRedis.on('error', (err: any) => {
   logger.warn('redis', `连接错误: ${err?.message || err}`);
 });
 realRedis.on('end', () => {
-  logger.warn('redis', '连接已断开，retryStrategy 将持续重连');
+  logger.error('redis', '连接已断开');
 });
 realRedis.on('ready', () => {
   logger.info('redis', 'Redis connected');
 });
 
-// 主动发起连接（不阻塞启动；失败由 retryStrategy 兜底重连）
-(realRedis as any).connect?.()
-  ?.catch?.((err: any) => logger.warn('redis', `初始连接失败，将持续重连: ${err?.message || err}`));
+let useMemoryRedis = !isProduction();
+
+export async function connectRedis(): Promise<any> {
+  if (!process.env.REDIS_URL || process.env.MOCK_MODE === 'true') {
+    if (isProduction()) {
+      throw new Error('生产环境必须配置并连接 REDIS_URL，且 MOCK_MODE 不得启用');
+    }
+    useMemoryRedis = true;
+    logger.warn('redis', 'Redis connection skipped outside production; using MemoryRedis');
+    return memoryRedis;
+  }
+
+  try {
+    const status = (realRedis as any).status;
+    if (status === 'wait' || status === 'end') {
+      await realRedis.connect();
+    }
+    const pong = await withTimeout(realRedis.ping() as Promise<string>, 5000, 'redis startup');
+    if (pong !== 'PONG') throw new Error(`unexpected Redis ping response: ${pong}`);
+    useMemoryRedis = false;
+    return realRedis;
+  } catch (error: any) {
+    logger.error('redis', `Failed to connect to Redis: ${error?.message || error}`);
+    if (isProduction()) throw error;
+    useMemoryRedis = true;
+    logger.warn('redis', 'Redis unavailable outside production; using MemoryRedis');
+    return memoryRedis;
+  }
+}
+
+export function isUsingMemoryRedis(): boolean {
+  return useMemoryRedis;
+}
 
 function isRedisReady(): boolean {
   return (realRedis as any).status === 'ready';
 }
 
-/**
- * 独立探测 Redis 可用性：每次新建短连接并 ping，避免主连接僵死（半开）污染
- * 健康状态。探测不重试、快速判定，真实反映 Redis 是否可达；主连接自身由
- * retryStrategy + keepalive 自愈（僵死时 app 自动降级内存版，恢复后自动切回）。
- */
 async function probeRedisHealth(): Promise<boolean> {
-  const probe = new Redis(REDIS_URL, {
-    lazyConnect: true,
-    connectTimeout: 3000,
-    maxRetriesPerRequest: 1,
-    retryStrategy: () => null, // 探测不重试，快速失败
-    keepAlive: 30,
-  });
+  if (useMemoryRedis) return !isProduction();
+  if (!isRedisReady()) return false;
   try {
-    await probe.connect();
-    const pong = await withTimeout(probe.ping() as Promise<string>, 1500, 'redis');
-    return pong === 'PONG';
+    return await withTimeout(realRedis.ping() as Promise<string>, 1500, 'redis') === 'PONG';
   } catch {
     return false;
-  } finally {
-    try { (probe as any).disconnect?.(); } catch { /* ignore */ }
   }
 }
 
 /**
- * Redis 代理：
- * - 真实连接可用时透传真实 Redis；
- * - 断开时自动降级内存版（配额/限流仍可用）；
- * - 一旦真实连接恢复（status 变 ready），后续调用自动切回真实 Redis。
- *
- * 取代原「10s 后永久替换为 MemoryRedis」逻辑——该逻辑会导致连接一旦错过
- * 启动窗口就永久走内存、且无法恢复，也无法区分「真不可用」与「僵死」。
+ * Redis 代理：生产环境永远指向真实 Redis，绝不降级到进程内存；
+ * 开发/测试在 connectRedis 未连接或失败时可使用 MemoryRedis。
  */
 const redisClient: any = new Proxy({}, {
   get(_target, prop: string | symbol) {
-    if (typeof prop === 'symbol') {
-      return (realRedis as any)[prop];
-    }
-    const backend = isRedisReady() ? realRedis : memoryRedis;
+    const backend = isProduction() || (!useMemoryRedis && isRedisReady()) ? realRedis : memoryRedis;
     const value = (backend as any)[prop];
     if (typeof value === 'function') {
       return (...args: any[]) => value.apply(backend, args);
@@ -279,7 +294,9 @@ export const closeDatabases = async (): Promise<void> => {
     await mongoose.disconnect();
     console.log('✅ MongoDB disconnected');
     
-    await redisClient.quit();
+    if ((realRedis as any).status !== 'wait' && (realRedis as any).status !== 'end') {
+      await realRedis.quit();
+    }
     console.log('✅ Redis disconnected');
   } catch (error) {
     console.error('❌ Error closing databases:', error);
@@ -301,6 +318,7 @@ process.on('SIGTERM', async () => {
 
 export default {
   connectMongoDB,
+  connectRedis,
   redisClient,
   checkDatabaseHealth,
   closeDatabases

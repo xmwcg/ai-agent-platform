@@ -1,35 +1,30 @@
-import type { Skill } from '../types';
 import { route } from '../../gateway/ai-gateway.service';
+import { mediaGenService } from '../../services/media-gen.service';
+import type { Skill } from '../types';
 
 /**
- * 视频生产流水线技能（借鉴 Open-Montage 的 agent-first pipeline 范式）
- * 阶段：research → script → assets(generate) → compose
- * 与本项目衔接点：
- *   - script 阶段走统一 AI 网关（route，可命中 DeepSeek/混元等）；
- *   - assets/generate 阶段复用 media-gen 服务（混元/可灵/即梦/Mock）；
- *   - compose 阶段调用 MoneyPrinterTurbo（外部视频工厂：文案→素材→配音→字幕→成片）。
- * 说明：OpenMontage 本身无 API，此处取其「pipeline 编排」理念落地为可调用技能。
+ * 视频生产流水线技能：research → script → compose。
+ * 所有阶段必须由真实 Provider 产出；任何关键阶段失败都会返回明确错误，绝不把错误文本包装成成功结果。
  */
 export const videoPipelineSkill: Skill = {
   manifest: {
     id: 'video-pipeline',
     name: '视频生产流水线',
-    description:
-      '从主题到成片的端到端视频生产：调研 → 脚本 → 素材生成 → 合成。串联 AI 网关与 MoneyPrinterTurbo 视频工厂。',
+    description: '从主题到成片的端到端视频生产：真实调研 → 脚本 → MoneyPrinterTurbo 合成。',
     division: 'media',
     color: '#f5222d',
-    coreMission: '把一句话主题，自动化生产为带配音字幕的高清短视频。',
+    coreMission: '把一句话主题自动化生产为带配音字幕的高清短视频。',
     criticalRules: [
-      '脚本阶段必须走统一 AI 网关（route），不直接调用厂商 SDK',
-      '合成阶段优先 MoneyPrinterTurbo（外部视频工厂），补齐成片能力',
-      '每个阶段产物可被单独查看（便于人工 checkpoint）',
+      '调研与脚本阶段必须走统一 AI 网关',
+      '生产环境只使用真实 Provider，任何阶段失败必须终止流水线',
+      '合成阶段使用已配置的 MoneyPrinterTurbo，并返回可追踪任务',
     ],
-    successMetrics: ['脚本质量', '成片可播放', '阶段可追溯'],
+    successMetrics: ['调研与脚本均来自真实模型', '成片任务可追踪', '阶段失败不返回伪成功'],
     userStory: '作为创作者，我希望从一句话主题自动生产带配音字幕的高清短视频。',
     acceptanceCriteria: [
-      '脚本阶段走统一 AI 网关',
-      '合成阶段优先 MoneyPrinterTurbo',
-      '各阶段产物可单独查看（checkpoint）',
+      '调研和脚本阶段走统一 AI 网关',
+      '合成阶段使用 MoneyPrinterTurbo',
+      '任一阶段失败返回非成功结果',
     ],
     quotaResource: 'media_gen',
     minRole: 'none',
@@ -37,58 +32,89 @@ export const videoPipelineSkill: Skill = {
     marketable: true,
   },
   async invoke(ctx) {
-    const { topic, duration, style, compose = true } = ctx.input || {};
-    if (!topic) return { ok: false, error: '视频流水线需要 topic（主题）' };
-
-    // 阶段1：research（占位：真实环境可接联网/RAG）
-    const research = `围绕「${topic}」的受众画像与核心卖点调研（占位，可接 RAG/联网）。`;
-
-    // 阶段2：script（走统一 AI 网关）
-    let script = '';
-    try {
-      const r = await route({
-        messages: [
-          { role: 'system', content: '你是短视频脚本专家，输出 30 秒短视频口播脚本，含画面提示。' },
-          { role: 'user', content: `主题：${topic}${duration ? `，时长约 ${duration} 秒` : ''}` },
-        ],
-        maxTokens: 600,
-      });
-      script = r.reply;
-    } catch (e: any) {
-      script = `[脚本生成失败：${e.message}]`;
+    const { topic, duration, style, compose = true, provider, model } = ctx.input || {};
+    if (typeof topic !== 'string' || !topic.trim()) {
+      return { ok: false, status: 400, code: 'VIDEO_TOPIC_REQUIRED', error: '视频流水线需要非空 topic（主题）' };
+    }
+    if (typeof compose !== 'boolean') {
+      return { ok: false, status: 400, code: 'VIDEO_COMPOSE_INVALID', error: 'compose 必须是布尔值' };
     }
 
-    // 阶段3：assets/generate（复用媒体生成，文生视频预览帧）
-    // 阶段4：compose（MoneyPrinterTurbo 整片）
-    let composeResult: any = null;
-    if (compose) {
-      try {
-        const { mediaGenService } = await import('../../services/media-gen.service');
-        const gen = await mediaGenService.generate({
+    const cleanTopic = topic.trim();
+    try {
+      const researchResult = await route({
+        ...(typeof provider === 'string' ? { provider: provider as any } : {}),
+        ...(typeof model === 'string' && model.trim() ? { model: model.trim() } : {}),
+        messages: [
+          {
+            role: 'system',
+            content: '你是短视频内容调研员。基于用户主题给出目标受众、核心痛点、可信卖点、内容风险和三条可验证的创作依据。不得声称已联网，也不得编造来源。',
+          },
+          { role: 'user', content: `主题：${cleanTopic}` },
+        ],
+        maxTokens: 700,
+        temperature: 0.3,
+      });
+      const research = researchResult.reply?.trim();
+      if (!research) throw new Error('调研 Provider 返回空内容');
+
+      const scriptResult = await route({
+        ...(typeof provider === 'string' ? { provider: provider as any } : {}),
+        ...(typeof model === 'string' && model.trim() ? { model: model.trim() } : {}),
+        messages: [
+          {
+            role: 'system',
+            content: '你是短视频脚本专家。根据给定调研结果输出完整口播脚本、分镜、字幕和画面提示，不得补写不存在的事实来源。',
+          },
+          {
+            role: 'user',
+            content: `主题：${cleanTopic}
+目标时长：${duration || 30} 秒
+风格：${style || '自然专业'}
+调研结果：
+${research}`,
+          },
+        ],
+        maxTokens: 1200,
+        temperature: 0.5,
+      });
+      const script = scriptResult.reply?.trim();
+      if (!script) throw new Error('脚本 Provider 返回空内容');
+
+      let composeResult: any = null;
+      if (compose) {
+        composeResult = await mediaGenService.generate({
           type: 'text2video',
-          prompt: topic,
+          prompt: script,
           provider: 'moneyprinterturbo',
           ...(duration ? { duration } : {}),
           ...(style ? { style } : {}),
         } as any);
-        composeResult = gen;
-      } catch (e: any) {
-        composeResult = { error: e.message };
+        if (!composeResult?.taskId && composeResult?.status !== 'completed') {
+          throw new Error('视频合成服务未返回可追踪任务');
+        }
       }
-    }
 
-    return {
-      ok: true,
-      data: {
-        stages: {
-          research,
-          script,
-          compose: composeResult,
+      return {
+        ok: true,
+        data: {
+          stages: {
+            research: { content: research, provider: researchResult.provider, model: researchResult.model },
+            script: { content: script, provider: scriptResult.provider, model: scriptResult.model },
+            compose: composeResult,
+          },
+          next: compose
+            ? `轮询 /api/tools/media/task/moneyprinterturbo/${composeResult.taskId} 获取成片`
+            : '已按请求跳过合成阶段',
         },
-        next: composeResult?.taskId
-          ? `轮询 /api/tools/media/task/moneyprinterturbo/${composeResult.taskId} 获取成片`
-          : '未触发合成',
-      },
-    };
+      };
+    } catch (error: any) {
+      return {
+        ok: false,
+        status: error?.statusCode || error?.status || 503,
+        code: error?.code || 'VIDEO_PIPELINE_UNAVAILABLE',
+        error: error?.message || '视频生产流水线暂时不可用',
+      };
+    }
   },
 };

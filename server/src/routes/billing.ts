@@ -8,7 +8,7 @@ import { PLANS, PlanId, DEFAULT_PLAN, getPlan } from '../config/billing';
 import { CREDITS_PACKAGES } from '../config/credits-pricing';
 import { getPaymentGateway, isRealGateway, listPaymentMethods } from '../services/payment.service';
 import { resolveUserPlan, getQuotaUsage } from '../middleware/subscription';
-import { sendError } from '../lib/http-error';
+import { AppError, sendError } from '../lib/http-error';
 import { validate, ValidationSchema } from '../lib/validation';
 import { logger } from '../lib/logger';
 import { activateReferralOnPayment } from '../services/referral.service';
@@ -25,6 +25,18 @@ const createOrderSchema: ValidationSchema = {
 /** 生成订单号：AI + 时间戳 + 随机 */
 function genOrderNo(): string {
   return `AI${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+}
+
+function resolvePaymentProvider(input?: PaymentProvider): PaymentProvider {
+  const configured = (process.env.DEFAULT_PAY_PROVIDER || (process.env.NODE_ENV === 'production' ? 'wechat' : 'mock')) as PaymentProvider;
+  const provider = input || configured;
+  if (!['mock', 'wechat', 'stripe', 'alipay'].includes(provider)) {
+    throw new AppError(400, '不支持的支付渠道', 'UNSUPPORTED_PAYMENT_PROVIDER');
+  }
+  if (process.env.NODE_ENV === 'production' && provider !== 'wechat') {
+    throw new AppError(400, '生产环境仅支持微信支付', 'PAYMENT_PROVIDER_DISABLED');
+  }
+  return provider;
 }
 
 /** 激活订阅：写入套餐、有效期、积分 */
@@ -107,7 +119,7 @@ router.post('/credits-packages/order', requireAuth, async (req: AuthRequest, res
     if (!pkg) {
       return res.status(400).json({ success: false, error: '无效的积分包' });
     }
-    const payProvider: PaymentProvider = provider || (process.env.DEFAULT_PAY_PROVIDER as PaymentProvider) || 'mock';
+    const payProvider = resolvePaymentProvider(provider);
     const orderNo = genOrderNo();
     const order = await Order.create({
       orderNo,
@@ -192,7 +204,7 @@ router.post('/orders', requireAuth, validate(createOrderSchema), async (req: Aut
     }
     const targetPeriod: BillingPeriod = period === 'yearly' ? 'yearly' : 'monthly';
     const amount = targetPeriod === 'yearly' ? PLANS[targetPlan].priceYearly : PLANS[targetPlan].priceMonthly;
-    const payProvider: PaymentProvider = provider || (process.env.DEFAULT_PAY_PROVIDER as PaymentProvider) || 'mock';
+    const payProvider = resolvePaymentProvider(provider);
 
     // 免费套餐无需支付
     if (amount === 0) {
@@ -247,6 +259,9 @@ router.post('/orders', requireAuth, validate(createOrderSchema), async (req: Aut
 
 // 模拟支付成功（仅 mock 网关，便于开发/演示跑通完整链路）
 router.get('/orders/:orderNo/pay', requireAuth, async (req: AuthRequest, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ success: false, error: '接口不存在' });
+  }
   try {
     const order = await Order.findOne({ orderNo: req.params.orderNo });
     if (!order) return res.status(404).json({ success: false, error: '订单不存在' });
@@ -350,8 +365,11 @@ router.get('/orders/:orderNo/detail', requireAuth, async (req: AuthRequest, res:
 
 // 支付网关回调（微信 / 支付宝 / Stripe）—— 带幂等性、重放防护、审计日志
 router.post('/webhook/:provider', async (req: Request, res: Response) => {
+  const provider = req.params.provider as PaymentProvider;
+  if (process.env.NODE_ENV === 'production' && provider !== 'wechat') {
+    return res.status(404).json({ success: false, error: '接口不存在' });
+  }
   try {
-    const provider = req.params.provider as PaymentProvider;
     const gateway = getPaymentGateway(provider);
 
     // 回执：支付宝要求返回纯文本 "success"，否则会持续重推；其余渠道返回 JSON 即可
@@ -382,14 +400,14 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
       : wechatHeaders;
 
     const result = await gateway.verifyWebhook(rawBody, signature, extra);
-    if (!result || !result.success) {
-      // 区分验签失败与非成功事件（如 payment_failed）
-      if (result && result.eventType) {
-        logger.info('webhook', `非成功事件: provider=${provider} eventType=${result.eventType} orderNo=${result.orderNo}`);
-      } else {
-        logger.warn('webhook', `验签失败: provider=${provider}`);
-      }
-      // 永远返回 200，避免支付网关认为回调失败而重试
+    if (!result) {
+      logger.warn('webhook', `验签失败: provider=${provider}`);
+      return process.env.NODE_ENV === 'production' && provider === 'wechat'
+        ? res.status(401).json({ code: 'SIGN_ERROR', message: '签名验证失败' })
+        : ack();
+    }
+    if (!result.success) {
+      logger.info('webhook', `非成功事件: provider=${provider} eventType=${result.eventType || 'unknown'} orderNo=${result.orderNo}`);
       return ack();
     }
 
@@ -501,10 +519,11 @@ router.post('/webhook/:provider', async (req: Request, res: Response) => {
     return ack();
   } catch (err) {
     logger.error('webhook', `处理失败: provider=${req.params.provider}`, err);
-    // 永远返回 200，避免支付网关认为回调失败而无限重试
-    if (req.params.provider === 'alipay') {
-      return res.status(200).send('success');
+    // 生产微信回调处理失败必须返回非 2xx，让渠道继续重试；不能吞掉持久化/履约故障。
+    if (process.env.NODE_ENV === 'production' && provider === 'wechat') {
+      return res.status(500).json({ code: 'SYSTEM_ERROR', message: '处理失败，请重试' });
     }
+    if (provider === 'alipay') return res.status(200).send('success');
     return res.status(200).json({ received: true });
   }
 });
@@ -549,14 +568,14 @@ router.get('/payment-status', requireAuth, async (_req: AuthRequest, res: Respon
     if (s.length <= 8) return '****';
     return s.slice(0, 4) + '****' + s.slice(-4);
   };
-  const defaultProvider = process.env.DEFAULT_PAY_PROVIDER || 'mock';
+  const defaultProvider = process.env.DEFAULT_PAY_PROVIDER || (process.env.NODE_ENV === 'production' ? 'wechat' : 'mock');
   res.json({
     success: true,
     data: {
       defaultProvider,
       isReal: defaultProvider !== 'mock',
       wechat: {
-        configured: !!(process.env.WECHAT_MCH_ID && process.env.WECHAT_API_V3_KEY && process.env.WECHAT_PRIVATE_KEY),
+        configured: !!(process.env.WECHAT_MCH_ID && process.env.WECHAT_APP_ID && process.env.WECHAT_API_V3_KEY && process.env.WECHAT_CERT_SERIAL && process.env.WECHAT_PRIVATE_KEY && process.env.WECHAT_PLATFORM_CERT),
         mchId: mask(process.env.WECHAT_MCH_ID),
         appId: mask(process.env.WECHAT_APP_ID),
         hasApiKey: !!process.env.WECHAT_API_V3_KEY,

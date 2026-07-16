@@ -50,8 +50,8 @@ describe('媒体生成 - 多厂商 Provider 抽象', () => {
     expect(list.find((p) => p.name === 'mock')!.configured).toBe(true);
   });
 
-  it('无配置时自动选择 Mock', () => {
-    expect(selectMediaProvider().name).toBe('mock');
+  it('无配置的文生图优先选择真实 CloudBase 免费额度', () => {
+    expect(selectMediaProvider().name).toBe('cloudbase-free');
   });
 
   it('配置混元后优先选中混元', () => {

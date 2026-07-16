@@ -11,10 +11,18 @@ import { requireAuth, optionalAuth, AuthRequest } from '../middleware/auth';
 import { enforceQuota, quotaIncrement } from '../middleware/subscription';
 import { canAccessResource } from '../middleware/resourceAccess';
 import { TeamRole } from '../models/Team';
-import { sendError } from '../lib/http-error';
+import { AppError, sendError } from '../lib/http-error';
 import { ICustomerService, ICustomerServiceSession } from '../models/CustomerService';
 
 const router = Router();
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+export function isCustomerServiceMockModeEnabled(): boolean {
+  return !isProduction() && process.env.ENABLE_MOCK_MODE === 'true';
+}
 
 function genEmbedCode(): string {
   return crypto.randomBytes(12).toString('hex');
@@ -213,7 +221,7 @@ router.post('/chat/:embedCode', optionalAuth, enforceQuota('cs_query'), async (r
       answer = cs.handoffPrompt;
     } else {
       // 3. 调用大模型生成回复（RAG 增强，统一走 AI 网关，支持国内/自定义模型）
-      const mockMode = process.env.ENABLE_MOCK_MODE === 'true';
+      const mockMode = isCustomerServiceMockModeEnabled();
       if (mockMode) {
         answer = context
           ? `（Mock）根据知识库内容，关于「${message}」：${sources[0]?.snippet || '请参考相关文档。'}`
@@ -231,9 +239,21 @@ router.post('/chat/:embedCode', optionalAuth, enforceQuota('cs_query'), async (r
             ],
             temperature: 0.5,
           });
-          answer = result.reply || cs.fallbackMessage;
+          const reply = result.reply?.trim();
+          if (!reply) {
+            throw new Error('AI Provider returned an empty reply');
+          }
+          answer = reply;
         } catch (e: any) {
           logger.error('customer-service', `模型调用失败（${fullModel}）：${e?.message ?? e}`);
+          if (isProduction()) {
+            throw new AppError(
+              503,
+              '智能客服暂时不可用，请稍后重试或转人工客服',
+              'CUSTOMER_SERVICE_AI_UNAVAILABLE',
+              e instanceof Error ? e.message : String(e)
+            );
+          }
           answer = cs.fallbackMessage;
         }
       }

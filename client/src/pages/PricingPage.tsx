@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import {
   CheckOutlined, CrownOutlined, ThunderboltOutlined, WalletOutlined,
-  WechatOutlined, AlipayOutlined, LoadingOutlined, CreditCardOutlined,
+  WechatOutlined, LoadingOutlined,
 } from '@ant-design/icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { billingAPI, extractApiError } from '@/services/api';
@@ -47,11 +47,9 @@ export default function PricingPage() {
   const [selectedItem, setSelectedItem] = useState<PlanFromServer | CreditsPackage | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'yearly'>('monthly');
   // 支付方式与支付流程状态
-  type PayProvider = 'wechat' | 'alipay' | 'stripe';
+  type PayProvider = 'wechat';
   const PAY_PROVIDERS: { key: PayProvider; label: string; icon: React.ReactNode; color: string; bg: string }[] = [
     { key: 'wechat', label: '微信支付', icon: <WechatOutlined style={{ color: '#09bb07', fontSize: 18 }} />, color: '#09bb07', bg: '#f6ffed' },
-    { key: 'alipay', label: '支付宝', icon: <AlipayOutlined style={{ color: '#1677ff', fontSize: 18 }} />, color: '#1677ff', bg: '#e6f4ff' },
-    { key: 'stripe', label: 'Stripe', icon: <CreditCardOutlined style={{ color: '#635bff', fontSize: 18 }} />, color: '#635bff', bg: '#f0edff' },
   ];
   const [payProvider, setPayProvider] = useState<PayProvider>('wechat');
   const [payStatus, setPayStatus] = useState<'confirm' | 'creating' | 'waiting' | 'success' | 'expired'>('confirm');
@@ -181,20 +179,16 @@ export default function PricingPage() {
       const pp = res?.data?.payParams || {};
       const orderNo = res?.data?.orderNo as string;
 
-      if (pp.payUrl) {
-        // Mock 模式（未配置真实密钥的演示环境）：直接完成
-        await billingAPI.mockPay(orderNo);
-        setPayStatus('success');
-        if (!isCredits) setCurrentPlan(selectedItem.id);
-        message.success(isCredits ? `成功购买 ${itemName}` : '支付成功！套餐已激活');
-      } else {
-        // 真实扫码：微信 codeUrl / 支付宝 qrCode
-        const qrValue = pp.codeUrl || pp.qrCode;
-        if (!qrValue) throw new Error('未获取到支付二维码，请稍后重试');
-        setQr({ value: qrValue, orderNo, itemName });
-        setPayStatus('waiting');
-        startPolling(orderNo, itemName, isCredits);
+      if (res?.data?.provider !== 'wechat') {
+        throw new Error('当前仅支持微信支付');
       }
+      const qrValue = pp.codeUrl;
+      if (!qrValue || typeof qrValue !== 'string') {
+        throw new Error('未获取到真实微信支付二维码，请稍后重试');
+      }
+      setQr({ value: qrValue, orderNo, itemName });
+      setPayStatus('waiting');
+      startPolling(orderNo, itemName, isCredits);
     } catch (e) {
       setPayStatus('confirm');
       message.error(extractApiError(e, '支付失败'));
@@ -205,14 +199,10 @@ export default function PricingPage() {
   // 获取付费套餐（不含免费版）
   const paidPlans = plans.filter((p) => p.id !== 'free');
 
-  // 仅展示后端已配置可用的支付方式（缺密钥的渠道自动隐藏；兜底：接口异常时只显示微信）
-  const visibleProviders = (() => {
-    const list = PAY_PROVIDERS.filter((pp) => {
-      const m = paymentMethods.find((x) => x.key === pp.key);
-      return m ? m.enabled : pp.key === 'wechat';
-    });
-    return list.length ? list : PAY_PROVIDERS.filter((pp) => pp.key === 'wechat');
-  })();
+  // 后端未确认真实微信支付可用时，不展示或启用支付入口。
+  const visibleProviders = PAY_PROVIDERS.filter((pp) =>
+    paymentMethods.some((method) => method.key === pp.key && method.enabled)
+  );
 
   if (loading) {
     return (
@@ -429,11 +419,17 @@ export default function PricingPage() {
                 );
               })}
             </div>
+            {visibleProviders.length === 0 && (
+              <Paragraph type="danger" style={{ marginTop: 12, marginBottom: 0 }}>
+                微信支付尚未配置完成，当前暂不接受付款。
+              </Paragraph>
+            )}
             <div style={{ textAlign: 'right', marginTop: 24 }}>
               <Button onClick={closeModal} style={{ marginRight: 8 }}>返回</Button>
               <Button
                 type="primary"
                 loading={payStatus === 'creating'}
+                disabled={visibleProviders.length === 0}
                 onClick={handlePay}
                 style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none' }}
               >
@@ -447,7 +443,7 @@ export default function PricingPage() {
         {payStatus === 'waiting' && qr && (
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <Paragraph type="secondary" style={{ marginBottom: 12 }}>
-              请使用{payProvider === 'alipay' ? '支付宝' : payProvider === 'stripe' ? 'Stripe' : '微信'}扫描二维码完成支付
+              请使用微信扫描二维码完成支付
             </Paragraph>
             <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 12, border: '1px solid #eee' }}>
               <QRCodeSVG value={qr.value} size={200} level="M" includeMargin />

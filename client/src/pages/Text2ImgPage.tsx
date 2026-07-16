@@ -254,8 +254,8 @@ export default function Text2ImgPage() {
             {anonLeft !== undefined && (
               <div style={{ marginBottom: 12, fontSize: 12, color: anonLeft > 0 ? '#8c6d1f' : '#cf1322' }}>
                 {anonLeft > 0
-                  ? `游客模式：今日还可真实生成 ${anonLeft} 次，超出后将自动切换为演示模式（不消耗算力）`
-                  : '今日真实生成次数已用尽，本次将使用演示模式（不消耗算力）。登录可解锁完整额度。'}
+                  ? `游客模式：今日还可真实生成 ${anonLeft} 次`
+                  : '今日真实生成次数已用尽，请登录后使用账户额度。'}
               </div>
             )}
             {byokAvailable && (

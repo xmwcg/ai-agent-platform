@@ -1,5 +1,6 @@
 /** MoneyPrinterTurbo（外部视频工厂）Provider */
 import axios from 'axios';
+import { AppError } from '../../lib/http-error';
 import {
   genTaskId,
   persistTask,
@@ -15,6 +16,10 @@ import {
  * 与本项目单帧/单任务式媒体生成形成互补。本项目作为编排方调用其 HTTP API。
  * 仅支持 text2video（整片生成），image2image / image2video 仍走原有厂商。
  */
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
 class MoneyPrinterTurboProvider implements MediaProvider {
   name = 'moneyprinterturbo' as const;
   label = 'MoneyPrinterTurbo（视频工厂）';
@@ -52,8 +57,17 @@ class MoneyPrinterTurboProvider implements MediaProvider {
       await persistTask(jobId, result);
       return result;
     } catch (e: unknown) {
-      // 外部服务不可用：回退为本地 processing 占位，仍走 Mock 式轮询告知用户
+      if (e instanceof AppError) throw e;
       const em = e instanceof Error ? e.message : String(e);
+      if (isProduction()) {
+        throw new AppError(
+          503,
+          '视频生成服务暂时不可用，请稍后重试',
+          'MEDIA_PROVIDER_UNAVAILABLE',
+          `MoneyPrinterTurbo submit failed (${this.baseURL}): ${em}`
+        );
+      }
+      // 仅开发/测试环境保留占位任务，便于本地联调。
       const result: MediaGenResult = {
         type: 'text2video',
         taskId,
@@ -71,17 +85,35 @@ class MoneyPrinterTurboProvider implements MediaProvider {
     try {
       const resp = await axios.get(`${this.baseURL}/api/video_status/${taskId}`, { timeout: 8000 });
       const d = resp.data || {};
-      const completed = d.status === 'completed' || d.state === 'completed';
+      const status = String(d.status || d.state || '').toLowerCase();
+      if (['failed', 'error', 'cancelled', 'canceled'].includes(status)) {
+        throw new AppError(502, '视频生成任务执行失败', 'MEDIA_TASK_FAILED');
+      }
+      const completed = status === 'completed' || status === 'success' || status === 'succeeded';
+      const outputUrl = completed ? String(d.video_url || d.file_path || '') : '';
+      if (completed && !outputUrl) {
+        throw new AppError(502, '视频生成服务返回了无效结果', 'MEDIA_PROVIDER_INVALID_RESPONSE');
+      }
       return {
         type: 'text2video',
         taskId,
         status: completed ? 'completed' : 'processing',
         prompt: '',
-        outputUrl: completed ? d.video_url || d.file_path || '' : '',
+        outputUrl,
         provider: 'moneyprinterturbo',
         note: completed ? 'MoneyPrinterTurbo 成片已生成。' : 'MoneyPrinterTurbo 制作中……',
       };
-    } catch {
+    } catch (e: unknown) {
+      if (e instanceof AppError) throw e;
+      const em = e instanceof Error ? e.message : String(e);
+      if (isProduction()) {
+        throw new AppError(
+          503,
+          '视频生成状态暂时无法查询，请稍后重试',
+          'MEDIA_PROVIDER_UNAVAILABLE',
+          `MoneyPrinterTurbo query failed (${this.baseURL}, task=${taskId}): ${em}`
+        );
+      }
       return {
         type: 'text2video',
         taskId,

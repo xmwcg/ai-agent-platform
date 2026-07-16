@@ -20,8 +20,7 @@ local main
   -> client build + test
   -> 安全镜像 GitHub main
   -> 快进 deploy/production
-  -> notify-webhook 最佳努力通知服务器（秒级）
-  -> 服务器 systemd timer 发现新版本
+  -> 服务器 systemd timer 主动拉取并发现新版本
   -> 同步部署 + 本地健康检查 + 公网健康检查
   -> /api/health revision 与 CNB_COMMIT 一致
   -> CNB 流水线公网验收完成
@@ -30,8 +29,8 @@ local main
 关键点：
 
 - 服务器不监听 `main`，只监听 `deploy/production`，因此未通过流水线门禁的提交不会部署。
-- `notify-webhook` 是非阻塞的：即使 CNB Runner 无法 POST 到服务器，部署也会在 1 分钟内由 systemd timer 兜底轮询完成。
-- webhook 地址与密钥配置在 `.cnb.yml` 的 `notify-webhook` 阶段，**CNB 仓库设置里没有独立的 Webhooks 页面**。
+- 生产部署坚持 outbound pull：CNB 不连接服务器 SSH，也不要求开放部署 webhook 入站端口。
+- systemd timer 每分钟检查一次；CNB 流水线会等待生产探针完成，不以通知请求成功代替部署成功。
 
 ## GitHub 镜像保护
 

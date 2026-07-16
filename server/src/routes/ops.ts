@@ -20,14 +20,11 @@ import { getOpsSnapshot, getPublicMetrics } from '../services/ops.service';
 
 const router = Router();
 
-// Everything here requires login first.
-router.use(requireAuth);
-
 /**
  * GET /api/ops/snapshot
  * Full operations dashboard — admin only.
  */
-router.get('/snapshot', requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/snapshot', requireAuth, requireAdmin, async (_req: AuthRequest, res: Response) => {
   try {
     const data = await getOpsSnapshot();
     res.json({ success: true, data });

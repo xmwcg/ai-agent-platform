@@ -86,6 +86,13 @@ router.get('/models', (req: Request, res: Response) => {
 // 测试 Provider 连接
 router.get('/test/:provider', async (req: Request, res: Response) => {
   const { provider } = req.params;
+  if (process.env.NODE_ENV === 'production' && provider === 'mock') {
+    return res.status(400).json({
+      success: false,
+      error: '生产环境禁止使用 Mock AI Provider',
+      code: 'AI_MOCK_DISABLED',
+    });
+  }
   
   try {
     const result = await aiModelManager.testConnection(provider as any);

@@ -86,6 +86,39 @@ describe('AI 网关 - 路由与 provider 注册表', () => {
     expect(r.reply).toContain('Mock');
     expect(r.provider).toBe('mock');
   });
+
+
+  it('production 即使误开 ENABLE_MOCK_MODE 也不会注册 mock provider', () => {
+    process.env = {
+      ...OLD_ENV,
+      NODE_ENV: 'production',
+      ENABLE_MOCK_MODE: 'true',
+      DEEPSEEK_API_KEY: 'real-provider-key',
+    };
+    reloadGatewayProviders();
+    expect(listGatewayProviders().some((p) => p.name === 'mock')).toBe(false);
+    expect(listGatewayProviders().some((p) => p.name === 'deepseek')).toBe(true);
+  });
+
+  it('production 显式 provider/model=mock 直接拒绝，不静默改走真实厂商', async () => {
+    process.env = {
+      ...OLD_ENV,
+      NODE_ENV: 'production',
+      ENABLE_MOCK_MODE: 'false',
+      DEEPSEEK_API_KEY: 'real-provider-key',
+    };
+    reloadGatewayProviders();
+
+    await expect(route({
+      provider: 'mock',
+      messages: [{ role: 'user', content: 'hi' }],
+    })).rejects.toMatchObject({ code: 'AI_MOCK_DISABLED', statusCode: 400 });
+
+    await expect(route({
+      model: 'mock/mock-gpt-4',
+      messages: [{ role: 'user', content: 'hi' }],
+    })).rejects.toMatchObject({ code: 'AI_MOCK_DISABLED', statusCode: 400 });
+  });
 });
 
 describe('AI 网关 - 国内主流模型注册（低成本闭环）', () => {

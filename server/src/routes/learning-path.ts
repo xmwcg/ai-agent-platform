@@ -3,7 +3,7 @@ import { createAIClient } from '../config/ai-models';
 import { Course } from '../models/Course';
 import { AuthRequest, optionalAuth } from '../middleware/auth';
 import { enforceQuota, quotaIncrement } from '../middleware/subscription';
-import { sendError } from '../lib/http-error';
+import { AppError, sendError } from '../lib/http-error';
 
 const router = Router();
 
@@ -17,7 +17,7 @@ interface Milestone {
   quiz?: { title: string; passed?: boolean };
 }
 
-interface LearningPath {
+export interface LearningPath {
   id: string;
   title: string;
   description: string;
@@ -27,7 +27,7 @@ interface LearningPath {
   generatedBy: 'ai' | 'template';
 }
 
-/** 离线/无 Key 时的兜底模板（引用真实课程库失败时使用静态示例） */
+/** 明确由用户选择的预置路径模板；生产 AI 生成接口失败时不得伪装成生成成功。 */
 const TEMPLATES: Record<Level, LearningPath> = {
   beginner: {
     id: 'tpl-beginner',
@@ -134,6 +134,113 @@ router.get('/templates', (req: Request, res: Response) => {
   res.json({ success: true, data: tpl });
 });
 
+export function isLearningPathTemplateFallbackAllowed(env = process.env.NODE_ENV): boolean {
+  return env !== 'production';
+}
+
+function parseGeneratedLearningPath(rawText: string, requestedLevel: Level): LearningPath {
+  let raw: any;
+  try {
+    raw = JSON.parse(rawText);
+  } catch (error) {
+    throw new AppError(
+      502,
+      'AI 返回的学习路径格式无效，请稍后重试',
+      'LEARNING_PATH_INVALID_RESPONSE',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  const validLevel = raw?.targetLevel === 'beginner'
+    || raw?.targetLevel === 'intermediate'
+    || raw?.targetLevel === 'advanced';
+  const validMilestones = Array.isArray(raw?.milestones)
+    && raw.milestones.length > 0
+    && raw.milestones.every((milestone: any) => (
+      Number.isFinite(Number(milestone?.week))
+      && Number(milestone.week) > 0
+      && typeof milestone?.title === 'string'
+      && milestone.title.trim().length > 0
+      && typeof milestone?.description === 'string'
+      && Array.isArray(milestone?.courses)
+    ));
+
+  if (
+    typeof raw?.title !== 'string'
+    || raw.title.trim().length === 0
+    || typeof raw?.description !== 'string'
+    || !validLevel
+    || !Number.isFinite(Number(raw?.estimatedWeeks))
+    || Number(raw.estimatedWeeks) <= 0
+    || !validMilestones
+  ) {
+    throw new AppError(
+      502,
+      'AI 返回的学习路径格式无效，请稍后重试',
+      'LEARNING_PATH_INVALID_RESPONSE',
+    );
+  }
+
+  return {
+    id: `ai-${Date.now()}`,
+    title: raw.title.trim(),
+    description: raw.description.trim(),
+    targetLevel: validLevel ? raw.targetLevel : requestedLevel,
+    estimatedWeeks: Number(raw.estimatedWeeks),
+    milestones: raw.milestones,
+    generatedBy: 'ai',
+  };
+}
+
+export async function generateLearningPathWithAI(input: {
+  level: Level;
+  goal?: string;
+  interests?: string;
+  courseList: { id: string; title: string; level: string; category: string }[];
+}): Promise<LearningPath> {
+  const { level, goal, interests, courseList } = input;
+  const system = `你是一名资深学习路径设计师。根据用户目标与可用课程库，生成一份个性化学习路径。
+要求：
+- 以 JSON 返回，结构：{ "title": string, "description": string, "targetLevel": "beginner"|"intermediate"|"advanced", "estimatedWeeks": number, "milestones": [{ "week": number, "title": string, "description": string, "courses": [{ "id": string, "title": string }], "quiz"?: { "title": string } }] }
+- milestones 的 courses 必须尽量引用提供的课程库（使用其 id 与 title），若确实无合适课程可留空数组。
+- 仅返回 JSON，不要额外说明。`;
+  const user = `用户水平：${level}
+学习目标：${goal || '全面提升 AI 应用能力'}
+兴趣方向：${interests || '不限'}
+可用课程库（JSON）：${JSON.stringify(courseList)}`;
+
+  let content: string;
+  try {
+    const client = createAIClient();
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      temperature: 0.7,
+      response_format: { type: 'json_object' },
+    });
+    content = completion.choices[0]?.message?.content || '';
+  } catch (error) {
+    throw new AppError(
+      503,
+      '学习路径 AI 服务暂时不可用，请稍后重试',
+      'LEARNING_PATH_PROVIDER_UNAVAILABLE',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  if (!content.trim()) {
+    throw new AppError(
+      502,
+      'AI 返回的学习路径格式无效，请稍后重试',
+      'LEARNING_PATH_INVALID_RESPONSE',
+    );
+  }
+  return parseGeneratedLearningPath(content, level);
+}
+
 // AI 生成个性化路径（引用真实课程库）
 router.post(
   '/generate',
@@ -146,7 +253,9 @@ router.post(
       interests?: string;
     };
     try {
-      // 取真实课程，供 AI 在路径中引用
+      const normalizedLevel: Level = ['beginner', 'intermediate', 'advanced'].includes(level)
+        ? level
+        : 'beginner';
       const courses = await Course.find({ isPublished: true })
         .select('title level category')
         .limit(60)
@@ -160,39 +269,15 @@ router.post(
 
       let path: LearningPath;
       try {
-        const client = createAIClient();
-        const system = `你是一名资深学习路径设计师。根据用户目标与可用人库课程，生成一份个性化学习路径。
-要求：
-- 以 JSON 返回，结构：{ "title": string, "description": string, "targetLevel": "beginner"|"intermediate"|"advanced", "estimatedWeeks": number, "milestones": [{ "week": number, "title": string, "description": string, "courses": [{ "id": string, "title": string }], "quiz"?: { "title": string } }] }
-- milestones 的 courses 必须尽量引用提供的课程库（使用其 id 与 title），若确实无合适课程可留空数组。
-- 仅返回 JSON，不要额外说明。`;
-        const user = `用户水平：${level}
-学习目标：${goal || '全面提升 AI 应用能力'}
-兴趣方向：${interests || '不限'}
-可用人库课程（JSON）：${JSON.stringify(courseList)}`;
-
-        const completion = await client.chat.completions.create({
-          model: 'gpt-4o',
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-          temperature: 0.7,
-          response_format: { type: 'json_object' },
+        path = await generateLearningPathWithAI({
+          level: normalizedLevel,
+          goal,
+          interests,
+          courseList,
         });
-        const raw = JSON.parse(completion.choices[0]?.message?.content || '{}');
-        path = {
-          id: `ai-${Date.now()}`,
-          title: raw.title || '个性化学习路径',
-          description: raw.description || '',
-          targetLevel: (raw.targetLevel as Level) || level,
-          estimatedWeeks: Number(raw.estimatedWeeks) || 8,
-          milestones: Array.isArray(raw.milestones) ? raw.milestones : [],
-          generatedBy: 'ai',
-        };
-      } catch {
-        // AI 不可用（无 Key / Mock）→ 使用模板兜底
-        path = TEMPLATES[level] || TEMPLATES.beginner;
+      } catch (error) {
+        if (!isLearningPathTemplateFallbackAllowed()) throw error;
+        path = TEMPLATES[normalizedLevel];
       }
 
       if (req.user?.id) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Typography, Radio, Checkbox, Input, Button, Space, Progress,
@@ -8,8 +8,7 @@ import {
   ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined,
   ClockCircleOutlined, TrophyOutlined
 } from '@ant-design/icons';
-// apiClient 预留（后续对接后端 API）
-// import apiClient from '@/services/api';
+import apiClient, { extractApiError } from '@/services/api';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -19,9 +18,15 @@ interface Question {
   type: 'single' | 'multiple' | 'truefalse' | 'fillblank' | 'code';
   question: string;
   options?: string[];
-  correctAnswer?: any;
-  explanation?: string;
   points: number;
+}
+
+interface QuizResult {
+  idx: number;
+  correct: boolean;
+  correctAnswer: unknown;
+  points: number;
+  explanation?: string;
 }
 
 interface Quiz {
@@ -42,114 +47,79 @@ export default function QuizPage() {
   const [answers, setAnswers] = useState<Record<number, any>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
-  const [results, setResults] = useState<{ correct: boolean; explanation?: string }[]>([]);
+  const [results, setResults] = useState<QuizResult[]>([]);
   const [timeLeft, setTimeLeft] = useState(0); // 秒
+  const [submitting, setSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
 
-  // 加载测验（模拟数据）
-  const loadQuiz = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setQuiz({
-        title: '第1章测验：Linux 基础',
-        description: '测试你对 Linux 基础知识的掌握程度，共 5 题，限时 10 分钟。',
-        timeLimit: 10,
-        passingScore: 60,
-        questions: [
-          {
-            type: 'single',
-            question: 'Linux 内核的创始人是谁？',
-            options: ['Linus Torvalds', 'Richard Stallman', 'Andrew Tanenbaum', 'Ken Thompson'],
-            correctAnswer: 0,
-            explanation: 'Linus Torvalds 在 1991 年发布了 Linux 内核。',
-            points: 20
-          },
-          {
-            type: 'multiple',
-            question: '以下哪些是 Linux 常见的包管理器？（多选）',
-            options: ['apt', 'yum', 'npm', 'dnf'],
-            correctAnswer: [0, 1, 3],
-            explanation: 'apt (Debian/Ubuntu)、yum/dnf (RHEL/CentOS) 是常见包管理器；npm 是 Node.js 的包管理器。',
-            points: 25
-          },
-          {
-            type: 'truefalse',
-            question: 'Linux 中 rm -rf / 命令可以安全执行。',
-            options: ['正确', '错误'],
-            correctAnswer: 1,
-            explanation: 'rm -rf / 会删除根目录下所有文件，极其危险！',
-            points: 15
-          },
-          {
-            type: 'fillblank',
-            question: '在 Linux 中，切换用户的命令是 ______。',
-            correctAnswer: 'su',
-            explanation: 'su (switch user) 命令用于切换用户，su - 可切换环境变量。',
-            points: 20
-          },
-          {
-            type: 'code',
-            question: '写出 Linux 命令：将文件 test.txt 的权限设置为「所有者读写执行，组用户读执行，其他用户读执行」。',
-            correctAnswer: 'chmod 755 test.txt',
-            explanation: '7=rwx, 5=rx, 5=rx，所以 chmod 755 test.txt。',
-            points: 20
-          }
-        ]
-      });
-      setTimeLeft(10 * 60); // 10 分钟
+  const loadQuiz = useCallback(async () => {
+    if (!courseId || chapterIdx === undefined) {
+      setQuiz(null);
       setLoading(false);
-    }, 500);
-  };
+      return;
+    }
 
-  useEffect(() => { loadQuiz(); }, [courseId, chapterIdx]);
+    setLoading(true);
+    setQuiz(null);
+    setAnswers({});
+    setResults([]);
+    setSubmitted(false);
+    try {
+      const res: any = await apiClient.get(`/courses/${courseId}/quiz/${chapterIdx}`);
+      const loaded = res?.data as Quiz | undefined;
+      if (!loaded || !Array.isArray(loaded.questions)) {
+        throw new Error('测验数据格式无效');
+      }
+      setQuiz(loaded);
+      setTimeLeft(Math.max(1, loaded.timeLimit || 10) * 60);
+    } catch (error) {
+      message.error(extractApiError(error, '测验加载失败'));
+    } finally {
+      setLoading(false);
+    }
+  }, [courseId, chapterIdx]);
 
-  // 倒计时
-  useEffect(() => {
-    if (timeLeft <= 0 || submitted) return;
-    const timer = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) {
-          clearInterval(timer);
-          handleSubmit(); // 自动提交
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [timeLeft, submitted]);
+  useEffect(() => { void loadQuiz(); }, [loadQuiz]);
 
   const handleAnswerChange = (qIdx: number, value: any) => {
     setAnswers(prev => ({ ...prev, [qIdx]: value }));
   };
 
-  const handleSubmit = () => {
-    if (!quiz) return;
-    // 计算得分
-    let totalScore = 0;
-    const newResults: { correct: boolean; explanation?: string }[] = [];
-    quiz.questions.forEach((q, idx) => {
-      const userAns = answers[idx];
-      let correct = false;
-      if (q.type === 'single' || q.type === 'truefalse') {
-        correct = userAns === q.correctAnswer;
-      } else if (q.type === 'multiple') {
-        const correctSet = new Set(q.correctAnswer);
-        const userSet = new Set(userAns || []);
-        correct = correctSet.size === userSet.size && [...correctSet].every(v => userSet.has(v));
-      } else if (q.type === 'fillblank') {
-        correct = userAns?.trim().toLowerCase() === q.correctAnswer?.toLowerCase();
-      } else if (q.type === 'code') {
-        // 代码题简单判断：包含关键词即算对
-        correct = userAns?.includes(q.correctAnswer) || false;
+  const handleSubmit = useCallback(async () => {
+    if (!quiz || !courseId || chapterIdx === undefined || submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    setSubmitting(true);
+    try {
+      const res: any = await apiClient.post(`/courses/${courseId}/quiz/${chapterIdx}/submit`, { answers });
+      const data = res?.data;
+      if (typeof data?.score !== 'number' || !Array.isArray(data?.results)) {
+        throw new Error('评分结果格式无效');
       }
-      if (correct) totalScore += q.points;
-      newResults.push({ correct, explanation: q.explanation });
-    });
-    setScore(totalScore);
-    setResults(newResults);
-    setSubmitted(true);
-    message.success(`提交成功！得分：${totalScore} 分`);
-  };
+      setScore(data.score);
+      setResults(data.results);
+      setSubmitted(true);
+      message.success(`提交成功！得分：${data.score} 分`);
+    } catch (error) {
+      message.error(extractApiError(error, '提交失败'));
+    } finally {
+      submitInFlightRef.current = false;
+      setSubmitting(false);
+    }
+  }, [answers, chapterIdx, courseId, quiz]);
+
+  // 倒计时；到期时使用最新答案自动提交，且提交锁避免按钮与计时器重复请求。
+  useEffect(() => {
+    if (timeLeft <= 0 || submitted) return;
+    const timer = window.setTimeout(() => {
+      if (timeLeft <= 1) {
+        setTimeLeft(0);
+        void handleSubmit();
+      } else {
+        setTimeLeft(timeLeft - 1);
+      }
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [handleSubmit, submitted, timeLeft]);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
@@ -217,9 +187,10 @@ export default function QuizPage() {
               {q.options && (
                 <div style={{ marginLeft: 24 }}>
                   {q.options.map((opt, oIdx) => {
-                    const isCorrect = Array.isArray(q.correctAnswer)
-                      ? q.correctAnswer.includes(oIdx)
-                      : q.correctAnswer === oIdx;
+                    const correctAnswer = results[idx]?.correctAnswer;
+                    const isCorrect = Array.isArray(correctAnswer)
+                      ? correctAnswer.includes(oIdx)
+                      : correctAnswer === oIdx;
                     return (
                       <div key={oIdx} style={{
                         padding: '4px 8px',
@@ -238,13 +209,13 @@ export default function QuizPage() {
                 <div style={{ marginLeft: 24 }}>
                   <Text type="secondary">你的答案：</Text>
                   <Text strong style={{ marginLeft: 8 }}>{answers[idx] || '（未作答）'}</Text>
-                  <Text type="success" style={{ marginLeft: 16 }}>正确答案：{q.correctAnswer}</Text>
+                  <Text type="success" style={{ marginLeft: 16 }}>正确答案：{String(results[idx]?.correctAnswer ?? '')}</Text>
                 </div>
               )}
-              {q.explanation && (
+              {results[idx]?.explanation && (
                 <div style={{ marginTop: 8, padding: 8, background: '#fafafa', borderRadius: 4 }}>
                   <TrophyOutlined style={{ color: '#faad14', marginRight: 8 }} />
-                  <Text type="secondary">{q.explanation}</Text>
+                  <Text type="secondary">{results[idx].explanation}</Text>
                 </div>
               )}
             </div>
@@ -384,7 +355,8 @@ export default function QuizPage() {
             <Button
               type="primary"
               size="large"
-              onClick={handleSubmit}
+              onClick={() => void handleSubmit()}
+              loading={submitting}
               disabled={Object.keys(answers).length < quiz.questions.length}
               style={{ width: 200 }}
             >

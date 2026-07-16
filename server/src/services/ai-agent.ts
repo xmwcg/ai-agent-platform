@@ -2,6 +2,7 @@ import { aiModelManager, type AIProvider } from '../config/ai-models';
 import { redisClient } from '../config/database';
 import { route, type GatewayProviderName } from '../gateway/ai-gateway.service';
 import { logger } from '../lib/logger';
+import { AppError } from '../lib/http-error';
 
 // 对话消息接口
 export interface ChatMessage {
@@ -41,6 +42,9 @@ class AIAgentService {
 
   // 创建新会话
   async createSession(userId: string, provider?: AIProvider): Promise<string> {
+    if (process.env.NODE_ENV === 'production' && provider === 'mock') {
+      throw new AppError(400, '生产环境禁止使用 Mock AI Provider', 'AI_MOCK_DISABLED');
+    }
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const defaultProvider = provider || (aiModelManager.getDefaultProvider()?.name.toLowerCase() as AIProvider) || 'openai';
     

@@ -15,6 +15,10 @@ const router = Router();
 router.post('/run', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { language, code, mode, resourceId } = req.body || {};
+    const production = process.env.NODE_ENV === 'production';
+    if (production && Object.prototype.hasOwnProperty.call(req.body || {}, 'mode')) {
+      return res.status(400).json({ success: false, error: '生产环境不接受 mode 参数，执行器固定为 remote' });
+    }
     if (typeof code !== 'string' || code.trim().length === 0) {
       return res.status(400).json({ success: false, error: 'code 不能为空' });
     }
@@ -24,7 +28,7 @@ router.post('/run', requireAuth, async (req: AuthRequest, res: Response) => {
     const result = await sandboxService.run({
       language: language as any,
       code,
-      mode: mode as any,
+      mode: production ? undefined : mode as any,
       resourceId: resourceId || (req.body as any)?.resourceId,
     });
     res.json({ success: true, data: result });
@@ -39,7 +43,10 @@ router.get('/status', optionalAuth, async (_req: AuthRequest, res: Response) => 
     res.json({
       success: true,
       data: {
+        production: process.env.NODE_ENV === 'production',
         defaultMode: sandboxService.defaultMode(),
+        mockEnabled: providers.find((item) => item.mode === 'mock')?.configured === true,
+        localEnabled: providers.find((item) => item.mode === 'local')?.configured === true,
         providers,
         supportedLanguages: SUPPORTED_LANGUAGES,
       },

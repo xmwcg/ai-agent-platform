@@ -1,36 +1,204 @@
 main:
   push:
     - name: production-release
+      runner:
+        tags: cnb:arch:amd64
       docker:
-        image: node:20-bookworm
+        image: node:22-bookworm
+      services:
+        - docker
       imports:
         - https://cnb.cool/aibak.site/cnb-github-migration-guide/-/blob/main/secrets.yml
       env:
         PRODUCTION_BASE_URL: https://aibak.site
         DEPLOY_BRANCH: deploy/production
+        IMAGE_REPOSITORY: ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG}
+        TRIVY_IMAGE: aquasec/trivy:0.58.2
+      lock:
+        key: deploy-production
+        wait: true
+        cancel-in-wait: true
       stages:
-        - name: server-quality-gate
+        - name: install-locked-dependencies
           script: |
             set -eu
             cd server
             npm ci --no-audit --no-fund
-            npx tsc --noEmit
-            npm test
+            cd ../client
+            npm ci --no-audit --no-fund
 
-        - name: client-quality-gate
+        - name: typescript-and-build-gate
           script: |
             set -eu
-            cd client
-            npm install --no-audit --no-fund
+            cd server
             npm run build
-            npm test
+            cd ../client
+            npm run build
 
-        - name: repository-consistency-gate
+        - name: unit-integration-and-release-tests
           script: |
             set -eu
+            cd server
+            npm test -- --runInBand
+            cd ..
             node scripts/check-superpowers-sync.cjs
+            npm run test:release
+            cd client
+            npm test
+
+        - name: production-config-static-gate
+          script: |
+            set -eu
+            cd server
+            export NODE_ENV=production
+            export ENABLE_MOCK_MODE=false
+            export MOCK_MODE=false
+            export DEFAULT_PAY_PROVIDER=wechat
+            export SANDBOX_MODE=remote
+            export PUBLIC_BASE_URL="$PRODUCTION_BASE_URL"
+            export APP_COMMIT_SHA="$CNB_COMMIT"
+            export NOTIFY_CHANNEL="${NOTIFY_CHANNEL:-disabled}"
+            npm run validate:production
+
+        - name: dependency-security-scan
+          script: |
+            set -eu
+            cd server
+            npm_config_registry=https://registry.npmjs.org npm audit --audit-level=high
+            cd ../client
+            npm_config_registry=https://registry.npmjs.org npm audit --audit-level=high
+
+        - name: build-and-push-immutable-images
+          image: docker:27-git
+          script: |
+            set -eu
+            test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
+            echo "$CNB_TOKEN" | docker login "$CNB_DOCKER_REGISTRY" \
+              --username "$CNB_TOKEN_USER_NAME" --password-stdin
+
+            server_tag="$IMAGE_REPOSITORY/server:$CNB_COMMIT"
+            client_tag="$IMAGE_REPOSITORY/client:$CNB_COMMIT"
+            export DOCKER_BUILDKIT=1
+
+            # 全局返回值，保持脚本兼容 docker:27-git 的 POSIX /bin/sh。
+            RESOLVED_IMAGE=''
+            resolve_existing_image() {
+              tag=$1
+              repository=$2
+              inspection_file=$(mktemp)
+              inspection_error=$(mktemp)
+              RESOLVED_IMAGE=''
+
+              attempt=1
+              while [ "$attempt" -le 3 ]; do
+                if docker manifest inspect "$tag" >"$inspection_file" 2>"$inspection_error"; then
+                  docker pull "$tag"
+                  revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$tag")
+                  if [ "$revision" != "$CNB_COMMIT" ]; then
+                    echo "已存在的 SHA 镜像 revision 不匹配，拒绝覆盖: tag=$tag revision=$revision"
+                    rm -f "$inspection_file" "$inspection_error"
+                    return 1
+                  fi
+                  immutable_ref=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$tag" \
+                    | awk -v prefix="${repository}@" 'index($0, prefix) == 1 { print; exit }')
+                  immutable_digest=${immutable_ref##*@}
+                  if [ "${immutable_ref%@*}" != "$repository" ] \
+                    || ! echo "$immutable_digest" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
+                    echo "已存在镜像未返回合法 digest: $tag"
+                    rm -f "$inspection_file" "$inspection_error"
+                    return 1
+                  fi
+                  RESOLVED_IMAGE=$immutable_ref
+                  echo "复用已存在的不可变 SHA 镜像: $immutable_ref"
+                  rm -f "$inspection_file" "$inspection_error"
+                  return 0
+                fi
+
+                if grep -Eqi 'manifest unknown|no such manifest|manifest.*not found|not found.*manifest' "$inspection_error"; then
+                  rm -f "$inspection_file" "$inspection_error"
+                  return 2
+                fi
+
+                if [ "$attempt" -lt 3 ]; then
+                  echo "Registry 查询失败，第 $attempt 次重试: $tag"
+                  sleep $((attempt * 3))
+                fi
+                attempt=$((attempt + 1))
+              done
+
+              echo "Registry 查询失败，不能将网络或鉴权错误当作镜像不存在: $tag"
+              cat "$inspection_error"
+              rm -f "$inspection_file" "$inspection_error"
+              return 1
+            }
+
+            build_or_reuse_image() {
+              context=$1
+              tag=$2
+              repository=$3
+
+              if resolve_existing_image "$tag" "$repository"; then
+                return 0
+              else
+                lookup_status=$?
+              fi
+              [ "$lookup_status" -eq 2 ] || return "$lookup_status"
+
+              echo "SHA 镜像不存在，首次构建: $tag"
+              docker build --pull \
+                --build-arg APP_COMMIT_SHA="$CNB_COMMIT" \
+                -t "$tag" "$context"
+              docker push "$tag"
+              resolve_existing_image "$tag" "$repository"
+            }
+
+            build_or_reuse_image server "$server_tag" "$IMAGE_REPOSITORY/server"
+            server_ref=$RESOLVED_IMAGE
+            build_or_reuse_image client "$client_tag" "$IMAGE_REPOSITORY/client"
+            client_ref=$RESOLVED_IMAGE
+
+            server_digest=${server_ref##*@}
+            client_digest=${client_ref##*@}
+            echo "$server_digest" | grep -Eq '^sha256:[a-f0-9]{64}$'
+            echo "$client_digest" | grep -Eq '^sha256:[a-f0-9]{64}$'
+
+            mkdir -p .release
+            cat >.release/image-metadata.env <<EOF
+            SERVER_IMAGE_TAG=$server_tag
+            CLIENT_IMAGE_TAG=$client_tag
+            SERVER_IMAGE=$server_ref
+            CLIENT_IMAGE=$client_ref
+            SERVER_IMAGE_DIGEST=$server_digest
+            CLIENT_IMAGE_DIGEST=$client_digest
+            EOF
+            cat .release/image-metadata.env
+
+        - name: image-security-scan
+          image: docker:27-git
+          script: |
+            set -eu
+            . .release/image-metadata.env
+            # Trivy 通过只读 Docker 登录配置直接扫描私有 Registry，
+            # 不把宿主 Docker socket 暴露给扫描容器。
+            docker run --rm \
+              -v "$HOME/.docker:/root/.docker:ro" \
+              "$TRIVY_IMAGE" image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 1 \
+              "$SERVER_IMAGE"
+            docker run --rm \
+              -v "$HOME/.docker:/root/.docker:ro" \
+              "$TRIVY_IMAGE" image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 1 \
+              "$CLIENT_IMAGE"
 
         - name: mirror-github-safely
+          image: docker:27-git
           script: |
             set -eu
             test -n "${GH_TOKEN:-}" || { echo "GH_TOKEN 未配置"; exit 1; }
@@ -38,22 +206,27 @@ main:
             export GIT_TERMINAL_PROMPT=0
             git config user.name "cnb-release-bot"
             git config user.email "cnb-release-bot@users.noreply.github.com"
-            git fetch --unshallow origin >/dev/null 2>&1 || true
+            git fetch --unshallow origin >/dev/null 2>&1 || git fetch --prune origin
             git remote remove github-mirror >/dev/null 2>&1 || true
-            git remote add github-mirror "https://x-access-token:${GH_TOKEN}@github.com/xmwcg/${CNB_REPO_NAME}.git"
+            git remote add github-mirror "https://x-access-token:${GH_TOKEN}@github.com/xmwcg/ai-agent-platform.git"
 
             if git fetch --prune github-mirror main; then
               github_sha=$(git rev-parse refs/remotes/github-mirror/main)
               if git merge-base --is-ancestor "$github_sha" "$CNB_COMMIT"; then
                 echo "GitHub main 可快进，执行普通 push"
                 git push github-mirror "$CNB_COMMIT:refs/heads/main"
-              elif git diff --quiet "$github_sha" "$CNB_COMMIT"; then
-                echo "GitHub 与 CNB 内容一致但历史不同，执行受控 force-with-lease"
-                git push github-mirror "$CNB_COMMIT:refs/heads/main" \
-                  --force-with-lease="refs/heads/main:$github_sha"
               else
-                echo "GitHub main 含 CNB 未包含的独立改动，拒绝覆盖。请先人工合并回 CNB。"
-                exit 1
+                unique_github_commits=$(git log --cherry-pick --right-only --format='%H' \
+                  "$CNB_COMMIT...$github_sha")
+                if git diff --quiet "$github_sha" "$CNB_COMMIT" \
+                  && [ -z "$unique_github_commits" ]; then
+                  echo "GitHub 最终内容一致且无独立补丁，执行受控 force-with-lease"
+                  git push github-mirror "$CNB_COMMIT:refs/heads/main" \
+                    --force-with-lease="refs/heads/main:$github_sha"
+                else
+                  echo "GitHub main 含 CNB 未包含的独立提交或内容，拒绝覆盖"
+                  exit 1
+                fi
               fi
             else
               echo "GitHub main 尚不存在，创建镜像分支"
@@ -67,6 +240,7 @@ main:
             }
 
         - name: promote-production-ref
+          image: docker:27-git
           script: |
             set -eu
             test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
@@ -91,54 +265,17 @@ main:
               exit 1
             }
 
-        - name: notify-webhook
-          script: |
-            set -u
-            # 最佳努力通知生产服务器立即检查 deploy/production
-            # 即使 webhook 失败，systemd timer 也会在 1 分钟内兜底轮询
-            node -e '
-            const crypto = require("crypto");
-            const http = require("http");
-            const payload = JSON.stringify({
-              repository: process.env.CNB_REPO || "ai-agent-platform",
-              branch: process.env.CNB_BRANCH || "main",
-              commit: process.env.CNB_COMMIT || "",
-              message: process.env.CNB_COMMIT_MESSAGE || ""
-            });
-            const secret = process.env.DEPLOY_SECRET || "cnb-deploy-secret-1784006404";
-            const sig = "sha256=" + crypto.createHmac("sha256", secret).update(payload).digest("hex");
-            const req = http.request({
-              hostname: "159.75.124.59",
-              port: 9000,
-              path: "/deploy",
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-CNB-Signature": sig,
-                "Content-Length": Buffer.byteLength(payload)
-              },
-              timeout: 30000
-            }, (res) => {
-              let body = "";
-              res.on("data", (chunk) => body += chunk);
-              res.on("end", () => {
-                console.log("webhook status:", res.statusCode, body);
-                process.exit(0); // 非阻塞，失败由 systemd timer 兜底
-              });
-            });
-            req.on("error", (err) => {
-              console.log("webhook error:", err.message);
-              process.exit(0); // 非阻塞
-            });
-            req.write(payload);
-            req.end();
-            '
-
         - name: verify-production-release
           script: |
             set -eu
+            . .release/image-metadata.env
             node deploy/verify-release.mjs \
               --base-url "$PRODUCTION_BASE_URL" \
               --expected-sha "$CNB_COMMIT" \
+              --expected-github-sha "$CNB_COMMIT" \
+              --expected-server-digest "$SERVER_IMAGE_DIGEST" \
+              --expected-client-digest "$CLIENT_IMAGE_DIGEST" \
               --timeout-seconds 900 \
-              --interval-seconds 15
+              --interval-seconds 15 \
+              --evidence-file .release/production-evidence.json
+            cat .release/production-evidence.json

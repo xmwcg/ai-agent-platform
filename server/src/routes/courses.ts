@@ -125,18 +125,18 @@ router.get('/user/progress-list', requireAuth, async (req: AuthRequest, res: Res
   }
 });
 
-// 获取课程详情
+// 获取已发布课程详情（公开响应不得泄漏测验答案与解析）
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const course = await Course.findById(req.params.id);
 
-    if (!course) {
+    if (!course || !course.isPublished) {
       return res.status(404).json({ error: 'Course not found' });
     }
 
     res.json({
       success: true,
-      data: course
+      data: sanitizeCourseForLearner(course)
     });
   } catch (error) {
     logger.error('courses', '获取课程详情失败', error);
@@ -230,8 +230,8 @@ router.post('/:id/enroll', requireAuth, async (req: AuthRequest, res: Response) 
     const userId = req.user!.id;
 
     const course = await Course.findById(courseId);
-    if (!course) {
-      return res.status(404).json({ error: '课程不存在' });
+    if (!course || !course.isPublished) {
+      return res.status(404).json({ error: '课程不存在或未发布' });
     }
 
     // upsert 进度记录
@@ -333,17 +333,68 @@ router.post('/:id/complete-chapter', requireAuth, async (req: AuthRequest, res: 
   }
 });
 
+// ─── 获取章节测验（需登录；正确答案与解析仅在提交后返回）───
+router.get('/:id/quiz/:chapterIdx', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const courseId = req.params.id;
+    const chapterIdx = Number.parseInt(req.params.chapterIdx, 10);
+
+    if (!Number.isInteger(chapterIdx) || chapterIdx < 0) {
+      return res.status(400).json({ error: '章节索引无效' });
+    }
+
+    const course = await Course.findById(courseId).select('title chapters isPublished');
+    if (!course || !course.isPublished) {
+      return res.status(404).json({ error: '课程不存在或未发布' });
+    }
+    if (chapterIdx >= course.chapters.length) {
+      return res.status(400).json({ error: '章节索引无效' });
+    }
+
+    const quiz = course.chapters[chapterIdx].quiz;
+    if (!quiz) {
+      return res.status(404).json({ error: '该章节没有测验' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        title: quiz.title,
+        description: quiz.description,
+        timeLimit: quiz.timeLimit,
+        passingScore: quiz.passingScore,
+        questions: quiz.questions.map((question) => ({
+          type: question.type,
+          question: question.question,
+          options: question.options,
+          points: question.points,
+        })),
+      },
+    });
+  } catch (error) {
+    logger.error('courses', '获取章节测验失败', error);
+    sendError(res, error);
+  }
+});
+
 // ─── 提交测验答案 + 自动评分（需登录）───
 router.post('/:id/quiz/:chapterIdx/submit', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const courseId = req.params.id;
-    const chapterIdx = parseInt(req.params.chapterIdx, 10);
+    const chapterIdx = Number.parseInt(req.params.chapterIdx, 10);
     const userId = req.user!.id;
     const { answers } = req.body; // { [questionIdx]: userAnswer }
 
+    if (!Number.isInteger(chapterIdx) || chapterIdx < 0) {
+      return res.status(400).json({ error: '章节索引无效' });
+    }
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+      return res.status(400).json({ error: 'answers 必须是题号到答案的对象' });
+    }
+
     const course = await Course.findById(courseId);
-    if (!course) {
-      return res.status(404).json({ error: '课程不存在' });
+    if (!course || !course.isPublished) {
+      return res.status(404).json({ error: '课程不存在或未发布' });
     }
     if (chapterIdx < 0 || chapterIdx >= course.chapters.length) {
       return res.status(400).json({ error: '章节索引无效' });
@@ -429,6 +480,35 @@ router.post('/:id/quiz/:chapterIdx/submit', requireAuth, async (req: AuthRequest
 });
 
 export default router;
+
+/** 课程公开详情只返回作答所需字段，正确答案与解析必须在提交评分后返回。 */
+function sanitizeCourseForLearner(course: any) {
+  const plain = typeof course?.toObject === 'function' ? course.toObject() : course;
+  return {
+    ...plain,
+    chapters: Array.isArray(plain?.chapters)
+      ? plain.chapters.map((chapter: any) => ({
+        ...chapter,
+        quiz: chapter.quiz
+          ? {
+            title: chapter.quiz.title,
+            description: chapter.quiz.description,
+            timeLimit: chapter.quiz.timeLimit,
+            passingScore: chapter.quiz.passingScore,
+            questions: Array.isArray(chapter.quiz.questions)
+              ? chapter.quiz.questions.map((question: any) => ({
+                type: question.type,
+                question: question.question,
+                options: question.options,
+                points: question.points,
+              }))
+              : [],
+          }
+          : undefined,
+      }))
+      : [],
+  };
+}
 
 /** 格式化进度对象 */
 function formatProgress(progress: any, totalChapters: number) {

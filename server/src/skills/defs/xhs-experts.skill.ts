@@ -4,7 +4,7 @@ import { XHS_AGENTS, generateXhsCopy, type XhsRole } from '../../services/xhs-co
 /**
  * 小红书专家技能组（把 xhs-copy.service 的 4 个专家角色注册为可上架/调用的内置技能）
  * ----------------------------------------------------------------
- * 复用 generateXhsCopy()（内部走统一 AI 网关 route，含 provider 选择 / fallback / mock 兜底）。
+ * 复用 generateXhsCopy()（内部走统一 AI 网关 route；生产环境只允许真实 Provider）。
  * 注册后：
  *   - GET /api/skills            会列出这 4 个技能
  *   - GET /api/skills/market     会列出（均 marketable=true）
@@ -59,7 +59,7 @@ function buildXhsSkill(agent: (typeof XHS_AGENTS)[number]): Skill {
       criticalRules: [
         '必须走统一 AI 网关（route），不直接调用厂商 SDK',
         'product（产品卖点/主题）为必填入参，缺失时直接报错',
-        '无可用 provider 时回退 Mock 并给出提示',
+        '无可用真实 provider 时明确失败并提示配置真实厂商',
         ...(agent.id === 'copywriter' ? ['文案角色需尝试结构化解包（title/body/hashtags/imageSuggestions）'] : []),
       ],
       successMetrics: agent.id === 'copywriter' ? ['标题有钩子', '话题标签合规', '结构可解析'] : ['方案可落地', '结构清晰'],
@@ -71,7 +71,7 @@ function buildXhsSkill(agent: (typeof XHS_AGENTS)[number]): Skill {
       acceptanceCriteria: [
         '传入 product 后返回 reply（文案角色附带 structured）',
         '支持 audience/style/keywords 可选参数',
-        'Mock 模式下零依赖可跑通',
+        '生产环境不返回 Mock 内容',
       ],
       qualityCriteria: ['输出忠实于输入卖点', '不夸大/不虚假宣传'],
       references: ['xhs-copy.service', 'ai-gateway route()'],
@@ -94,7 +94,7 @@ function buildXhsSkill(agent: (typeof XHS_AGENTS)[number]): Skill {
         });
         return { ok: true, data: result };
       } catch (e: any) {
-        return { ok: false, error: `生成失败：${e.message}（请确认已配置厂商 Key 或启用 ENABLE_MOCK_MODE）` };
+        return { ok: false, error: `生成失败：${e.message}（请确认已配置真实厂商 Key）` };
       }
     },
   };

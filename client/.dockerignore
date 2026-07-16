@@ -1,3 +1,12 @@
 node_modules
-src
-*.zip
+dist
+.env
+.env.*
+*.log
+coverage
+.git
+.gitignore
+Dockerfile
+.dockerignore
+src/**/*.test.ts
+src/**/*.spec.ts

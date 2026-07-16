@@ -98,8 +98,15 @@ router.get('/media/task/:provider/:taskId', optionalAuth, async (req: AuthReques
   try {
     const provider = req.params.provider as MediaProviderName;
     const { taskId } = req.params;
-    if (!['mock', 'hunyuan', 'keling', 'jimeng'].includes(provider)) {
+    if (!['mock', 'hunyuan', 'keling', 'jimeng', 'moneyprinterturbo'].includes(provider)) {
       return res.status(400).json({ success: false, error: '不支持的厂商' });
+    }
+    if (process.env.NODE_ENV === 'production' && provider === 'mock') {
+      return res.status(400).json({
+        success: false,
+        error: '生产环境禁止查询 Mock 媒体任务',
+        code: 'MEDIA_MOCK_DISABLED',
+      });
     }
     const result = await mediaGenService.queryTask(provider, taskId);
     res.json({ success: true, data: result });

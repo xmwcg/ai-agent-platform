@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { billingAPI } from '@/services/api';
+import { billingAPI, type PaymentProvider } from '@/services/api';
 
 interface Plan {
   id: string;
@@ -58,7 +58,7 @@ interface PaymentState {
 
   // 当前支付流程
   currentOrderNo: string | null;
-  paymentProvider: 'wechat' | 'stripe' | 'alipay' | 'mock' | null;
+  paymentProvider: PaymentProvider | null;
   paymentModalOpen: boolean;
   paymentStep: 'confirm' | 'pay' | 'result';
   paymentResult: 'success' | 'fail' | null;
@@ -68,8 +68,8 @@ interface PaymentState {
   fetchCreditsPackages: () => Promise<void>;
   fetchSubscription: () => Promise<void>;
   fetchOrders: () => Promise<void>;
-  createOrder: (plan: string, period: 'monthly' | 'yearly', provider?: string) => Promise<any>;
-  createCreditsOrder: (packageId: string, provider?: string) => Promise<any>;
+  createOrder: (plan: 'free' | 'pro' | 'max' | 'team', period: 'monthly' | 'yearly', provider?: PaymentProvider) => Promise<any>;
+  createCreditsOrder: (packageId: string, provider?: PaymentProvider) => Promise<any>;
   getOrderStatus: (orderNo: string) => Promise<any>;
   setPaymentModalOpen: (open: boolean) => void;
   setPaymentProvider: (provider: PaymentState['paymentProvider']) => void;
@@ -134,7 +134,7 @@ export const usePaymentStore = create<PaymentState>()((set, get) => ({
   },
 
   createOrder: async (plan, period, provider) => {
-    const res: any = await billingAPI.createOrder({ plan: plan as any, period, provider });
+    const res: any = await billingAPI.createOrder({ plan, period, provider });
     const orderNo = res?.orderNo || res?.data?.orderNo;
     set({ currentOrderNo: orderNo || null });
     return res;

@@ -23,16 +23,15 @@ export const customerServiceSkill: Skill = {
     quotaResource: 'cs_query',
     minRole: 'none',
     requireAuth: false,
-    marketable: true,
+    marketable: false,
+    invokable: false,
   },
-  async invoke(ctx) {
+  async invoke() {
     return {
-      ok: true,
-      data: {
-        skill: 'customer-service',
-        hint: 'RAG 问答入口；绑定知识文档与来源引用在 routes/customer-service.ts 落实。',
-        input: ctx.input,
-      },
+      ok: false,
+      status: 501,
+      code: 'SKILL_ROUTE_ONLY',
+      error: '智能客服需通过 /api/customer-service/chat/:embedCode 调用，通用技能入口未开放',
     };
   },
 };

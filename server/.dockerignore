@@ -10,3 +10,4 @@ coverage
 .gitignore
 Dockerfile
 .dockerignore
+src/**/*.test.ts

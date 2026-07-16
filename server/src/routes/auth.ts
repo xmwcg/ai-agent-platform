@@ -147,6 +147,9 @@ const smsLoginSchema: ValidationSchema = {
 
 // 发送验证码（开发态 Mock：直接返回 code 便于测试；生产接短信服务商）
 router.post('/sms/send', authLimiter, validate(smsSendSchema), async (req: AuthRequest, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(503).json({ success: false, error: '短信登录暂未开放' });
+  }
   try {
     const { phone } = req.body as { phone: string };
     const rawPhone = normalizePhone(phone);
@@ -177,6 +180,9 @@ router.post('/sms/send', authLimiter, validate(smsSendSchema), async (req: AuthR
 
 // 验证码登录/注册（手机号不存在则自动注册）
 router.post('/sms/login', authLimiter, validate(smsLoginSchema), async (req: AuthRequest, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(503).json({ success: false, error: '短信登录暂未开放' });
+  }
   try {
     const { phone, code } = req.body as { phone: string; code: string };
     const rawPhone = normalizePhone(phone);
@@ -211,7 +217,8 @@ router.post('/sms/login', authLimiter, validate(smsLoginSchema), async (req: Aut
 // 登录方式可用状态：前端据此动态显示/隐藏入口；缺密钥自动隐藏，不影响其他功能上线
 router.get('/login-methods', async (_req: Request, res: Response) => {
   const wechatEnabled = !!(process.env.WECHAT_OPEN_APPID && process.env.WECHAT_OPEN_SECRET);
-  const smsEnabled = !!process.env.SMS_PROVIDER; // 未配置短信服务商则隐藏手机号入口（避免只能 Mock）
+  // 当前代码尚未接入真实短信 SDK；生产必须隐藏入口并拒绝请求。
+  const smsEnabled = process.env.NODE_ENV !== 'production' && !!process.env.SMS_PROVIDER;
   res.json({
     success: true,
     data: { email: true, wechat: wechatEnabled, sms: smsEnabled },
@@ -222,7 +229,12 @@ router.get('/login-methods', async (_req: Request, res: Response) => {
 // 生成扫码登录入口：返回需渲染为二维码的 authorizeUrl（开发态 Mock 可直接走通）
 router.get('/wechat/qr', async (_req: Request, res: Response) => {
   try {
-    const mock = process.env.WECHAT_LOGIN_MOCK === 'true' || (!process.env.WECHAT_OPEN_APPID);
+    const configured = !!(process.env.WECHAT_OPEN_APPID && process.env.WECHAT_OPEN_SECRET);
+    if (process.env.NODE_ENV === 'production' && !configured) {
+      return res.status(503).json({ success: false, error: '微信登录暂未开放' });
+    }
+    const mock = process.env.NODE_ENV !== 'production'
+      && (process.env.WECHAT_LOGIN_MOCK === 'true' || !configured);
     if (mock) {
       const state = crypto.randomBytes(8).toString('hex');
       await redisClient.set(`wechat:state:${state}`, '1', 'EX', 600);
@@ -244,13 +256,17 @@ router.get('/wechat/callback', async (req: Request, res: Response) => {
   try {
     const { code, state } = req.query as { code?: string; state?: string };
     const format = (req.query as any).format;
+    const configured = !!(process.env.WECHAT_OPEN_APPID && process.env.WECHAT_OPEN_SECRET);
+    if (process.env.NODE_ENV === 'production' && (!configured || code === 'mock')) {
+      return res.status(503).json({ success: false, error: '微信登录不可用' });
+    }
     if (!state || !(await redisClient.get(`wechat:state:${state}`))) {
       return res.status(400).json({ error: '非法的登录态' });
     }
     await redisClient.del(`wechat:state:${state}`);
 
     let openid: string;
-    if (code === 'mock' || !process.env.WECHAT_OPEN_APPID) {
+    if (process.env.NODE_ENV !== 'production' && (code === 'mock' || !configured)) {
       openid = `mock_openid_${state.slice(0, 6)}`;
     } else {
       const tokenResp = await axios.get('https://api.weixin.qq.com/sns/oauth2/access_token', {

@@ -1,30 +1,64 @@
+import type { AIProvider } from '../../config/ai-models';
+import { generateText } from '../../services/ai-text.service';
 import type { Skill } from '../types';
 
-/**
- * 代码解释技能（agency-agents: engineering division）
- * 11 语言 × 3 粒度的代码解释与示例生成。
- */
+const LEVEL_PROMPTS: Record<string, string> = {
+  brief: '用 2-3 句话说明代码用途、输入和输出。',
+  detailed: '详细说明代码用途、关键流程、复杂度、潜在缺陷和改进建议。',
+  teaching: '面向初学者逐步讲解，并列出关键概念和一个练习建议。',
+};
+
+/** 代码解释技能：直接调用真实文本生成服务，不返回入口提示或回显输入。 */
 export const codeExplainSkill: Skill = {
   manifest: {
     id: 'code-explain',
     name: '代码解释',
-    description: '支持 11 种编程语言、3 档粒度的代码解释与示例生成。',
+    description: '支持多种编程语言和三档粒度的真实 AI 代码解释。',
     division: 'engineering',
     color: '#fa8c16',
-    coreMission: '把任意代码段翻译成人话，并给出可运行的示例。',
-    criticalRules: ['指定语言与粒度', '输出结构化解释 + 示例'],
-    successMetrics: ['解释覆盖率', '示例可运行率'],
-    userStory: '作为开发者，我希望把任意代码段翻译成人话并给出可运行示例。',
-    acceptanceCriteria: ['指定语言与粒度', '输出结构化解释 + 示例'],
+    coreMission: '把任意代码段准确翻译成人话，并指出风险与改进方向。',
+    criticalRules: ['代码与语言必填', '调用真实 AI Provider', '不得把输入回显冒充解释结果'],
+    successMetrics: ['解释结果非空', 'Provider 与模型可追踪'],
+    userStory: '作为开发者，我希望把任意代码段翻译成人话并获得改进建议。',
+    acceptanceCriteria: ['指定语言与粒度', '输出真实模型生成的解释和 Provider 信息'],
     quotaResource: 'code_explain',
     minRole: 'none',
     requireAuth: false,
     marketable: true,
   },
   async invoke(ctx) {
-    return {
-      ok: true,
-      data: { skill: 'code-explain', hint: '代码解释入口（后端服务见 services/code）。', input: ctx.input },
-    };
+    const { code, language, level = 'detailed', context, provider, model } = ctx.input || {};
+    if (typeof code !== 'string' || !code.trim() || typeof language !== 'string' || !language.trim()) {
+      return { ok: false, status: 400, code: 'CODE_EXPLAIN_INPUT_INVALID', error: '代码解释需要非空 code 与 language' };
+    }
+    if (!LEVEL_PROMPTS[level]) {
+      return { ok: false, status: 400, code: 'CODE_EXPLAIN_LEVEL_INVALID', error: 'level 仅支持 brief/detailed/teaching' };
+    }
+    try {
+      const result = await generateText({
+        system: '你是严谨的高级软件工程师。只基于用户提供的代码作答，不虚构运行结果。',
+        user: `语言：${language}
+要求：${LEVEL_PROMPTS[level]}${context ? `
+上下文：${context}` : ''}
+
+代码：
+\`\`\`${language}
+${code.trim()}
+\`\`\``,
+        provider: typeof provider === 'string' ? provider as AIProvider : undefined,
+        model: typeof model === 'string' ? model.trim() || undefined : undefined,
+        temperature: 0.3,
+        maxTokens: 2000,
+      });
+      if (!result.text?.trim()) throw new Error('代码解释 Provider 返回空内容');
+      return { ok: true, data: { explanation: result.text, language, level, provider: result.provider, model: result.model } };
+    } catch (error: any) {
+      return {
+        ok: false,
+        status: error?.statusCode || error?.status || 503,
+        code: error?.code || 'CODE_EXPLAIN_PROVIDER_UNAVAILABLE',
+        error: error?.message || '代码解释 Provider 暂时不可用',
+      };
+    }
   },
 };

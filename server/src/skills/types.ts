@@ -50,6 +50,8 @@ export interface SkillManifest {
   requireAuth: boolean;
   /** 是否可在开放 API 市场上架（按量计费） */
   marketable: boolean;
+  /** 是否允许通过统一技能调用端点执行；false 表示仅提供独立业务路由。 */
+  invokable?: boolean;
   /**
    * —— 以下为 superpowers 风格声明字段（可选，对齐 obra/superpowers 的 SKILL.md frontmatter）——
    * 把「价值锚点 / 完成定义 / 质量约束」前置声明，便于评审与自动生成。
@@ -78,6 +80,10 @@ export interface SkillResult {
   ok: boolean;
   data?: any;
   error?: string;
+  /** 失败时建议的 HTTP 状态码。 */
+  status?: number;
+  /** 稳定的机器可读错误码。 */
+  code?: string;
 }
 
 /** 技能定义：manifest + invoke */

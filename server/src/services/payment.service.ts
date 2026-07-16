@@ -134,12 +134,41 @@ class WeChatPayGateway implements PaymentGateway {
   private get platformCert() { return process.env.WECHAT_PLATFORM_CERT || ''; }
 
   isConfigured() {
-    return !!(this.mchId && this.apiKey && this.privateKey);
+    const baseConfigured = !!(
+      this.mchId
+      && this.appId
+      && this.apiKey
+      && this.serialNo
+      && this.privateKey
+    );
+    return process.env.NODE_ENV === 'production'
+      ? baseConfigured && !!this.platformCert
+      : baseConfigured;
   }
 
   private ensureConfigured() {
-    if (!this.mchId || !this.apiKey || !this.privateKey) {
-      throw new Error('微信支付未配置：请在 .env 设置 WECHAT_MCH_ID / WECHAT_API_V3_KEY / WECHAT_PRIVATE_KEY');
+    const required: Array<[string, string]> = [
+      ['WECHAT_MCH_ID', this.mchId],
+      ['WECHAT_APP_ID', this.appId],
+      ['WECHAT_API_V3_KEY', this.apiKey],
+      ['WECHAT_CERT_SERIAL', this.serialNo],
+      ['WECHAT_PRIVATE_KEY', this.privateKey],
+    ];
+    if (process.env.NODE_ENV === 'production') {
+      required.push(['WECHAT_PLATFORM_CERT', this.platformCert]);
+    }
+    const missing = required.filter(([, value]) => !value).map(([key]) => key);
+    if (missing.length > 0) {
+      throw new Error(`微信支付未配置完整：缺少 ${missing.join(' / ')}`);
+    }
+  }
+
+  private platformCertificateSerial(): string | null {
+    if (!this.platformCert) return null;
+    try {
+      return new crypto.X509Certificate(this.platformCert).serialNumber.replace(/:/g, '').toUpperCase();
+    } catch {
+      return null;
     }
   }
 
@@ -190,19 +219,32 @@ class WeChatPayGateway implements PaymentGateway {
   async verifyWebhook(rawBody: string, signature: string, extra?: WebhookExtraHeaders): Promise<WebhookResult | null> {
     try {
       // ===== 第一步：签名验证（使用微信平台证书公钥） =====
-      if (this.platformCert && extra?.wechatTimestamp && extra?.wechatNonce) {
-        const sigValid = verifyWeChatSignature(
-          extra.wechatTimestamp,
-          extra.wechatNonce,
-          rawBody,
-          signature,
-          this.platformCert
-        );
-        if (!sigValid) {
-          return null; // 签名验证失败，拒绝伪造回调
+      const production = process.env.NODE_ENV === 'production';
+      const timestamp = extra?.wechatTimestamp || '';
+      const nonce = extra?.wechatNonce || '';
+      const serial = (extra?.wechatSerial || '').replace(/:/g, '').toUpperCase();
+      const platformSerial = this.platformCertificateSerial();
+
+      if (production && (!signature || !timestamp || !nonce || !serial || !this.platformCert || !platformSerial)) {
+        return null;
+      }
+      if (production && serial !== platformSerial) {
+        return null;
+      }
+      if (production) {
+        const signedAt = Number(timestamp);
+        const now = Math.floor(Date.now() / 1000);
+        if (!Number.isFinite(signedAt) || Math.abs(now - signedAt) > 300) {
+          return null;
         }
       }
-      // 注意：未配置 WECHAT_PLATFORM_CERT 时跳过验签（开发/Mock 环境兼容）
+      if (this.platformCert) {
+        if (!timestamp || !nonce || !signature) return null;
+        const sigValid = verifyWeChatSignature(timestamp, nonce, rawBody, signature, this.platformCert);
+        if (!sigValid) return null;
+      } else if (production) {
+        return null;
+      }
 
       // ===== 第二步：解析回调体并解密（如有必要） =====
       const data = JSON.parse(rawBody);
@@ -421,8 +463,15 @@ const gateways: Record<PaymentProvider, PaymentGateway> = {
   alipay: new AlipayGateway(),
 };
 
-export function getPaymentGateway(provider: PaymentProvider = 'mock'): PaymentGateway {
-  return gateways[provider] || gateways.mock;
+export function getPaymentGateway(provider?: PaymentProvider | string): PaymentGateway {
+  const selected = provider || (process.env.NODE_ENV === 'production' ? 'wechat' : 'mock');
+  if (!(selected in gateways)) {
+    throw new Error(`不支持的支付渠道: ${selected}`);
+  }
+  if (process.env.NODE_ENV === 'production' && selected !== 'wechat') {
+    throw new Error('生产环境仅允许微信支付');
+  }
+  return gateways[selected as PaymentProvider];
 }
 
 /** 各支付渠道展示元信息（顺序即前端展示顺序） */
@@ -434,7 +483,10 @@ export const PAYMENT_METHOD_META: { key: PaymentProvider; label: string }[] = [
 
 /** 返回各真实支付渠道的「是否已配置」状态，供前端动态展示入口（缺密钥的渠道自动隐藏） */
 export function listPaymentMethods() {
-  return PAYMENT_METHOD_META.map((m) => ({
+  const methods = process.env.NODE_ENV === 'production'
+    ? PAYMENT_METHOD_META.filter((method) => method.key === 'wechat')
+    : PAYMENT_METHOD_META;
+  return methods.map((m) => ({
     key: m.key,
     label: m.label,
     enabled: getPaymentGateway(m.key).isConfigured(),

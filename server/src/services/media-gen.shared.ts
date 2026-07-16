@@ -5,6 +5,7 @@
  */
 import { randomBytes } from 'crypto';
 import { MediaTask } from '../models/MediaTask';
+import { AppError } from '../lib/http-error';
 
 export type MediaTaskType = 'text2img' | 'image2image' | 'text2video' | 'image2video';
 export type MediaProviderName = 'mock' | 'hunyuan' | 'keling' | 'jimeng' | 'moneyprinterturbo' | 'cloudbase-free';
@@ -72,10 +73,24 @@ export interface StoredTask extends MediaGenResult {
   createdAt: number;
 }
 
-/** 内存降级存储（MongoDB 不可用时使用） */
+/** 内存降级存储（仅开发/测试环境使用） */
 const fallbackStore = new Map<string, StoredTask>();
 
-/** 持久化存储任务状态，MongoDB 不可用时自动降级内存 */
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+function taskStoreUnavailable(operation: 'write' | 'read', error?: unknown): AppError {
+  const detail = error instanceof Error ? error.message : error ? String(error) : 'MongoDB is not connected';
+  return new AppError(
+    503,
+    '媒体任务存储暂时不可用，请稍后重试',
+    'MEDIA_TASK_STORE_UNAVAILABLE',
+    `Media task store ${operation} failed: ${detail}`
+  );
+}
+
+/** 持久化存储任务状态；生产环境 MongoDB 不可用时直接失败。 */
 export async function persistTask(taskId: string, result: MediaGenResult): Promise<void> {
   try {
     if (MediaTask.db.readyState === 1) {
@@ -96,11 +111,14 @@ export async function persistTask(taskId: string, result: MediaGenResult): Promi
       );
       return;
     }
-  } catch { /* MongoDB 不可用时降级 */ }
+  } catch (error) {
+    if (isProduction()) throw taskStoreUnavailable('write', error);
+  }
+  if (isProduction()) throw taskStoreUnavailable('write');
   fallbackStore.set(taskId, { ...result, createdAt: Date.now() });
 }
 
-/** 从持久化存储检索任务，MongoDB 不可用时回退内存 */
+/** 从持久化存储检索任务；生产环境 MongoDB 不可用时直接失败。 */
 export async function retrieveTask(taskId: string): Promise<StoredTask | null> {
   try {
     if (MediaTask.db.readyState === 1) {
@@ -121,7 +139,10 @@ export async function retrieveTask(taskId: string): Promise<StoredTask | null> {
       }
       return null;
     }
-  } catch { /* MongoDB 不可用时降级 */ }
+  } catch (error) {
+    if (isProduction()) throw taskStoreUnavailable('read', error);
+  }
+  if (isProduction()) throw taskStoreUnavailable('read');
   return fallbackStore.get(taskId) || null;
 }
 

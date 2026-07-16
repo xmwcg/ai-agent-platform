@@ -150,15 +150,16 @@ export const gatewayAPI = {
 export default apiClient;
 
 // 计费 / 订阅 API
+export type PaymentProvider = 'wechat';
+
 export const billingAPI = {
   getPlans: () => apiClient.get('/billing/plans'),
   getSubscription: () => apiClient.get('/billing/subscription'),
   getCreditsPackages: () => apiClient.get('/billing/credits-packages'),
-  createOrder: (data: { plan: 'free' | 'pro' | 'max' | 'team'; period: 'monthly' | 'yearly'; provider?: string }) =>
+  createOrder: (data: { plan: 'free' | 'pro' | 'max' | 'team'; period: 'monthly' | 'yearly'; provider?: PaymentProvider }) =>
     apiClient.post('/billing/orders', data),
-  createCreditsOrder: (data: { packageId: string; provider?: string }) =>
+  createCreditsOrder: (data: { packageId: string; provider?: PaymentProvider }) =>
     apiClient.post('/billing/credits-packages/order', data),
-  mockPay: (orderNo: string) => apiClient.get(`/billing/orders/${orderNo}/pay`),
   // 查询订单支付状态（前端扫码后轮询；真实网关会主动查单兜底激活）
   getOrderStatus: (orderNo: string) => apiClient.get(`/billing/orders/${orderNo}/status`),
   cancelSubscription: () => apiClient.post('/billing/subscription/cancel'),
@@ -337,6 +338,26 @@ export const byokAPI = {
 export const diagnosticsAPI = {
   check: () => apiClient.get('/diagnostics'),
 };
+export interface OpsSnapshot {
+  northStar: { wau: number; wauTarget: number; wowGrowth: number };
+  acquisition: { signupsLast7d: number; newCreatorsLast7d: number };
+  activation: { activatedLast7d: number; activationRate: number };
+  retention: { weeklyRetentionRate: number; returningCreators: number };
+  revenue: { mrr: number; paidUsers: number; arpu: number; ordersLast7d: number };
+  referral: { referralSignupsLast7d: number; publicApiCallsLast7d: number; quotaHitsLast7d: number };
+  trend: { week: string; wau: number }[];
+}
+
+export interface PublicOpsMetrics {
+  totalCreators: number;
+  weeklyActiveCreators: number;
+  serviceOnline: boolean;
+}
+
+export const opsAPI = {
+  snapshot: () => apiClient.get<{ success: boolean; data: OpsSnapshot }>('/ops/snapshot'),
+  publicMetrics: () => apiClient.get<{ success: boolean; data: PublicOpsMetrics }>('/ops/public'),
+};
 
 // 技能市场 API（agency-agents 风格名册 + 调用 + 导入导出 + 外部市场）
 export const skillsAPI = {
@@ -480,4 +501,3 @@ export const workflowAPI = {
       responseType: download ? 'blob' : 'json',
     }),
 };
-

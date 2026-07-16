@@ -103,7 +103,7 @@ router.post(
       const safeN = Math.min(Math.max(Number(n) || 1, 1), TEXT2IMG_MAX_N);
       const safeSize = TEXT2IMG_ALLOWED_SIZES.includes(size) ? size : TEXT2IMG_DEFAULT_SIZE;
 
-      // —— 匿名用户每日限次真实生成，超出转 Mock（免垫付）——
+      // —— 匿名用户每日限次真实生成；生产超限直接拒绝，非生产可转 Mock 演示 ——
       let anonRealLeft: number | undefined;
       let effectiveProvider = (byok?.provider as any) || provider || undefined;
       let anonKey: string | undefined;
@@ -115,7 +115,14 @@ router.post(
           anonUsed = Number(await redisClient.get(anonKey)) || 0;
         } catch {/* 忽略：计数异常不阻断 */ }
         if (anonUsed >= ANON_DAILY_LIMIT) {
-          effectiveProvider = 'mock'; // 限额用尽，强制演示模式
+          if (process.env.NODE_ENV === 'production') {
+            return res.status(429).json({
+              success: false,
+              error: '匿名生成额度已用尽，请登录后继续使用',
+              code: 'ANON_MEDIA_QUOTA_EXCEEDED',
+            });
+          }
+          effectiveProvider = 'mock';
         }
       }
 
@@ -327,12 +334,15 @@ router.get('/storage-info', optionalAuth, async (_req: Request, res: Response) =
 router.get('/providers', optionalAuth, async (_req: Request, res: Response) => {
   const providers = listMediaProviders();
   const configured = providers.filter(p => p.configured).map(p => p.name);
+  const mockFallback = process.env.NODE_ENV !== 'production' && configured.length === 0;
   res.json({
     success: true,
     data: {
       providers,
-      summary: configured.length ? `已配置厂商: ${configured.join(', ')}` : '无厂商配置，自动回退 Mock 模式',
-      mockFallback: configured.length === 0,
+      summary: configured.length
+        ? `已配置厂商: ${configured.join(', ')}`
+        : (mockFallback ? '无厂商配置，自动回退 Mock 模式' : '无可用真实媒体生成厂商'),
+      mockFallback,
     },
   });
 });

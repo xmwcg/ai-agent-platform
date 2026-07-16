@@ -1,0 +1,90 @@
+services:
+  server:
+    image: ${SERVER_IMAGE:?SERVER_IMAGE must be an immutable digest reference}
+    container_name: ai-platform-server
+    restart: always
+    init: true
+    env_file:
+      - ${PRODUCTION_ENV_FILE:?PRODUCTION_ENV_FILE is required}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      APP_COMMIT_SHA: ${APP_COMMIT_SHA:?APP_COMMIT_SHA is required}
+      SERVER_IMAGE_DIGEST: ${SERVER_IMAGE_DIGEST:?SERVER_IMAGE_DIGEST is required}
+      CLIENT_IMAGE_DIGEST: ${CLIENT_IMAGE_DIGEST:?CLIENT_IMAGE_DIGEST is required}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - server_uploads:/usr/src/app/uploads
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "const h=require('http');const r=h.get('http://127.0.0.1:3000/api/health',x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)"]
+      interval: 15s
+      timeout: 4s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - ai-platform-network
+
+  client:
+    image: ${CLIENT_IMAGE:?CLIENT_IMAGE must be an immutable digest reference}
+    container_name: ai-platform-client
+    restart: unless-stopped
+    init: true
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${NGINX_RUNTIME_CONFIG:?NGINX_RUNTIME_CONFIG is required}:/etc/nginx/conf.d/default.conf:ro
+      - /opt/certs:/etc/nginx/certs:ro
+      - /opt/certs-webroot:/usr/share/nginx/html/.well-known/acme-challenge:ro
+    tmpfs:
+      - /var/cache/nginx:size=32m
+      - /var/run:size=8m
+      - /tmp:size=16m
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - ai-platform-network
+
+networks:
+  ai-platform-network:
+    driver: bridge
+
+volumes:
+  server_uploads:

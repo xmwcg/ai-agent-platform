@@ -51,14 +51,18 @@ export default function SandboxPage() {
   const [result, setResult] = useState<SandboxResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modeInfo, setModeInfo] = useState<{ defaultMode?: string; supportedLanguages?: string[] }>({});
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const loadStatus = useCallback(async () => {
     try {
       const res = await sandboxAPI.status();
       const d = (res.data as any)?.data;
-      setModeInfo({ defaultMode: d?.defaultMode, supportedLanguages: d?.supportedLanguages });
-    } catch {
-      /* 状态查询失败不阻塞主流程 */
+      if (!d?.defaultMode) throw new Error('沙盒状态响应无效');
+      setModeInfo({ defaultMode: d.defaultMode, supportedLanguages: d.supportedLanguages });
+      setStatusError(null);
+    } catch (e: unknown) {
+      setModeInfo({});
+      setStatusError(extractApiError(e, '无法确认沙盒运行模式'));
     }
   }, []);
 
@@ -114,8 +118,8 @@ export default function SandboxPage() {
         <Space wrap>
           <Text type="secondary">当前模式：</Text>
           <Badge
-            status={modeInfo.defaultMode === 'mock' ? 'default' : 'processing'}
-            text={modeInfo.defaultMode || 'mock'}
+            status={!modeInfo.defaultMode ? 'warning' : modeInfo.defaultMode === 'mock' ? 'default' : 'processing'}
+            text={modeInfo.defaultMode || '状态未知'}
           />
         </Space>
       </div>
@@ -130,6 +134,7 @@ export default function SandboxPage() {
         />
       )}
 
+      {statusError && <Alert type="error" message={statusError} style={{ marginBottom: 12 }} />}
       {error && <Alert type="error" message={error} style={{ marginBottom: 12 }} />}
 
       <Card style={{ marginBottom: 16 }}>

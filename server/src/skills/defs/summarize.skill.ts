@@ -4,7 +4,7 @@ import { route } from '../../gateway/ai-gateway.service';
 /**
  * 智能摘要技能（agency-agents: productivity division）
  * 把长文本/文档提炼为结构化要点摘要，复用统一 AI 网关（route）。
- * 支持指定摘要长度（brief/detailed）与输出语种；无 Key 时自动走 Mock 兜底。
+ * 支持指定摘要长度（brief/detailed）与输出语种；生产环境无真实 Provider 时明确失败。
  */
 export const summarizeSkill: Skill = {
   manifest: {
@@ -17,7 +17,7 @@ export const summarizeSkill: Skill = {
     criticalRules: [
       '必须走统一 AI 网关（route），不直接调用厂商 SDK',
       '输出结构：summary（一段概述）+ bullets（要点数组）',
-      '无可用 provider 时回退 Mock 并给出提示',
+      '无可用真实 provider 时明确失败并提示配置真实厂商',
     ],
     successMetrics: ['摘要覆盖率', '要点可读性'],
     quotaResource: 'ai_chat',
@@ -25,7 +25,7 @@ export const summarizeSkill: Skill = {
     requireAuth: false,
     marketable: true,
     userStory: '作为用户，我希望把长文快速提炼为要点，从而节省阅读时间。',
-    acceptanceCriteria: ['输入 text 后返回 summary 与 bullets', '支持 length 与 lang 参数', 'Mock 模式下零依赖可跑通'],
+    acceptanceCriteria: ['输入 text 后返回 summary 与 bullets', '支持 length 与 lang 参数', '生产环境不返回 Mock 摘要'],
     qualityCriteria: ['摘要不歪曲原意', '要点不冗余'],
     references: ['agency-agents skill protocol', 'ai-gateway route()'],
   },
@@ -60,7 +60,7 @@ export const summarizeSkill: Skill = {
       summary = parsed?.summary || raw;
       bullets = Array.isArray(parsed?.bullets) ? parsed.bullets : [];
     } catch (e: any) {
-      return { ok: false, error: `摘要生成失败：${e.message}（请确认已配置厂商 Key 或启用 ENABLE_MOCK_MODE）` };
+      return { ok: false, error: `摘要生成失败：${e.message}（请确认已配置真实厂商 Key）` };
     }
 
     return { ok: true, data: { summary, bullets, length, lang } };

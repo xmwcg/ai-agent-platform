@@ -18,10 +18,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import axios from 'axios';
 
-// ── P0 止血：local 模式默认禁用 ──
-// 真实本机执行（无容器隔离）需管理员显式设置 SANDBOX_LOCAL_ENABLED=true，
-// 且仍受 detectDangerousPatterns 静态拦截兜底。默认降级为 mock。
-const LOCAL_ENABLED = process.env.SANDBOX_LOCAL_ENABLED === 'true';
+// local 仅供非生产开发调试；生产始终强制 remote。
 
 export type SandboxLanguage = 'python' | 'javascript' | 'typescript' | 'bash';
 export type SandboxMode = 'mock' | 'local' | 'remote';
@@ -114,43 +111,60 @@ export interface SandboxEnvConfig {
   mode?: string;
   remoteUrl?: string;
   remoteToken?: string;
-  timeoutMs?: number;
+  timeoutMs?: number | string;
   pythonBin?: string;
   nodeBin?: string;
-  maxOutput?: number;
+  maxOutput?: number | string;
+  nodeEnv?: string;
+  localEnabled?: string;
+  [key: string]: unknown;
 }
 
-/** 读取沙盒配置（可注入 env 便于单测，不污染 process.env） */
-export function readSandboxConfig(env: SandboxEnvConfig = process.env): SandboxEnvConfig {
-  const timeout = Number(env.timeoutMs);
-  const maxOut = Number(env.maxOutput);
+export interface NormalizedSandboxConfig {
+  mode: string;
+  remoteUrl: string;
+  remoteToken: string;
+  timeoutMs: number;
+  pythonBin: string;
+  nodeBin: string;
+  maxOutput: number;
+  nodeEnv: string;
+  localEnabled: string;
+}
+
+/** 兼容归一化配置和真实 process.env 的 SANDBOX_* 命名。 */
+export function readSandboxConfig(env: SandboxEnvConfig = process.env): NormalizedSandboxConfig {
+  const source = env as Record<string, unknown>;
+  const timeout = Number(source.timeoutMs ?? source.SANDBOX_TIMEOUT_MS);
+  const maxOut = Number(source.maxOutput ?? source.SANDBOX_MAX_OUTPUT);
   return {
-    mode: env.mode,
-    remoteUrl: env.remoteUrl,
-    remoteToken: env.remoteToken,
+    mode: String(source.mode ?? source.SANDBOX_MODE ?? ''),
+    remoteUrl: String(source.remoteUrl ?? source.SANDBOX_REMOTE_URL ?? ''),
+    remoteToken: String(source.remoteToken ?? source.SANDBOX_REMOTE_TOKEN ?? ''),
     timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : 10000,
-    pythonBin: env.pythonBin || 'python3',
-    nodeBin: env.nodeBin || 'node',
+    pythonBin: String(source.pythonBin ?? source.SANDBOX_PYTHON_BIN ?? 'python3'),
+    nodeBin: String(source.nodeBin ?? source.SANDBOX_NODE_BIN ?? 'node'),
     maxOutput: Number.isFinite(maxOut) && maxOut > 0 ? maxOut : 64 * 1024,
+    nodeEnv: String(source.nodeEnv ?? source.NODE_ENV ?? ''),
+    localEnabled: String(source.localEnabled ?? source.SANDBOX_LOCAL_ENABLED ?? ''),
   };
 }
 
-/** 纯函数：根据显式选择 + 环境配置推导实际运行模式，默认 mock */
+/** 生产固定 remote；非生产才允许显式 mock/local。 */
 export function selectSandboxMode(
   explicit: SandboxMode | undefined,
   config: SandboxEnvConfig = process.env
 ): SandboxMode {
   const cfg = readSandboxConfig(config);
+  if (cfg.nodeEnv === 'production') return 'remote';
+
+  const localEnabled = cfg.localEnabled === 'true';
   if (explicit && ['mock', 'local', 'remote'].includes(explicit)) {
-    // local 真实执行默认禁用，降级为 mock
-    if (explicit === 'local' && !LOCAL_ENABLED) return 'mock';
+    if (explicit === 'local' && !localEnabled) return 'mock';
     return explicit;
   }
-  if (cfg.mode === 'local') {
-    if (!LOCAL_ENABLED) return 'mock';
-    return 'local';
-  }
-  if (cfg.mode === 'remote' && cfg.remoteUrl) return 'remote';
+  if (cfg.mode === 'local') return localEnabled ? 'local' : 'mock';
+  if (cfg.mode === 'remote' && cfg.remoteUrl && cfg.remoteToken) return 'remote';
   return 'mock';
 }
 
@@ -317,7 +331,7 @@ class RemoteProvider implements SandboxProvider {
   name = 'remote' as const;
   isConfigured(ctx?: SandboxEnvConfig) {
     const cfg = readSandboxConfig(ctx ?? process.env);
-    return !!cfg.remoteUrl;
+    return !!(cfg.remoteUrl && cfg.remoteToken);
   }
   async run(req: SandboxRequest, ctx: SandboxEnvConfig): Promise<SandboxResult> {
     const cfg = readSandboxConfig(ctx);
@@ -396,10 +410,16 @@ export const sandboxService = {
   defaultMode(explicit?: SandboxMode, ctx?: SandboxEnvConfig): SandboxMode {
     return selectSandboxMode(explicit, ctx ?? process.env);
   },
-  providers(): Array<{ mode: SandboxMode; configured: boolean }> {
+  providers(ctx: SandboxEnvConfig = process.env): Array<{ mode: SandboxMode; configured: boolean }> {
+    const cfg = readSandboxConfig(ctx);
+    const production = cfg.nodeEnv === 'production';
     return (['mock', 'local', 'remote'] as SandboxMode[]).map((m) => ({
       mode: m,
-      configured: PROVIDERS[m].isConfigured(),
+      configured: m === 'mock'
+        ? !production
+        : m === 'local'
+          ? !production && cfg.localEnabled === 'true'
+          : Boolean(cfg.remoteUrl && cfg.remoteToken),
     }));
   },
   async run(req: SandboxRequest): Promise<SandboxResult> {

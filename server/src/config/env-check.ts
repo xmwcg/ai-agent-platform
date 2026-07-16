@@ -1,11 +1,11 @@
 /**
- * 启动期环境变量校验（L4）
+ * 启动期环境变量校验。
  *
- * 目的：避免用弱占位 JWT_SECRET 直接上线（此前 .env 默认值为
- * `dev-secret-key-change-in-production`，任何人都可伪造 Token）。
- * - 测试环境（NODE_ENV==='test'）放行，不影响 CI 单测。
- * - 生产 / 开发环境若使用已知弱值或为空，则拒绝启动（exit 1）并打印明确指引。
+ * 生产环境采用 fail-closed：任何 Mock 开关、基础设施、真实 AI、远程
+ * Sandbox 或微信支付凭据缺失时均拒绝启动。测试环境保留固定测试配置。
  */
+
+type EnvLike = Record<string, string | undefined>;
 
 const WEAK_JWT_SECRETS = new Set([
   '',
@@ -15,23 +15,138 @@ const WEAK_JWT_SECRETS = new Set([
   'test',
 ]);
 
-export function validateStartupEnv(): void {
-  // 测试环境不强制（以保持单测可在固定测试密钥下运行）
-  if (process.env.NODE_ENV === 'test') return;
+const AI_KEY_NAMES = [
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'DEEPSEEK_API_KEY',
+  'ZHIPU_API_KEY',
+  'QWEN_API_KEY',
+  'DASHSCOPE_API_KEY',
+  'DOUBAO_API_KEY',
+  'ARK_API_KEY',
+] as const;
 
-  const secret = process.env.JWT_SECRET || '';
-  if (WEAK_JWT_SECRETS.has(secret.trim())) {
-    const isProd = process.env.NODE_ENV === 'production';
-    const msg =
-      '⚠️/❌ JWT_SECRET 为弱占位值或为空，任何人可伪造 Token。\n' +
-      '   请设置强随机密钥：JWT_SECRET=$(openssl rand -base64 48)\n' +
-      (isProd ? '   生产环境拒绝启动。' : '   开发环境仅告警，应用继续运行。');
-    if (isProd) {
-      // eslint-disable-next-line no-console
-      console.error(msg);
-      process.exit(1);
+const WECHAT_REQUIRED = [
+  'WECHAT_MCH_ID',
+  'WECHAT_APP_ID',
+  'WECHAT_API_V3_KEY',
+  'WECHAT_CERT_SERIAL',
+  'WECHAT_PRIVATE_KEY',
+  'WECHAT_PLATFORM_CERT',
+] as const;
+
+function present(env: EnvLike, key: string): boolean {
+  return Boolean(env[key]?.trim());
+}
+
+function isHttpsUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** 返回生产配置问题，便于启动校验、CI 静态门禁和单元测试复用。 */
+export function collectStartupEnvErrors(env: EnvLike = process.env): string[] {
+  const errors: string[] = [];
+
+  if (env.NODE_ENV !== 'production') {
+    errors.push('NODE_ENV 必须为 production');
+    return errors;
+  }
+
+  if (env.ENABLE_MOCK_MODE !== 'false') {
+    errors.push('ENABLE_MOCK_MODE 必须显式设置为 false');
+  }
+  if (env.MOCK_MODE === 'true') {
+    errors.push('MOCK_MODE 在生产环境不得为 true');
+  }
+  if (env.DEFAULT_PAY_PROVIDER !== 'wechat') {
+    errors.push('DEFAULT_PAY_PROVIDER 必须为 wechat');
+  }
+  if (env.SANDBOX_MODE !== 'remote') {
+    errors.push('SANDBOX_MODE 必须为 remote');
+  }
+  if (!isHttpsUrl(env.SANDBOX_REMOTE_URL)) {
+    errors.push('SANDBOX_REMOTE_URL 必须是有效的 HTTPS 地址');
+  }
+  if (!present(env, 'SANDBOX_REMOTE_TOKEN')) {
+    errors.push('SANDBOX_REMOTE_TOKEN 未配置');
+  }
+
+  for (const key of ['MONGODB_URI', 'REDIS_URL', 'PUBLIC_BASE_URL'] as const) {
+    if (!present(env, key)) errors.push(`${key} 未配置`);
+  }
+  if (present(env, 'PUBLIC_BASE_URL') && !isHttpsUrl(env.PUBLIC_BASE_URL)) {
+    errors.push('PUBLIC_BASE_URL 必须是有效的 HTTPS 地址');
+  }
+
+  const jwt = env.JWT_SECRET?.trim() || '';
+  if (WEAK_JWT_SECRETS.has(jwt) || jwt.length < 48) {
+    errors.push('JWT_SECRET 必须是至少 48 个字符的强随机密钥');
+  }
+
+  const encryptionKey = env.ENCRYPTION_KEY?.trim() || '';
+  if (!/^[a-fA-F0-9]{64}$/.test(encryptionKey)) {
+    errors.push('ENCRYPTION_KEY 必须是 32 字节（64 位十六进制）密钥');
+  }
+
+  const hasRealAi = AI_KEY_NAMES.some((key) => present(env, key)) ||
+    (present(env, 'HUNYUAN_SECRET_ID') && present(env, 'HUNYUAN_SECRET_KEY'));
+  if (!hasRealAi) {
+    errors.push('至少配置一个真实 AI Provider 凭据');
+  }
+
+  for (const key of WECHAT_REQUIRED) {
+    if (!present(env, key)) errors.push(`${key} 未配置`);
+  }
+  if (present(env, 'WECHAT_API_V3_KEY') && env.WECHAT_API_V3_KEY!.trim().length !== 32) {
+    errors.push('WECHAT_API_V3_KEY 必须为 32 个字符');
+  }
+  if (present(env, 'WECHAT_PRIVATE_KEY') && !env.WECHAT_PRIVATE_KEY!.includes('BEGIN PRIVATE KEY')) {
+    errors.push('WECHAT_PRIVATE_KEY 必须是 PEM 私钥');
+  }
+  if (present(env, 'WECHAT_PLATFORM_CERT') &&
+      !env.WECHAT_PLATFORM_CERT!.includes('BEGIN CERTIFICATE')) {
+    errors.push('WECHAT_PLATFORM_CERT 必须是 PEM X.509 平台证书');
+  }
+
+  const notifyChannel = env.NOTIFY_CHANNEL?.trim().toLowerCase();
+  if (!notifyChannel) {
+    errors.push('NOTIFY_CHANNEL 必须显式设置为 disabled 或 wechat');
+  } else if (!['disabled', 'wechat'].includes(notifyChannel)) {
+    errors.push('生产环境 NOTIFY_CHANNEL 仅允许 disabled 或已真实接入的 wechat');
+  } else if (notifyChannel === 'wechat') {
+    for (const key of ['WECHAT_OPEN_APPID', 'WECHAT_OPEN_SECRET', 'WECHAT_NOTIFY_TEMPLATE_ID'] as const) {
+      if (!present(env, key)) errors.push(`${key} 未配置`);
     }
+  }
+
+  return errors;
+}
+
+export function assertStartupEnv(env: EnvLike = process.env): void {
+  const errors = collectStartupEnvErrors(env);
+  if (errors.length > 0) {
+    throw new Error(`生产启动配置校验失败：\n- ${errors.join('\n- ')}`);
+  }
+}
+
+export function validateStartupEnv(env: EnvLike = process.env): void {
+  if (env.NODE_ENV === 'test') return;
+
+  if (env.NODE_ENV === 'production') {
+    assertStartupEnv(env);
+    return;
+  }
+
+  const secret = env.JWT_SECRET?.trim() || '';
+  if (WEAK_JWT_SECRETS.has(secret) || secret.length < 48) {
     // eslint-disable-next-line no-console
-    console.warn(msg);
+    console.warn(
+      '⚠️ JWT_SECRET 为弱占位值或长度不足；开发环境继续运行，生产环境会拒绝启动。'
+    );
   }
 }

@@ -1,4 +1,5 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
+import type { Server } from 'http';
 import path from 'path';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -10,7 +11,7 @@ import { buildCorsOptions, parseAllowedOrigins } from './middleware/cors-config'
 import { buildHelmetOptions } from './middleware/security-headers';
 
 // 导入数据库配置
-import { connectMongoDB, redisClient, checkDatabaseHealth } from './config/database';
+import { connectMongoDB, connectRedis, checkDatabaseHealth } from './config/database';
 import { validateStartupEnv } from './config/env-check';
 
 // 导入路由
@@ -45,12 +46,15 @@ import xhsRoutes from './routes/xhs';
 import referralRoutes from './routes/referral';
 import pointsRoutes from './routes/points';
 import marketplaceRevenueRoutes from './routes/marketplace-revenue';
+import opsRoutes from './routes/ops';
 import aibakChatRoutes from './routes/aibak-chat';
 import { mcpService } from './services/mcp.service';
 import { sendError } from './lib/http-error';
 import { logger } from './lib/logger';
 import { apmMiddleware, vitalsHandler } from './middleware/apm';
 import { requestIdMiddleware } from './middleware/request-id';
+import { reloadCustomProviders } from './gateway/ai-gateway.service';
+import { mediaWorker } from './services/queue.service';
 
 // ─── 进程级崩溃兜底（稳定性基线，适配 0→1→100 扩容）───
 // 未捕获异常：记录后退出，交由 Docker restart / healthcheck 自动拉起，避免僵尸进程。
@@ -65,9 +69,6 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 // 加载环境变量
 dotenv.config();
-
-// 启动期安全校验：弱 JWT_SECRET / 缺失关键变量则拒绝启动（test 环境豁免）
-validateStartupEnv();
 
 const app: Express = express();
 const PORT = process.env.PORT || 3000;
@@ -113,30 +114,6 @@ app.get('/health/vitals', vitalsHandler);
 // 限流（全局 API）
 app.use('/api/', apiLimiter);
 
-// 连接数据库
-connectMongoDB().catch(err => {
-  logger.error('index', `Failed to connect to MongoDB: ${err}`);
-  logger.warn('index', 'Server will continue without database (mock mode)');
-  // process.exit(1); // 注释掉，让服务器继续运行
-});
-
-// 启动时加载已持久化的 MCP 服务器配置
-mcpService.loadFromDB().catch(err => {
-  logger.warn('index', `MCP config load skipped: ${err.message}`);
-});
-
-// 启动时加载用户配置的第三方模型（接入第三方模型 API 闭环）
-import { reloadCustomProviders } from './gateway/ai-gateway.service';
-reloadCustomProviders().catch(err => {
-  logger.warn('index', `自定义模型加载跳过：${err.message}`);
-});
-
-// 启动异步任务队列 Worker（媒体生成 / 文件转换等长任务后台处理）
-import { mediaWorker } from './services/queue.service';
-mediaWorker.start().catch(err => {
-  logger.warn('index', `任务队列 Worker 启动失败: ${err.message}`);
-});
-
 // 注册路由
 app.use('/api/auth', authRoutes);
 app.use('/api/compare', compareRoutes);
@@ -171,6 +148,7 @@ app.use('/api/media-keys', mediaByokRoutes); // 媒体生成 BYOK（用户自带
 app.use('/api/referral', referralRoutes);            // 推荐/分销体系
 app.use('/api/points', pointsRoutes);                // 积分签到/任务体系
 app.use('/api/marketplace', marketplaceRevenueRoutes); // 市场收益/提现
+app.use('/api/ops', opsRoutes);                         // 运营看板 / 北极星指标
 
 // 静态资源：对象存储（OSS）落盘的图片/视频由 /generated 对外提供
 // 与 lib/object-storage.ts 的 LOCAL_STORAGE_DIR 保持一致（默认 server/uploads/generated）
@@ -187,13 +165,16 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // 健康检查
-app.get('/api/health', async (req: Request, res: Response) => {
+app.get('/api/health', async (_req: Request, res: Response) => {
   const health = await checkDatabaseHealth();
-  res.json({
-    status: 'healthy',
+  const healthy = health.mongodb && health.redis;
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'healthy' : 'unhealthy',
     mongodb: health.mongodb ? 'connected' : 'disconnected',
     redis: health.redis ? 'connected' : 'disconnected',
     revision: process.env.APP_COMMIT_SHA || 'unknown',
+    serverImageDigest: process.env.SERVER_IMAGE_DIGEST || 'unknown',
+    clientImageDigest: process.env.CLIENT_IMAGE_DIGEST || 'unknown',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
   });
@@ -211,9 +192,72 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   sendError(res, err);
 });
 
-// 启动服务器
-app.listen(PORT, () => {
-  logger.info('index', `Server running on http://localhost:${PORT}`, { env: process.env.NODE_ENV || 'development' });
-});
+export interface BootstrapDependencies {
+  validateEnv: () => void;
+  connectMongo: () => Promise<unknown>;
+  connectRedis: () => Promise<unknown>;
+  loadMcp: () => Promise<unknown>;
+  reloadProviders: () => Promise<unknown>;
+  startMediaWorker: () => Promise<unknown>;
+  startHttpServer: () => Server;
+}
+
+export interface BootstrapOptions {
+  listen?: boolean;
+  /** 仅用于启动顺序测试；生产运行使用默认真实依赖。 */
+  dependencies?: Partial<BootstrapDependencies>;
+}
+
+function defaultBootstrapDependencies(): BootstrapDependencies {
+  return {
+    validateEnv: validateStartupEnv,
+    connectMongo: connectMongoDB,
+    connectRedis,
+    loadMcp: () => mcpService.loadFromDB(),
+    reloadProviders: reloadCustomProviders,
+    startMediaWorker: () => mediaWorker.start(),
+    startHttpServer: () => app.listen(PORT, () => {
+      logger.info('index', `Server running on http://localhost:${PORT}`, {
+        env: process.env.NODE_ENV || 'development',
+        revision: process.env.APP_COMMIT_SHA || 'unknown',
+      });
+    }),
+  };
+}
+
+async function startManagedDependency(label: string, action: () => Promise<unknown>): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    if (process.env.NODE_ENV === 'production') throw error;
+    logger.warn('index', `${label} 启动失败，非生产环境继续运行: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * 启动顺序门禁：配置、MongoDB、Redis 全部成功后才启动 Worker 和 HTTP 监听。
+ * 生产依赖失败会向上抛错，由容器退出并触发部署回滚，而不是降级 Mock。
+ */
+export async function bootstrap(options: BootstrapOptions = {}): Promise<Server | undefined> {
+  const dependencies = { ...defaultBootstrapDependencies(), ...options.dependencies };
+
+  dependencies.validateEnv();
+  await dependencies.connectMongo();
+  await dependencies.connectRedis();
+
+  await startManagedDependency('MCP 配置', dependencies.loadMcp);
+  await startManagedDependency('自定义 AI Provider', dependencies.reloadProviders);
+  await startManagedDependency('媒体任务 Worker', dependencies.startMediaWorker);
+
+  if (options.listen === false) return undefined;
+  return dependencies.startHttpServer();
+}
+
+if (require.main === module) {
+  bootstrap().catch((error) => {
+    logger.error('index', `生产启动失败，进程退出: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+    process.exit(1);
+  });
+}
 
 export default app;

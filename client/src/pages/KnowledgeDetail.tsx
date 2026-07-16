@@ -8,8 +8,7 @@ import {
   RobotOutlined, ClockCircleOutlined, UserOutlined, EyeOutlined,
   HeartOutlined, ShareAltOutlined, CrownOutlined, LockOutlined,
 } from '@ant-design/icons';
-import { knowledgeAPI } from '@/services/api';
-import apiClient from '@/services/api';
+import apiClient, { extractApiError, knowledgeAPI } from '@/services/api';
 import FileConverter from '@/components/FileConverter';
 
 const { Title, Text, Paragraph } = Typography;
@@ -74,7 +73,6 @@ export default function KnowledgeDetail() {
   const navigate = useNavigate();
   const [document, setDocument] = useState<KnowledgeDocument | null>(null);
   const [loading, setLoading] = useState(true);
-  const [liked, setLiked] = useState(false);
   const [converterOpen, setConverterOpen] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
 
@@ -108,16 +106,13 @@ export default function KnowledgeDetail() {
     if (!id) return;
     setLoading(true);
     apiClient.get(`/knowledge/${id}`)
-      .then((res: any) => { if (res?.data) setDocument(res.data); })
-      .catch(() => {
-        // 使用模拟文档
-        setDocument({
-          _id: id, title: 'RAG 技术详解',
-          content: `# RAG 技术概述\n\nRAG（检索增强生成）是结合信息检索与文本生成的技术。\n\n## 核心原理\n\n1. **检索**：从知识库中检索相关文档\n2. **增强**：将检索结果作为上下文\n3. **生成**：由大模型生成最终回答\n\n## 代码示例\n\n\`\`\`typescript\nasync function ragChat(query: string) {\n  const docs = await searchDocuments(query);\n  const prompt = buildPrompt(query, docs);\n  return await llm.generate(prompt);\n}\n\`\`\`\n\n## 应用场景\n\n- 知识库问答\n- 文档助手\n- 研究辅助`,
-          tags: ['AI', 'RAG'], categories: ['技术'], viewCount: 128, likeCount: 36,
-          createdAt: '2025-01-08', updatedAt: '2025-06-15',
-          author: { username: 'admin' },
-        });
+      .then((res: any) => {
+        if (!res?.data) throw new Error('文档数据格式无效');
+        setDocument(res.data);
+      })
+      .catch((error) => {
+        setDocument(null);
+        message.error(extractApiError(error, '文档加载失败'));
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -179,11 +174,8 @@ export default function KnowledgeDetail() {
             <span style={{ color: '#64748b' }}><UserOutlined /> {document.author?.username}</span>
             <span style={{ color: '#64748b' }}><ClockCircleOutlined /> {new Date(document.updatedAt || document.createdAt).toLocaleDateString('zh-CN')}</span>
             <span style={{ color: '#64748b' }}><EyeOutlined /> {document.viewCount} 浏览</span>
-            <span
-              style={{ color: liked ? '#ef4444' : '#64748b', cursor: 'pointer' }}
-              onClick={() => setLiked(!liked)}
-            >
-              <HeartOutlined style={{ color: liked ? '#ef4444' : undefined }} /> {document.likeCount + (liked ? 1 : 0)} 赞
+            <span style={{ color: '#64748b' }}>
+              <HeartOutlined /> {document.likeCount} 赞
             </span>
           </Space>
 

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { logger } from '../lib/logger';
+import { AppError } from '../lib/http-error';
 
 dotenv.config();
 
@@ -52,7 +53,7 @@ export interface ProviderConfig {
 }
 
 // AI 模型配置管理类
-class AIModelManager {
+export class AIModelManager {
   private providers: Map<AIProvider, ProviderConfig> = new Map();
   private defaultProvider: AIProvider = 'openai';
 
@@ -62,8 +63,9 @@ class AIModelManager {
 
   // 初始化所有 Provider
   private initializeProviders(): void {
-    // 检查是否启用模拟模式
-    const mockMode = process.env.ENABLE_MOCK_MODE === 'true';
+    const production = process.env.NODE_ENV === 'production';
+    // Mock 仅允许在非生产环境启用。
+    const mockMode = !production && process.env.ENABLE_MOCK_MODE === 'true';
     // 显式指定的默认 provider（平台配置 / 环境变量优先）
     const configuredDefault = (process.env.DEFAULT_AI_PROVIDER as AIProvider) || undefined;
 
@@ -71,13 +73,13 @@ class AIModelManager {
       logger.warn('ai-models', 'Mock mode enabled - AI responses will be simulated');
     }
 
-    // 始终注册模拟 Provider（作为可用兜底，不强制为默认）
+    // 保留开发/测试用 Provider 定义，但生产环境永远标记为不可用且不会对外暴露。
     this.providers.set('mock', {
       name: 'Mock AI',
       apiKey: 'mock-key',
       models: ['mock-gpt-4', 'mock-claude'],
       defaultModel: 'mock-gpt-4',
-      enabled: true
+      enabled: !production
     });
 
     // OpenAI
@@ -230,41 +232,61 @@ class AIModelManager {
     //   1) 显式 DEFAULT_AI_PROVIDER 且已注册 → 优先采用；
     //   2) 非 Mock 模式 → 取第一个已注册的真实 provider；
     //   3) Mock 模式且未显式指定 → 保持 mock 兜底（零依赖可跑）。
-    if (configuredDefault && this.providers.has(configuredDefault)) {
+    if (
+      configuredDefault
+      && this.providers.has(configuredDefault)
+      && (!production || configuredDefault !== 'mock')
+    ) {
       this.defaultProvider = configuredDefault;
     } else if (!mockMode) {
-      const firstReal = Array.from(this.providers.keys()).find((p) => p !== 'mock');
-      this.defaultProvider = firstReal || 'mock';
+      const firstReal = Array.from(this.providers.entries())
+        .find(([provider, config]) => provider !== 'mock' && config.enabled)?.[0];
+      // 类型保持非空；若没有真实 Provider，getDefaultProvider() 会返回 undefined，生产启动校验会拒绝启动。
+      this.defaultProvider = firstReal || 'openai';
     } else {
       this.defaultProvider = 'mock';
     }
   }
 
+  private isProviderAllowed(provider: AIProvider): boolean {
+    return process.env.NODE_ENV !== 'production' || provider !== 'mock';
+  }
+
   // 获取 Provider 配置
   getProvider(provider: AIProvider): ProviderConfig | undefined {
-    return this.providers.get(provider);
+    if (!this.isProviderAllowed(provider)) return undefined;
+    const config = this.providers.get(provider);
+    return config?.enabled ? config : undefined;
   }
 
   // 获取所有启用的 Providers
   getEnabledProviders(): ProviderConfig[] {
-    return Array.from(this.providers.values()).filter(p => p.enabled);
+    return Array.from(this.providers.entries())
+      .filter(([provider, config]) => config.enabled && this.isProviderAllowed(provider))
+      .map(([, config]) => config);
   }
 
   // 获取默认 Provider
   getDefaultProvider(): ProviderConfig | undefined {
-    return this.providers.get(this.defaultProvider);
+    return this.getProvider(this.defaultProvider);
   }
 
   // 设置默认 Provider
   setDefaultProvider(provider: AIProvider): void {
-    if (this.providers.has(provider)) {
+    if (!this.isProviderAllowed(provider)) {
+      throw new AppError(400, '生产环境禁止使用 Mock AI Provider', 'AI_MOCK_DISABLED');
+    }
+    if (this.getProvider(provider)) {
       this.defaultProvider = provider;
     }
   }
 
   // 创建 OpenAI 客户端（支持多 Provider）
   createClient(provider?: AIProvider): OpenAI {
-    const targetProvider = provider ? this.providers.get(provider) : this.getDefaultProvider();
+    if (provider && !this.isProviderAllowed(provider)) {
+      throw new AppError(400, '生产环境禁止使用 Mock AI Provider', 'AI_MOCK_DISABLED');
+    }
+    const targetProvider = provider ? this.getProvider(provider) : this.getDefaultProvider();
     
     if (!targetProvider) {
       throw new Error(`Provider ${provider || this.defaultProvider} not configured`);
@@ -280,8 +302,8 @@ class AIModelManager {
   getAvailableModels(): { provider: string; models: string[] }[] {
     const result: { provider: string; models: string[] }[] = [];
     
-    this.providers.forEach((config, key) => {
-      if (config.enabled) {
+    this.providers.forEach((config, provider) => {
+      if (config.enabled && this.isProviderAllowed(provider)) {
         result.push({
           provider: config.name,
           models: config.models
@@ -294,7 +316,7 @@ class AIModelManager {
 
   // 测试 Provider 连接
   async testConnection(provider: AIProvider): Promise<boolean> {
-    const config = this.providers.get(provider);
+    const config = this.getProvider(provider);
     if (!config) return false;
 
     try {

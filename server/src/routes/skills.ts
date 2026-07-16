@@ -322,6 +322,13 @@ router.post('/:id/invoke', optionalAuth, async (req: AuthRequest, res) => {
   try {
     const builtin = getSkill(req.params.id);
     if (builtin) {
+      if (builtin.manifest.invokable === false) {
+        return res.status(501).json({
+          ok: false,
+          code: 'SKILL_NOT_INVOKABLE',
+          error: '该能力仅通过专用业务接口提供，通用技能调用入口未开放',
+        });
+      }
       if (builtin.manifest.requireAuth && !req.user) {
         return res.status(401).json({ ok: false, error: '该技能需要登录' });
       }
@@ -335,6 +342,13 @@ router.post('/:id/invoke', optionalAuth, async (req: AuthRequest, res) => {
         role: req.body?.role,
         input: req.body || {},
       });
+      if (!result.ok) {
+        return res.status(result.status || 422).json({
+          ok: false,
+          code: result.code || 'SKILL_INVOCATION_FAILED',
+          error: result.error || '技能执行失败',
+        });
+      }
       return res.json({ ok: true, result });
     }
 

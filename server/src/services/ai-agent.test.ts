@@ -30,4 +30,15 @@ describe('AIAgentService.sendMessage 模型选择透传', () => {
     await aiAgentService.sendMessage(sid, 'hi', undefined, { model: 'mc_abc123/glm-4' });
     expect(route).toHaveBeenCalledWith(expect.objectContaining({ model: 'mc_abc123/glm-4' }));
   });
+
+  it('生产环境拒绝创建 Mock 会话', async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      await expect(aiAgentService.createSession('u1', 'mock' as any))
+        .rejects.toMatchObject({ code: 'AI_MOCK_DISABLED', statusCode: 400 });
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+    }
+  });
 });

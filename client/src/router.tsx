@@ -25,6 +25,7 @@ import AuditLogPage from '@/pages/AuditLogPage';
 import ToolsCenterPage from '@/pages/ToolsCenterPage';
 import QuickstartPage from '@/pages/QuickstartPage';
 import DiagnosticsPage from '@/pages/DiagnosticsPage';
+import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import TeamPage from '@/pages/TeamPage';
 import MarketplacePage from '@/pages/MarketplacePage';
 import SkillsMarketPage from '@/pages/SkillsMarketPage';
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
       { path: 'marketplace', element: <MarketplacePage /> },
       { path: 'skills', element: <SkillsMarketPage /> },
       { path: 'diagnostics', element: <DiagnosticsPage /> },
+      { path: 'ops-dashboard', element: <AdminDashboardPage /> },
       { path: 'ai-chat', element: <AiChat /> },
       { path: 'aibak-chat', element: <AibakChat /> },
       { path: 'workflows', element: <WorkflowEditor /> },

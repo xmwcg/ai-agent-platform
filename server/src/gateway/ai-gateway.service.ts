@@ -17,6 +17,7 @@ import OpenAI from 'openai';
 import { aiModelManager } from '../config/ai-models';
 import { signTencentTC3 } from '../lib/tc3';
 import { logger } from '../lib/logger';
+import { AppError } from '../lib/http-error';
 
 /* ------------------------------ 类型定义 ------------------------------ */
 
@@ -197,7 +198,8 @@ class HunyuanGatewayProvider implements GatewayProvider {
 
 /* ------------------------------ 注册表 ------------------------------ */
 function buildProviders(): GatewayProvider[] {
-  const mockMode = process.env.ENABLE_MOCK_MODE === 'true';
+  const production = process.env.NODE_ENV === 'production';
+  const mockMode = !production && process.env.ENABLE_MOCK_MODE === 'true';
   const list: GatewayProvider[] = [];
   if (mockMode) {
     list.push(new MockGatewayProvider());
@@ -222,7 +224,6 @@ function buildProviders(): GatewayProvider[] {
     list.push(new OpenAICompatibleProvider('doubao', '豆包', 'https://ark.cn-beijing.volces.com/api/v3', process.env.DOUBAO_API_KEY || process.env.ARK_API_KEY!, 'doubao', ['doubao-pro-32k', 'doubao-pro-128k', 'doubao-lite-32k']));
   if (process.env.HUNYUAN_SECRET_ID && process.env.HUNYUAN_SECRET_KEY)
     list.push(new HunyuanGatewayProvider());
-  list.push(new MockGatewayProvider()); // 始终保留 Mock 作为最终兜底
   return list;
 }
 
@@ -300,6 +301,12 @@ export function listGatewayModels() {
  * 调用失败则依次降级到下一个。与 OmniRoute 的 priority combo 一致。
  */
 export async function route(req: ChatRouteRequest): Promise<ChatRouteResult> {
+  if (
+    process.env.NODE_ENV === 'production'
+    && (req.provider === 'mock' || req.model === 'mock' || req.model?.startsWith('mock/'))
+  ) {
+    throw new AppError(400, '生产环境禁止使用 Mock AI Provider', 'AI_MOCK_DISABLED');
+  }
   const ALL = allProviders();
   let target: GatewayProvider | undefined;
 
@@ -320,7 +327,7 @@ export async function route(req: ChatRouteRequest): Promise<ChatRouteResult> {
     target = ALL.find((p) => p.name === defName && p.isConfigured()) || ALL.find((p) => p.isConfigured());
   }
 
-  if (!target) throw new Error('没有可用的 AI provider（请配置厂商 Key 或启用 ENABLE_MOCK_MODE）');
+  if (!target) throw new Error('没有可用的真实 AI provider（生产环境禁止 Mock，请配置厂商 Key）');
 
   // fallback：从该 provider 起，依次尝试后续 configured provider（内置 + 自定义）
   const startIdx = ALL.indexOf(target);

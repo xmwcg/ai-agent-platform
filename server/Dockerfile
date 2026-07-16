@@ -1,26 +1,36 @@
-FROM node:20-alpine
+# syntax=docker/dockerfile:1.7
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /usr/src/app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 
-# 使用腾讯云镜像源（同机房），加速 alpine 包与 npm 依赖安装，避免默认源在国内网络挂起
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.cloud.tencent.com/g' /etc/apk/repositories \
- && npm config set registry https://mirrors.cloud.tencent.com/npm/
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
-# 安装 bcrypt 编译所需的构建工具
-RUN apk add --no-cache python3 make g++
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build \
+  && npm prune --omit=dev \
+  && npm cache clean --force
 
-# 安装依赖
-COPY package*.json ./
-RUN npm install && apk del python3 make g++
+FROM node:22-bookworm-slim AS runtime
 
-# 复制源代码
-COPY . .
+ARG APP_COMMIT_SHA=unknown
+LABEL org.opencontainers.image.title="AIbak API" \
+      org.opencontainers.image.revision="$APP_COMMIT_SHA"
 
-# 构建 TypeScript
-RUN npm run build
+ENV NODE_ENV=production \
+    PORT=3000
+WORKDIR /usr/src/app
 
-# 暴露端口
+COPY --chown=node:node package.json package-lock.json ./
+COPY --from=build --chown=node:node /usr/src/app/node_modules ./node_modules
+COPY --from=build --chown=node:node /usr/src/app/dist ./dist
+
+RUN mkdir -p /usr/src/app/uploads && chown -R node:node /usr/src/app/uploads
+USER node
+
 EXPOSE 3000
-
-# 启动命令
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

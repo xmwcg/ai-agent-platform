@@ -101,9 +101,9 @@ export default function AiChat() {
   // 移动端侧边栏
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
 
-  // 计算 Token 使用量（模拟）
-  const totalTokens = messages.reduce((sum, m) => sum + m.content.length, 0);
-  const userTokens = messages.filter((m) => m.role === 'user').reduce((sum, m) => sum + m.content.length, 0);
+  // 客户端只能准确统计字符数；真实 Token/计费数据应以后端返回为准。
+  const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+  const userChars = messages.filter((m) => m.role === 'user').reduce((sum, m) => sum + m.content.length, 0);
 
   return (
     <div className="chat-container" ref={containerRef}>
@@ -245,16 +245,16 @@ export default function AiChat() {
             <Divider style={{ margin: '4px 0' }} />
 
             <Statistic title="消息数" value={messages.length} valueStyle={{ fontSize: 20 }} />
-            <Statistic title="Token 估算" value={totalTokens} valueStyle={{ fontSize: 20 }} />
+            <Statistic title="字符数" value={totalChars} valueStyle={{ fontSize: 20 }} />
 
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>Token 分布</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>字符分布</Text>
               <Progress
-                percent={totalTokens > 0 ? Math.round((userTokens / totalTokens) * 100) : 0}
+                percent={totalChars > 0 ? Math.round((userChars / totalChars) * 100) : 0}
                 strokeColor="#6366f1"
                 trailColor="#e8ecf1"
                 size="small"
-                format={() => `用户 ${userTokens}`}
+                format={() => `用户 ${userChars}`}
               />
             </div>
           </Space>

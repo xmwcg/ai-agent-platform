@@ -28,17 +28,14 @@ export const knowledgeSkill: Skill = {
     minRole: 'viewer',
     requireAuth: true,
     marketable: false,
+    invokable: false,
   },
-  async invoke(ctx) {
-    // 实际写入 / 检索逻辑在 routes/knowledge.ts 内落实团队隔离，
-    // 此处作为技能入口统一返回元数据驱动的调用骨架。
+  async invoke() {
     return {
-      ok: true,
-      data: {
-        skill: 'knowledge',
-        hint: '检索/写入知识文档；团队隔离由路由层 canAccessResource 守卫。',
-        input: ctx.input,
-      },
+      ok: false,
+      status: 501,
+      code: 'SKILL_ROUTE_ONLY',
+      error: '知识库读写必须通过 /api/knowledge 的资源权限路由调用，通用技能入口未开放',
     };
   },
 };

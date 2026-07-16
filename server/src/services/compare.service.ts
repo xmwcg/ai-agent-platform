@@ -1,5 +1,6 @@
 import { createAIClient, aiModelManager, type AIProvider } from '../config/ai-models';
 import { logger } from '../lib/logger';
+import { AppError } from '../lib/http-error';
 
 export interface CompareItem {
   id: string;
@@ -34,7 +35,7 @@ export interface CompareRow {
   winner?: number; // index of winner
 }
 
-class CompareService {
+export class CompareService {
   // 预置可对比的项
   private presets: CompareItem[] = [
     // AI 模型
@@ -62,7 +63,7 @@ class CompareService {
     return this.presets.filter(p => p.type === type);
   }
 
-  // 生成对比（优先调用真实 AI 生成结构化对比，失败则回退到内置数据）
+  // 生成对比：生产环境只接受真实 AI 结果；静态参考值仅用于开发/测试。
   async generateCompare(req: CompareRequest): Promise<CompareResult> {
     const items = this.presets.filter(p => req.items.includes(p.id));
     if (items.length < 2) {
@@ -74,10 +75,19 @@ class CompareService {
     try {
       return await this.generateCompareWithAI(items, dimensions);
     } catch (err) {
-      logger.warn('compare', `AI 对比生成失败，回退到内置数据: ${(err as Error).message}`);
+      logger.warn('compare', `AI 对比生成失败: ${(err as Error).message}`);
+      if (process.env.NODE_ENV === 'production') {
+        if (err instanceof AppError) throw err;
+        throw new AppError(
+          503,
+          '真实对比数据暂时不可用，请稍后重试',
+          'COMPARE_PROVIDER_UNAVAILABLE',
+          err instanceof Error ? err.message : String(err)
+        );
+      }
       const rows: CompareRow[] = dimensions.map(dim => ({
         dimension: dim.key,
-        values: items.map(item => this.getMockValue(item, dim.key)),
+        values: items.map(item => this.getDevelopmentReferenceValue(item, dim.key)),
       }));
       return {
         items,
@@ -124,9 +134,13 @@ ${dimContext}
     const content = completion.choices[0]?.message?.content || '{}';
     const parsed = JSON.parse(content) as { rows?: CompareRow[]; recommendation?: string };
 
+    if (process.env.NODE_ENV === 'production' && (!parsed.rows?.length || !parsed.recommendation?.trim())) {
+      throw new AppError(502, '真实对比数据返回格式无效', 'COMPARE_INVALID_RESPONSE');
+    }
+
     const rows: CompareRow[] = (parsed.rows && parsed.rows.length)
       ? parsed.rows
-      : dimensions.map(dim => ({ dimension: dim.key, values: items.map(i => this.getMockValue(i, dim.key)) }));
+      : dimensions.map(dim => ({ dimension: dim.key, values: items.map(i => this.getDevelopmentReferenceValue(i, dim.key)) }));
 
     return {
       items,
@@ -170,9 +184,9 @@ ${dimContext}
     }
   }
 
-  private getMockValue(item: CompareItem, dimKey: string): string | number | boolean {
-    // 模拟数据
-    const mockDB: Record<string, Record<string, any>> = {
+  private getDevelopmentReferenceValue(item: CompareItem, dimKey: string): string | number | boolean {
+    // 仅供开发/测试界面联调，不得作为生产实时价格或能力事实展示。
+    const developmentReferenceDB: Record<string, Record<string, any>> = {
       'gpt-4o': {
         provider: 'OpenAI', context_window: 128000, max_output: 16384,
         price_input: 5, price_output: 15, multimodal: true, coding: 9, reasoning: 8, chinese: 7
@@ -198,7 +212,7 @@ ${dimContext}
         price_input: 1.2, price_output: 1.2, multimodal: true, coding: 7, reasoning: 7, chinese: 10
       },
     };
-    return mockDB[item.id]?.[dimKey] ?? '—';
+    return developmentReferenceDB[item.id]?.[dimKey] ?? item.specs?.[dimKey] ?? '—';
   }
 
   private generateRecommendation(items: CompareItem[]): string {

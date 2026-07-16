@@ -69,8 +69,20 @@ describe('sandbox.service pure functions', () => {
       expect(selectSandboxMode('remote', {})).toBe('remote');
       expect(selectSandboxMode('mock', {})).toBe('mock');
       expect(selectSandboxMode(undefined, { mode: 'remote' })).toBe('mock');
-      expect(selectSandboxMode(undefined, { mode: 'remote', remoteUrl: 'http://x' })).toBe('remote');
+      expect(selectSandboxMode(undefined, { mode: 'remote', remoteUrl: 'http://x', remoteToken: 'token' })).toBe('remote');
     });
+  });
+
+  it('production 无论客户端显式选择什么都固定 remote', () => {
+    const config = {
+      nodeEnv: 'production',
+      mode: 'remote',
+      remoteUrl: 'https://sandbox.example.com/run',
+      remoteToken: 'token',
+    };
+    expect(selectSandboxMode('mock', config)).toBe('remote');
+    expect(selectSandboxMode('local', config)).toBe('remote');
+    expect(selectSandboxMode(undefined, config)).toBe('remote');
   });
 
   describe('buildLocalCommand', () => {
@@ -180,7 +192,11 @@ describe('sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=tr
     jest.isolateModules(() => {
       Svc = require('./sandbox.service').sandboxService;
     });
-    process.env.SANDBOX_LOCAL_ENABLED = ORIG;
+  });
+
+  afterAll(() => {
+    if (ORIG === undefined) delete process.env.SANDBOX_LOCAL_ENABLED;
+    else process.env.SANDBOX_LOCAL_ENABLED = ORIG;
   });
 
   it('启用后：mode:local 真正在本机执行并返回 stdout', async () => {
