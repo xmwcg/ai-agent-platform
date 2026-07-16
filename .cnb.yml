@@ -91,6 +91,49 @@ main:
               exit 1
             }
 
+        - name: notify-webhook
+          script: |
+            set -uo pipefail
+            # 最佳努力通知生产服务器立即检查 deploy/production
+            # 即使 webhook 失败，systemd timer 也会在 1 分钟内兜底轮询
+            node -e '
+            const crypto = require("crypto");
+            const http = require("http");
+            const payload = JSON.stringify({
+              repository: process.env.CNB_REPO || "ai-agent-platform",
+              branch: process.env.CNB_BRANCH || "main",
+              commit: process.env.CNB_COMMIT || "",
+              message: process.env.CNB_COMMIT_MESSAGE || ""
+            });
+            const secret = process.env.DEPLOY_SECRET || "cnb-deploy-secret-1784006404";
+            const sig = "sha256=" + crypto.createHmac("sha256", secret).update(payload).digest("hex");
+            const req = http.request({
+              hostname: "159.75.124.59",
+              port: 9000,
+              path: "/deploy",
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CNB-Signature": sig,
+                "Content-Length": Buffer.byteLength(payload)
+              },
+              timeout: 30000
+            }, (res) => {
+              let body = "";
+              res.on("data", (chunk) => body += chunk);
+              res.on("end", () => {
+                console.log("webhook status:", res.statusCode, body);
+                process.exit(0); // 非阻塞，失败由 systemd timer 兜底
+              });
+            });
+            req.on("error", (err) => {
+              console.log("webhook error:", err.message);
+              process.exit(0); // 非阻塞
+            });
+            req.write(payload);
+            req.end();
+            '
+
         - name: verify-production-release
           script: |
             set -euo pipefail
