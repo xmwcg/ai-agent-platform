@@ -55,8 +55,10 @@ export default function AiChat() {
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const messages = activeSession?.messages || [];
 
-  // 自动滚动到底部
+  // 自动滚动到底部（首次挂载跳过，避免覆盖路由级回顶）
+  const chatMountedRef = useRef(false);
   useEffect(() => {
+    if (!chatMountedRef.current) { chatMountedRef.current = true; return; }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 

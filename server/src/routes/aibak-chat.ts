@@ -5,6 +5,7 @@ import { AuthRequest, optionalAuth } from '../middleware/auth';
 import { sendError } from '../lib/http-error';
 import { logger } from '../lib/logger';
 import { callCloudbaseChat, AIBAK_MODELS } from '../services/cloudbase-ai.service';
+import { putAsset, getAsset, deleteAsset } from '../services/asset-store';
 
 const router = Router();
 
@@ -15,21 +16,21 @@ const CLOUDBASE_IMAGE_URL = process.env.CLOUDBASE_IMAGE_URL ||
   CLOUDBASE_CHAT_URL.replace(/\/ai-chat$/, '/ai-image');
 
 // 图生图参考图临时托管：CloudBase 图像网关对请求体大小有限制，base64 直传会 413，
-// 因此后端把参考图存内存并暴露公网 URL（经 nginx /api 反代），让函数通过 image_urls 回源拉取。
-const refStore = new Map<string, { buf: Buffer; ctype: string }>();
+// 因此后端把参考图存入可插拔资产存储并暴露公网 URL（经 nginx /api 反代），
+// 让函数通过 image_urls 回源拉取；后端支持 COS / 本地磁盘 / 内存，多实例可达。
 const AIBAK_PUBLIC_ORIGIN = process.env.AIBAK_PUBLIC_ORIGIN || 'https://aibak.site';
 
-/** 把 dataURL 存入内存，返回公网可访问的 URL（供 CloudBase 函数 image_urls 拉取） */
-function storeRef(dataUrl: string): { id: string; url: string } | null {
+/** 把 dataURL 存入资产存储，返回公网可访问的 URL（供 CloudBase 函数 image_urls 拉取） */
+async function storeRef(dataUrl: string): Promise<{ id: string; url: string } | null> {
   const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
   if (!m) return null;
   const ctype = m[1] || 'image/png';
   const buf = Buffer.from(m[2], 'base64');
   if (!buf.length) return null;
   const id = randomBytes(12).toString('hex');
-  refStore.set(id, { buf, ctype });
-  // 5 分钟后自动清理，避免内存泄漏
-  setTimeout(() => refStore.delete(id), 5 * 60 * 1000).unref();
+  await putAsset(id, buf, ctype);
+  // 5 分钟后自动清理，避免存储膨胀
+  setTimeout(() => { deleteAsset(id).catch(() => {}); }, 5 * 60 * 1000).unref();
   return { id, url: `${AIBAK_PUBLIC_ORIGIN}/api/aibak/refs/${id}` };
 }
 
@@ -143,7 +144,7 @@ router.post('/image', optionalAuth, async (req: AuthRequest, res: Response) => {
     // 图生图：base64 直传会触发网关 413，改为托管后走 image_urls（函数回源拉取）
     let refId: string | undefined;
     if (isImage2Image && imageBase64) {
-      const ref = storeRef(String(imageBase64));
+      const ref = await storeRef(String(imageBase64));
       if (ref) { body.image_urls = [ref.url]; refId = ref.id; }
     } else if (imageUrl) {
       body.image_urls = [imageUrl];
@@ -159,8 +160,8 @@ router.post('/image', optionalAuth, async (req: AuthRequest, res: Response) => {
         timeout: 170000, // 图像生成（尤其 thinking 模式）可能较长，需小于云函数 180s 超时
       });
     } finally {
-      // 函数已在 generateImage 内同步拉取参考图，调用结束即可释放内存
-      if (refId) refStore.delete(refId);
+      // 函数已在 generateImage 内同步拉取参考图，调用结束即可释放资产
+      if (refId) { await deleteAsset(refId).catch(() => {}); }
     }
 
     const elapsed = Date.now() - startTime;
@@ -207,8 +208,8 @@ router.post('/image', optionalAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // 图生图参考图公网回源：CloudBase 函数通过 image_urls 拉取（需经 nginx /api 反代）
-router.get('/refs/:id', (_req, res: Response) => {
-  const item = refStore.get(_req.params.id);
+router.get('/refs/:id', async (_req, res: Response) => {
+  const item = await getAsset(_req.params.id);
   if (!item) return res.status(404).send('not found');
   res.set('Content-Type', item.ctype);
   res.set('Cache-Control', 'no-store');

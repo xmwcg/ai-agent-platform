@@ -137,15 +137,14 @@ export default function ProfilePage() {
   const plan = subscription?.plan || authUser?.plan || 'free';
   const credits = subscription?.credits ?? authUser?.credits ?? 0;
 
-  const pointsDataSource = creditsHistory.length > 0
-    ? creditsHistory.map((item: any, idx: number) => ({ id: item._id || `c-${idx}`, type: item.type || 'earn', amount: item.amount || 0, desc: item.description || item.meta?.reason || '积分变动', time: item.createdAt?.slice(0, 10) || '-' }))
-    : [
-      { id: '1', type: 'earn', amount: 10, desc: '每日签到', time: '-' },
-      { id: '2', type: 'earn', amount: 50, desc: '完成AI对话', time: '-' },
-      { id: '3', type: 'spend', amount: -20, desc: '兑换API调用', time: '-' },
-      { id: '4', type: 'earn', amount: 100, desc: '分享推广奖励', time: '-' },
-      { id: '5', type: 'earn', amount: 30, desc: '上传知识文档', time: '-' },
-    ];
+  // 仅展示真实积分流水；加载失败/无数据时显示空态，不再回落硬编码假数据
+  const pointsDataSource = creditsHistory.map((item: any, idx: number) => ({
+    id: item._id || `c-${idx}`,
+    type: item.type || 'earn',
+    amount: item.amount || 0,
+    desc: item.description || item.meta?.reason || '积分变动',
+    time: item.createdAt?.slice(0, 10) || '-',
+  }));
 
   const cardStyle = {
     borderRadius: 16,
@@ -267,7 +266,7 @@ export default function ProfilePage() {
       </Col>
       <Col xs={24} md={14}>
         <Card title="积分记录" style={cardStyle} extra={<Button size="small" loading={creditsHistoryLoading} onClick={loadCreditsHistory}>刷新</Button>}>
-          <Table dataSource={pointsDataSource} rowKey="id" size="small" pagination={{ pageSize: 10 }}
+          <Table dataSource={pointsDataSource} rowKey="id" size="small" pagination={{ pageSize: 10 }} locale={{ emptyText: creditsHistoryLoading ? '加载中…' : '暂无积分记录' }}
             columns={[
               { title: '说明', dataIndex: 'desc', key: 'desc' },
               { title: '变动', dataIndex: 'amount', key: 'amount', render: (v: number) => <Text style={{ color: v > 0 ? 'var(--brand-success)' : 'var(--brand-danger)', fontWeight: 600 }}>{v > 0 ? `+${v}` : v}</Text> },

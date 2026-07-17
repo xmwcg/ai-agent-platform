@@ -21,12 +21,18 @@ const TeamPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
+  const [roleOpen, setRoleOpen] = useState(false);
+  const [roleTarget, setRoleTarget] = useState<{ teamId: string; userId: string; current: string } | null>(null);
   const [detail, setDetail] = useState<Team | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [form] = Form.useForm();
   const [joinForm] = Form.useForm();
+  const [inviteForm] = Form.useForm();
+  const [roleForm] = Form.useForm();
 
   const load = async () => {
     setLoading(true);
@@ -54,15 +60,20 @@ const TeamPage: React.FC = () => {
     }
   };
 
-  const invite = async (teamId: string) => {
-    const userId = prompt('输入要邀请的用户 ID：');
-    if (!userId) return;
-    const role = (prompt('角色(admin/member/viewer)：', 'member') || 'member') as string;
+  const invite = (teamId: string) => {
+    setInviteTeamId(teamId);
+    inviteForm.resetFields();
+    setInviteOpen(true);
+  };
+  const submitInvite = async () => {
+    if (!inviteTeamId) return;
     try {
-      await teamAPI.invite(teamId, { userId, role });
+      const v = await inviteForm.validateFields();
+      await teamAPI.invite(inviteTeamId, { userId: v.userId, role: v.role });
       message.success('已邀请成员');
-      openDetail(teamId);
-    } catch (e) { message.error(extractApiError(e, '邀请失败')); }
+      setInviteOpen(false);
+      openDetail(inviteTeamId);
+    } catch (e) { if (e) message.error(extractApiError(e, '邀请失败')); }
   };
 
   const generateInvite = async (teamId: string) => {
@@ -126,14 +137,21 @@ const TeamPage: React.FC = () => {
     } catch (e) { message.error(extractApiError(e, '移除失败')); }
   };
 
-  const changeRole = async (teamId: string, userId: string, currentRole: string) => {
-    const newRole = prompt('新角色(admin/member/viewer)：', currentRole);
-    if (!newRole || newRole === currentRole) return;
+  const changeRole = (teamId: string, userId: string, currentRole: string) => {
+    setRoleTarget({ teamId, userId, current: currentRole });
+    roleForm.setFieldsValue({ role: currentRole });
+    setRoleOpen(true);
+  };
+  const submitRole = async () => {
+    if (!roleTarget) return;
     try {
-      await teamAPI.updateRole(teamId, userId, { role: newRole });
+      const v = await roleForm.validateFields();
+      if (v.role === roleTarget.current) { setRoleOpen(false); return; }
+      await teamAPI.updateRole(roleTarget.teamId, roleTarget.userId, { role: v.role });
       message.success('角色已更新');
-      openDetail(teamId);
-    } catch (e) { message.error(extractApiError(e, '更新失败')); }
+      setRoleOpen(false);
+      openDetail(roleTarget.teamId);
+    } catch (e) { if (e) message.error(extractApiError(e, '更新失败')); }
   };
 
   const columns = [
@@ -190,6 +208,27 @@ const TeamPage: React.FC = () => {
         <Form form={joinForm} layout="vertical">
           <Form.Item name="code" label="邀请码" rules={[{ required: true, message: '请输入邀请码' }]}>
             <Input placeholder="粘贴 24 位邀请码" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 邀请成员 Modal */}
+      <Modal title="邀请成员" open={inviteOpen} onOk={submitInvite} onCancel={() => setInviteOpen(false)} okText="邀请" destroyOnClose>
+        <Form form={inviteForm} layout="vertical">
+          <Form.Item name="userId" label="用户 ID" rules={[{ required: true, message: '请输入要邀请的用户 ID' }]}>
+            <Input placeholder="输入对方用户 ID" />
+          </Form.Item>
+          <Form.Item name="role" label="角色" initialValue="member">
+            <Select options={[{ value: 'admin', label: '管理员 (admin)' }, { value: 'member', label: '成员 (member)' }, { value: 'viewer', label: '访客 (viewer)' }]} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 修改角色 Modal */}
+      <Modal title="修改成员角色" open={roleOpen} onOk={submitRole} onCancel={() => setRoleOpen(false)} okText="保存" destroyOnClose>
+        <Form form={roleForm} layout="vertical">
+          <Form.Item name="role" label="角色" rules={[{ required: true, message: '请选择角色' }]}>
+            <Select options={[{ value: 'admin', label: '管理员 (admin)' }, { value: 'member', label: '成员 (member)' }, { value: 'viewer', label: '访客 (viewer)' }]} />
           </Form.Item>
         </Form>
       </Modal>

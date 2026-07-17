@@ -116,10 +116,10 @@ router.get('/media/task/:provider/:taskId', optionalAuth, async (req: AuthReques
 });
 
 // ============ 下载真实转换产物 ============
-router.get('/convert/download', (req: Request, res: Response) => {
+router.get('/convert/download', async (req: Request, res: Response) => {
   const id = req.query.id as string;
   const fallbackName = (req.query.name as string) || 'result';
-  const item = id ? getStoredConversion(id) : undefined;
+  const item = id ? await getStoredConversion(id) : undefined;
   if (!item) {
     return res.status(404).json({ success: false, error: '转换产物不存在或已过期（10 分钟有效期）' });
   }

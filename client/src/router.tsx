@@ -40,6 +40,7 @@ import PointsCenter from '@/pages/PointsCenter';
 import DistributionPage from '@/pages/DistributionPage';
 import OrderDetailPage from '@/pages/OrderDetailPage';
 import AibakChat from '@/pages/AibakChat';
+import PublicMetricsPage from '@/pages/PublicMetricsPage';
 import AboutPage from '@/pages/AboutPage';
 import ContactPage from '@/pages/ContactPage';
 import JoinPage from '@/pages/JoinPage';
@@ -102,6 +103,7 @@ const router = createBrowserRouter([
       { path: 'contact', element: <ContactPage /> },
       { path: 'partners', element: <JoinPage /> },
       { path: 'cookies', element: <CookiesPage /> },
+      { path: 'metrics', element: <PublicMetricsPage /> },
       { path: '*', element: <div>404 - 页面未找到</div> }
     ]
   }

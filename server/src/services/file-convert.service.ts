@@ -6,13 +6,15 @@
  * 未安装时明确报错（不返回假占位文件），避免误导用户。
  */
 
+import { putAsset, getAsset, deleteAsset } from './asset-store';
+
 export interface ConvertResult {
   sourceName: string;
   sourceFormat: string;
   targetFormat: string;
   outputName: string;
   outputSize: number;
-  outputId: string;       // 真实产物内存标识，供 /convert/download 取回
+  outputId: string;       // 资产存储标识，供 /convert/download 取回
   contentType: string;
   note: string;
 }
@@ -32,17 +34,18 @@ const CONVERSION_MATRIX: { from: string[]; to: string[]; label: string }[] = [
   { from: [...TEXT_FAMILY], to: [...TEXT_FAMILY], label: '文本格式互转（md/html/txt/csv/json/yaml/xml）' },
 ];
 
-// 真实产物内存存储（进程级，重启清空；生产可由对象存储替换）
-const outputStore = new Map<string, { content: string; ctype: string; name: string }>();
-function storeOutput(name: string, content: string, ctype: string): string {
+// 资产存储改为可插拔后端（COS / 本地磁盘 / 内存兜底），支持多实例部署
+async function storeOutput(name: string, content: string, ctype: string): Promise<string> {
   const id = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
-  outputStore.set(id, { content, ctype, name });
-  // 10 分钟后自动清理，避免内存泄漏
-  setTimeout(() => outputStore.delete(id), 10 * 60 * 1000).unref();
+  await putAsset(id, Buffer.from(content, 'utf8'), ctype, name);
+  // 10 分钟后自动清理，避免存储膨胀
+  setTimeout(() => { deleteAsset(id).catch(() => {}); }, 10 * 60 * 1000).unref();
   return id;
 }
-export function getStoredConversion(id: string) {
-  return outputStore.get(id);
+export async function getStoredConversion(id: string): Promise<{ content: string; ctype: string; name: string } | undefined> {
+  const a = await getAsset(id);
+  if (!a) return undefined;
+  return { content: a.buf.toString('utf8'), ctype: a.ctype, name: a.name || 'result' };
 }
 
 export function isConversionSupported(source: string, target: string): boolean {
@@ -334,7 +337,7 @@ class FileConvertService {
     else { output = content; } // 同族其它组合直接透传
 
     const outputName = fileName.replace(new RegExp(`\\.${sourceFormat}$`, 'i'), '') + '.' + targetFormat;
-    const id = storeOutput(outputName, output, ctype);
+    const id = await storeOutput(outputName, output, ctype);
     const ctypeLabel = ctype;
 
     return {

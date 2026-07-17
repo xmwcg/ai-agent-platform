@@ -460,11 +460,6 @@ function App() {
     </div>
   );
 
-  // ─── 路由切换自动回到顶部（修复长页面点模块后停在新页底部）───
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
-
   // ─── 内容区域页码过渡 key ───
   const [pageKey, setPageKey] = useState(0);
   useEffect(() => {

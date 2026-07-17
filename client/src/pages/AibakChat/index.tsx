@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styles from './style.module.css';
+import { aibakAPI, extractApiError } from '@/services/api';
 
 // ─── 常量区 ───────────────────────────────
 const MODELS = [
@@ -64,8 +65,10 @@ const AibakChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 自动滚动到底部
+  // 自动滚动到底部（首次挂载跳过，避免覆盖路由级回顶）
+  const chatMountedRef = useRef(false);
   const scrollToBottom = useCallback(() => {
+    if (chatMountedRef.current) { chatMountedRef.current = false; return; }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
@@ -95,30 +98,24 @@ const AibakChat: React.FC = () => {
     setStatusText('思考中...');
 
     try {
-      const response = await fetch('/api/aibak/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: newMessages,
-          model,
-          stream: false,
-        }),
+      const data: any = await aibakAPI.chat({
+        messages: newMessages,
+        model: model as 'hy3' | 'hy3-preview',
+        stream: false,
       });
 
-      const data = await response.json();
-
-      if (data.success) {
+      if (data?.success) {
         const aiMsg: ChatMessage = { role: 'assistant', content: data.text };
         setMessages(prev => [...prev, aiMsg]);
         const tokens = data.usage?.total_tokens ?? 'N/A';
         setStatusText(`上次: ${tokens} tokens · 免费额度`);
       } else {
-        const errMsg: ChatMessage = { role: 'assistant', content: `❌ 错误: ${data.error || '未知错误'}` };
+        const errMsg: ChatMessage = { role: 'assistant', content: `❌ 错误: ${data?.error || '未知错误'}` };
         setMessages(prev => [...prev, errMsg]);
         setStatusText('AI 在线 · 免费额度');
       }
     } catch (err: any) {
-      const errMsg: ChatMessage = { role: 'assistant', content: `❌ 网络错误: ${err.message}` };
+      const errMsg: ChatMessage = { role: 'assistant', content: `❌ 网络错误: ${extractApiError(err)}` };
       setMessages(prev => [...prev, errMsg]);
       setStatusText('AI 在线 · 免费额度');
     }
