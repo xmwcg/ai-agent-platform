@@ -183,8 +183,8 @@ export async function connectRedis(): Promise<any> {
   }
 
   try {
-    const status = (realRedis as any).status;
-    if (status === 'wait' || status === 'end') {
+    // 只要主连接不是 ready 就主动建立（覆盖 lazyConnect 初始 idle / wait / end / reconnecting 等态）
+    if ((realRedis as any).status !== 'ready') {
       await realRedis.connect();
     }
     const pong = await withTimeout(realRedis.ping() as Promise<string>, 5000, 'redis startup');
@@ -210,12 +210,46 @@ function isRedisReady(): boolean {
 
 async function probeRedisHealth(): Promise<boolean> {
   if (useMemoryRedis) return !isProduction();
-  if (!isRedisReady()) return false;
-  try {
-    return await withTimeout(realRedis.ping() as Promise<string>, 1500, 'redis') === 'PONG';
-  } catch {
-    return false;
+
+  // 1) 主连接就绪则直接 ping；记录主连接是否成功响应（用于自愈判定）
+  let mainOk = false;
+  if (isRedisReady()) {
+    try {
+      mainOk = (await withTimeout(realRedis.ping() as Promise<string>, 1500, 'redis')) === 'PONG';
+      if (mainOk) return true;
+    } catch {
+      // 主连接 ping 失败，落到独立探测 + 自愈
+    }
   }
+
+  // 2) 独立探测连接（每次新建），真实反映 Redis 可用性，不受主连接僵死影响。
+  //    主连接可能因偶发网络抖动（如 DNS EAI_AGAIN、TCP 半开）而卡死，
+  //    此时 status 仍为 'ready'（ESTABLISHED 但命令挂起），不应让 /api/health
+  //    永久误判 disconnected（进而被 Docker 标记为 unhealthy）。
+  let probeOk = false;
+  try {
+    const probe = new Redis(redisUrl(), {
+      lazyConnect: true,
+      connectTimeout: 1500,
+      maxRetriesPerRequest: 1,
+      retryStrategy: () => null, // 探测不重连，一次性判定
+      enableReadyCheck: false,
+    });
+    const pong = await withTimeout(probe.ping() as Promise<string>, 1500, 'redis-probe');
+    probe.disconnect();
+    probeOk = pong === 'PONG';
+  } catch {
+    probeOk = false;
+  }
+
+  // 3) Redis 实际可用但主连接僵死（无论 status 是 'ready' 半开还是未连接）时，
+  //    主动断开并重建主连接实现自愈，使限流等依赖真正恢复使用 Redis。
+  if (probeOk && !mainOk) {
+    (realRedis as any).disconnect?.();
+    (realRedis as any).connect?.().catch(() => {});
+  }
+
+  return probeOk;
 }
 
 /**

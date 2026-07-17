@@ -24,7 +24,10 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD", "node", "-e", "const h=require('http');const r=h.get('http://127.0.0.1:3000/api/health',x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)"]
+      # 容器存活探活：仅验证进程存活，不依赖外部依赖（Redis/Mongo），
+      # 避免长连接在受限容器中偶发哑掉时误判整个容器 unhealthy。
+      # 业务依赖健康请查 /api/health（供监控/告警）。
+      test: ["CMD", "node", "-e", "const h=require('http');const r=h.get('http://127.0.0.1:3000/health',x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)"]
       interval: 15s
       timeout: 4s
       retries: 3
