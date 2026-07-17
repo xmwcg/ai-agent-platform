@@ -29,7 +29,14 @@ COPY --chown=node:node package.json package-lock.json ./
 COPY --from=build --chown=node:node /usr/src/app/node_modules ./node_modules
 COPY --from=build --chown=node:node /usr/src/app/dist ./dist
 
-RUN mkdir -p /usr/src/app/uploads && chown -R node:node /usr/src/app/uploads
+# The production process only needs the Node runtime. Removing npm/npx also removes
+# npm's bundled dependency tree from the attack surface (including packages that
+# are irrelevant to the application but still reported by image scanners).
+RUN rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx \
+  && mkdir -p /usr/src/app/uploads \
+  && chown -R node:node /usr/src/app/uploads \
+  && node --version
 USER node
 
 EXPOSE 3000

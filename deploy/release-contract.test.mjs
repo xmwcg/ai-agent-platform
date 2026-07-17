@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const watcherPath = new URL('./cnb-watcher.sh', import.meta.url);
 const cnbPath = new URL('../.cnb.yml', import.meta.url);
+const serverDockerfilePath = new URL('../server/Dockerfile', import.meta.url);
 
 test('watcher retries and alerts when the CNB production ref cannot be read', async () => {
   const watcher = await readFile(watcherPath, 'utf8');
@@ -44,6 +45,17 @@ test('CNB scripts remain compatible with the runner shell', async () => {
   const pipeline = await readFile(cnbPath, 'utf8');
 
   assert.doesNotMatch(pipeline, /pipefail/);
+});
+
+test('server runtime image excludes npm tooling and its bundled dependency tree', async () => {
+  const dockerfile = await readFile(serverDockerfilePath, 'utf8');
+
+  assert.match(dockerfile, /rm -rf \/usr\/local\/lib\/node_modules\/npm/);
+  assert.match(dockerfile, /rm -f \/usr\/local\/bin\/npm \/usr\/local\/bin\/npx/);
+  assert.ok(
+    dockerfile.indexOf('rm -rf /usr/local/lib/node_modules/npm') < dockerfile.indexOf('USER node'),
+    'npm must be removed from the runtime stage before dropping privileges'
+  );
 });
 
 test('CNB long-running dependency installs and image builds keep the runner alive without hiding failures', async () => {
