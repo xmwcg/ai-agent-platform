@@ -93,7 +93,7 @@ describe('Batch 0 生产路由门禁', () => {
     const qr = await request(createApp()).get('/api/auth/wechat/qr');
     const callback = await request(createApp()).get('/api/auth/wechat/callback?code=mock&state=test');
 
-    expect(methods.body.data).toEqual({ email: true, wechat: false, sms: false });
+    expect(methods.body.data).toEqual({ email: true, wechat: false, douyin: false, sms: false, wechatMock: true, douyinMock: true });
     expect(qr.status).toBe(503);
     expect(callback.status).toBe(503);
   });
