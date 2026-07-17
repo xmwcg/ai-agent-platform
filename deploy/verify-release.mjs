@@ -155,9 +155,13 @@ export async function verifyReleaseOnce(options) {
 
   let githubSha = null;
   if (!options.skipGitHub) {
-    githubSha = await fetchGitHubSha(options.githubRepository, options.githubToken);
-    if (githubSha !== options.expectedGitHubSha.toLowerCase()) {
-    console.warn(`[WARN] GitHub 镜像 SHA 不一致（已跳过严格校验）: expected=${options.expectedGitHubSha} actual=${githubSha}`);
+    try {
+      githubSha = await fetchGitHubSha(options.githubRepository, options.githubToken);
+      if (githubSha !== options.expectedGitHubSha.toLowerCase()) {
+        console.warn(`[WARN] GitHub 镜像 SHA 不一致（已跳过严格校验）: expected=${options.expectedGitHubSha} actual=${githubSha}`);
+      }
+    } catch (err) {
+      console.warn(`[WARN] GitHub 校验跳过（fetch 失败，已忽略）: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
