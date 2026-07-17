@@ -13,6 +13,7 @@ import { redisClient } from '../config/database';
 import { logger } from '../lib/logger';
 import { processReferralOnRegister } from '../services/referral.service';
 import { phoneHash, normalizePhone, maskPhone, encryptField } from '../lib/field-crypto';
+import { OAUTH_CONFIG } from '../config/oauth';
 
 const router = Router();
 
@@ -222,12 +223,21 @@ router.post('/sms/login', authLimiter, validate(smsLoginSchema), async (req: Aut
 
 // 登录方式可用状态：前端据此动态显示/隐藏入口；缺密钥自动隐藏，不影响其他功能上线
 router.get('/login-methods', async (_req: Request, res: Response) => {
-  const wechatEnabled = !!(process.env.WECHAT_OPEN_APPID && process.env.WECHAT_OPEN_SECRET);
+  const wechatEnabled = OAUTH_CONFIG.wechat.enabled;
+  const douyinEnabled = OAUTH_CONFIG.douyin.enabled;
   // 当前代码尚未接入真实短信 SDK；生产必须隐藏入口并拒绝请求。
   const smsEnabled = process.env.NODE_ENV !== 'production' && !!process.env.SMS_PROVIDER;
   res.json({
     success: true,
-    data: { email: true, wechat: wechatEnabled, sms: smsEnabled },
+    data: {
+      email: true,
+      wechat: wechatEnabled,
+      douyin: douyinEnabled,
+      sms: smsEnabled,
+      // Mock 模式下也显示入口，便于前端开发
+      wechatMock: OAUTH_CONFIG.wechat.mock,
+      douyinMock: OAUTH_CONFIG.douyin.mock,
+    },
   });
 });
 
@@ -426,6 +436,271 @@ router.get('/admin/audit', requireAuth, requireAdmin, async (req: AuthRequest, r
     });
   } catch (error) {
     sendError(res, error);
+  }
+});
+
+// ===================== 抖音扫码登录（OAuth2 网站应用） =====================
+// 抖音 OAuth 与微信的关键差异：
+// 1. 参数名 client_key（非 appid）；2. token 用 POST（微信 GET）；3. scope=user_info
+
+// 生成抖音扫码登录入口（PC 端弹出二维码）
+router.get('/douyin/qr', async (_req: Request, res: Response) => {
+  try {
+    const cfg = OAUTH_CONFIG.douyin;
+    if (process.env.NODE_ENV === 'production' && !cfg.enabled) {
+      return res.status(503).json({ success: false, error: '抖音登录暂未开放' });
+    }
+    const state = crypto.randomBytes(8).toString('hex');
+    await redisClient.set(`douyin:state:${state}`, '1', 'EX', 600);
+
+    if (cfg.mock) {
+      return res.json({ success: true, mock: true, authorizeUrl: `mock://douyin-login?state=${state}`, state });
+    }
+
+    const redirectUri = encodeURIComponent(cfg.redirectUri);
+    const authorizeUrl = `${cfg.authorizeUrl}?client_key=${cfg.clientId}&response_type=code&scope=${cfg.scope}&redirect_uri=${redirectUri}&state=${state}`;
+    res.json({ success: true, mock: false, authorizeUrl, state });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 抖音 H5 跳转授权（移动端直接跳转，不弹窗）
+router.get('/douyin/h5', async (_req: Request, res: Response) => {
+  try {
+    const cfg = OAUTH_CONFIG.douyin;
+    if (process.env.NODE_ENV === 'production' && !cfg.enabled) {
+      return res.status(503).json({ success: false, error: '抖音登录暂未开放' });
+    }
+    const state = crypto.randomBytes(8).toString('hex');
+    await redisClient.set(`douyin:state:${state}`, '1', 'EX', 600);
+
+    if (cfg.mock) {
+      return res.json({ success: true, mock: true, authorizeUrl: `mock://douyin-h5?state=${state}`, state });
+    }
+
+    const redirectUri = encodeURIComponent(cfg.redirectUri);
+    const authorizeUrl = `${cfg.authorizeUrl}?client_key=${cfg.clientId}&response_type=code&scope=${cfg.scope}&redirect_uri=${redirectUri}&state=${state}`;
+    res.json({ success: true, mock: false, authorizeUrl, state });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 抖音回调：code 换 access_token + openid，登录/注册，返回 token
+router.get('/douyin/callback', async (req: Request, res: Response) => {
+  try {
+    const { code, state } = req.query as { code?: string; state?: string };
+    const format = (req.query as any).format;
+    const cfg = OAUTH_CONFIG.douyin;
+
+    if (process.env.NODE_ENV === 'production' && (!cfg.enabled || code === 'mock')) {
+      return res.status(503).json({ success: false, error: '抖音登录不可用' });
+    }
+    if (!state || !(await redisClient.get(`douyin:state:${state}`))) {
+      return res.status(400).json({ error: '非法的登录态' });
+    }
+    await redisClient.del(`douyin:state:${state}`);
+
+    let openid: string;
+    let unionid: string | undefined;
+    let nickname: string | undefined;
+    let avatar: string | undefined;
+
+    if (cfg.mock && code !== 'mock_real') {
+      // Mock 模式：生成模拟 openid，便于前端开发
+      openid = `mock_douyin_openid_${state.slice(0, 6)}`;
+      nickname = '抖音用户';
+    } else {
+      // 抖音获取 access_token：POST 请求（与微信 GET 不同）
+      const tokenResp = await axios.post(cfg.tokenUrl, {
+        client_key: cfg.clientId,
+        client_secret: cfg.clientSecret,
+        code,
+        grant_type: 'authorization_code',
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      openid = tokenResp.data?.data?.open_id;
+      const accessToken = tokenResp.data?.data?.access_token;
+      if (!openid) return res.status(400).json({ error: '抖音授权失败' });
+
+      // 获取用户信息（openid + unionid + 昵称 + 头像）
+      const userinfoResp = await axios.get(cfg.userinfoUrl, {
+        params: { access_token: accessToken, open_id: openid },
+      });
+      unionid = userinfoResp.data?.data?.union_id;
+      nickname = userinfoResp.data?.data?.nickname;
+      avatar = userinfoResp.data?.data?.avatar;
+    }
+
+    let user = await User.findOne({ douyinOpenid: openid });
+    if (!user) {
+      user = await User.create({
+        douyinOpenid: openid,
+        ...(unionid ? { douyinUnionid: unionid } : {}),
+        password: crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, ''),
+        name: nickname || '抖音用户',
+        ...(avatar ? { avatar } : {}),
+        provider: 'douyin',
+        providerId: openid,
+        email: `douyin_${openid.slice(-12)}@douyin.local`,
+      });
+    }
+    const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
+
+    if (format === 'json') {
+      return res.json({ success: true, token, user: user.toJSON() });
+    }
+    // 前端弹窗扫码：回调页把 token 发给 opener 并关闭
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<html><body><script>
+      try { window.opener && window.opener.postMessage({ type:'douyin_login', token:'${token}' }, '*'); } catch(e){}
+      window.close();
+    </script>登录成功，正在返回…</body></html>`);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// ===================== 账号绑定 / 解绑 =====================
+
+// 查询当前用户已绑定的第三方账号
+router.get('/bindings', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user!.id);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    res.json({
+      success: true,
+      data: {
+        email: user.email,
+        hasPassword: !!user.password,
+        wechat: user.wechatOpenid ? { bound: true } : { bound: false },
+        douyin: user.douyinOpenid ? { bound: true } : { bound: false },
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 绑定微信（已登录用户，通过 OAuth code 绑定到当前账号）
+router.post('/bind/wechat', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.body as { code: string };
+    if (!code) return res.status(400).json({ error: '缺少授权 code' });
+    const cfg = OAUTH_CONFIG.wechat;
+    if (process.env.NODE_ENV === 'production' && !cfg.enabled) {
+      return res.status(503).json({ success: false, error: '微信登录暂未开放' });
+    }
+
+    let openid: string;
+    if (cfg.mock || code === 'mock') {
+      openid = `mock_openid_bind_${Date.now().toString(36)}`;
+    } else {
+      const tokenResp = await axios.get(cfg.tokenUrl, {
+        params: { appid: cfg.clientId, secret: cfg.clientSecret, code, grant_type: 'authorization_code' },
+      });
+      openid = tokenResp.data?.openid;
+      if (!openid) return res.status(400).json({ error: '微信授权失败' });
+    }
+
+    // 检查 openid 是否已被其他账号绑定
+    const existing = await User.findOne({ wechatOpenid: openid });
+    if (existing && existing._id.toString() !== req.user!.id) {
+      return res.status(409).json({ error: '该微信已绑定其他账号' });
+    }
+
+    await User.findByIdAndUpdate(req.user!.id, { $set: { wechatOpenid: openid } });
+    res.json({ success: true, message: '微信绑定成功' });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 绑定抖音
+router.post('/bind/douyin', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.body as { code: string };
+    if (!code) return res.status(400).json({ error: '缺少授权 code' });
+    const cfg = OAUTH_CONFIG.douyin;
+    if (process.env.NODE_ENV === 'production' && !cfg.enabled) {
+      return res.status(503).json({ success: false, error: '抖音登录暂未开放' });
+    }
+
+    let openid: string;
+    let unionid: string | undefined;
+    if (cfg.mock || code === 'mock') {
+      openid = `mock_douyin_bind_${Date.now().toString(36)}`;
+    } else {
+      const tokenResp = await axios.post(cfg.tokenUrl, {
+        client_key: cfg.clientId, client_secret: cfg.clientSecret, code, grant_type: 'authorization_code',
+      }, { headers: { 'Content-Type': 'application/json' } });
+      openid = tokenResp.data?.data?.open_id;
+      const accessToken = tokenResp.data?.data?.access_token;
+      if (!openid) return res.status(400).json({ error: '抖音授权失败' });
+      const userinfoResp = await axios.get(cfg.userinfoUrl, { params: { access_token: accessToken, open_id: openid } });
+      unionid = userinfoResp.data?.data?.union_id;
+    }
+
+    const existing = await User.findOne({ douyinOpenid: openid });
+    if (existing && existing._id.toString() !== req.user!.id) {
+      return res.status(409).json({ error: '该抖音已绑定其他账号' });
+    }
+
+    await User.findByIdAndUpdate(req.user!.id, {
+      $set: { douyinOpenid: openid, ...(unionid ? { douyinUnionid: unionid } : {}) },
+    });
+    res.json({ success: true, message: '抖音绑定成功' });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 解绑微信（若是最后登录方式则强制设密码）
+router.post('/unbind/wechat', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user!.id);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    if (!user.wechatOpenid) return res.status(400).json({ error: '未绑定微信' });
+
+    // 安全检查：若解绑后无任何登录方式（无密码 + 无其他 OAuth），拒绝
+    const hasPassword = !!user.password;
+    const hasDouyin = !!user.douyinOpenid;
+    if (!hasPassword && !hasDouyin) {
+      return res.status(400).json({
+        error: '解绑后将无任何登录方式，请先设置密码或绑定其他账号',
+        code: 'NEED_PASSWORD',
+      });
+    }
+
+    await User.findByIdAndUpdate(req.user!.id, { $unset: { wechatOpenid: '' } });
+    res.json({ success: true, message: '微信解绑成功' });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 解绑抖音
+router.post('/unbind/douyin', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user!.id);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    if (!user.douyinOpenid) return res.status(400).json({ error: '未绑定抖音' });
+
+    const hasPassword = !!user.password;
+    const hasWechat = !!user.wechatOpenid;
+    if (!hasPassword && !hasWechat) {
+      return res.status(400).json({
+        error: '解绑后将无任何登录方式，请先设置密码或绑定其他账号',
+        code: 'NEED_PASSWORD',
+      });
+    }
+
+    await User.findByIdAndUpdate(req.user!.id, { $unset: { douyinOpenid: '', douyinUnionid: '' } });
+    res.json({ success: true, message: '抖音解绑成功' });
+  } catch (err) {
+    sendError(res, err);
   }
 });
 

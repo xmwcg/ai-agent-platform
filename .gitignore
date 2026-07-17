@@ -20,3 +20,7 @@ lint-run*.log
 # 系统
 .DS_Store
 Thumbs.db
+_cli*.txt
+_cli_log.zip
+_fullci*.txt
+ai-agent-platform-*.html

@@ -219,6 +219,28 @@ export const profileAPI = {
     apiClient.put('/auth/profile', data),
 };
 
+// 认证 API（微信/抖音 OAuth + 账号绑定/解绑）
+export const authAPI = {
+  // 登录方式可用状态
+  loginMethods: () => apiClient.get('/auth/login-methods'),
+  // 微信扫码登录
+  wechatQr: () => apiClient.get('/auth/wechat/qr'),
+  // 抖音扫码登录（PC）
+  douyinQr: () => apiClient.get('/auth/douyin/qr'),
+  // 抖音 H5 跳转登录（移动端）
+  douyinH5: () => apiClient.get('/auth/douyin/h5'),
+  // 账号绑定状态查询
+  getBindings: () => apiClient.get('/auth/bindings'),
+  // 绑定微信（传 OAuth code）
+  bindWechat: (code: string) => apiClient.post('/auth/bind/wechat', { code }),
+  // 绑定抖音
+  bindDouyin: (code: string) => apiClient.post('/auth/bind/douyin', { code }),
+  // 解绑微信（若最后登录方式则后端返回 400 + NEED_PASSWORD）
+  unbindWechat: () => apiClient.post('/auth/unbind/wechat', {}),
+  // 解绑抖音
+  unbindDouyin: () => apiClient.post('/auth/unbind/douyin', {}),
+};
+
 // 大模型配置中心 API
 export const modelConfigAPI = {
   list: () => apiClient.get('/model-config'),

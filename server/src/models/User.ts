@@ -16,6 +16,8 @@ export interface IUser extends Document {
   phone?: string;          // 密文存储（AES-256-GCM），toJSON 时掩码展示
   phoneHash?: string;      // HMAC-SHA256 确定性 hash，用于 unique 索引 + 登录查找
   wechatOpenid?: string;
+  douyinOpenid?: string;   // 抖音 OpenID（用户在该应用内的唯一标识）
+  douyinUnionid?: string;  // 抖音 UnionID（同一开发者下跨应用唯一，可选）
   role: 'user' | 'admin';
   isBanned?: boolean;
   provider: string;
@@ -82,7 +84,7 @@ const userSchema = new Schema<IUser>(
     },
     provider: {
       type: String,
-      enum: ['local', 'github', 'wechat'],
+      enum: ['local', 'github', 'wechat', 'douyin'],
       default: 'local',
     },
     providerId: {
@@ -102,6 +104,16 @@ const userSchema = new Schema<IUser>(
     wechatOpenid: {
       type: String,
       unique: true,
+      sparse: true,
+    },
+    douyinOpenid: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    douyinUnionid: {
+      type: String,
       sparse: true,
     },
     // 商业变现字段

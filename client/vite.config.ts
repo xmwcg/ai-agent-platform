@@ -16,7 +16,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        // 不 strip /api 前缀：后端所有路由挂在 /api/xxx（如 /api/auth/login），
+        // 原样透传即可命中后端路由。
       }
     }
   },

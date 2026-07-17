@@ -9,6 +9,7 @@ export interface UserProfile {
   avatar?: string;
   phone?: string;
   wechatOpenid?: string;
+  douyinOpenid?: string;
   plan: 'free' | 'pro' | 'max' | 'team';
   membershipExpiresAt?: string;
   credits: number;

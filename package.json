@@ -22,7 +22,13 @@
     "auto:start": "node scripts/auto-deploy.cjs start",
     "auto:stop": "node scripts/auto-deploy.cjs stop",
     "auto:status": "node scripts/auto-deploy.cjs status",
-    "auto:log": "node scripts/auto-deploy.cjs log"
+    "auto:log": "node scripts/auto-deploy.cjs log",
+    "local:dev": "bash scripts/local-dev.sh",
+    "local:prod": "bash scripts/local-prod.sh",
+    "local:stop": "docker compose -f docker-compose.local.yml down",
+    "local:logs": "docker compose -f docker-compose.local.yml logs -f",
+    "local:dev:ps": "powershell -ExecutionPolicy Bypass -File scripts/local-dev.ps1",
+    "local:prod:ps": "powershell -ExecutionPolicy Bypass -File scripts/local-prod.ps1"
   },
   "keywords": ["ai", "agent", "rag", "knowledge-management", "learning"],
   "author": "Your Name",

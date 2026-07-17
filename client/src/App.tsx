@@ -186,9 +186,19 @@ function RouteScrollRestoration() {
     };
   }, []);
 
+  // 多次重试确保滚动到顶部，覆盖三种场景：
+  //  1) 同步立即滚动（防止浏览器在 paint 前以旧 scrollY 渲染新页）；
+  //  2) rAF 重试覆盖 Outlet 异步内容渲染（数据拉取后页面变高）；
+  //  3) rAF 重试覆盖 pageKey 触发的 Content 重挂载（重挂后子页面 useEffect 可能再次改变滚动位置）。
   useLayoutEffect(() => {
     let frame = 0;
+    let hashFrame = 0;
     let attempts = 0;
+    let hashAttempts = 0;
+
+    // 立即同步滚动一次：useLayoutEffect 在 paint 前同步执行，
+    // 此时调用 scrollTo 可保证浏览器以 scrollY=0 渲染新页面，避免"先看到旧位置再跳"的闪烁。
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 
     const scrollToLocation = () => {
       if (location.hash) {
@@ -205,18 +215,47 @@ function RouteScrollRestoration() {
           return;
         }
         // 详情正文可能在异步请求后才生成，短暂重试避免深链接落在旧页面位置。
-        if (attempts < 8) {
-          attempts += 1;
-          frame = window.requestAnimationFrame(scrollToLocation);
+        if (hashAttempts < 8) {
+          hashAttempts += 1;
+          hashFrame = window.requestAnimationFrame(scrollToLocation);
           return;
         }
       }
+      // 无 hash 或 hash 重试耗尽：强制滚到顶部。
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     };
 
-    // 页面切换和异步正文渲染都完成后再定位，避免先滚到旧页面的底部。
-    frame = window.requestAnimationFrame(scrollToLocation);
-    return () => window.cancelAnimationFrame(frame);
+    // rAF 重试机制：连续 5 帧滚动到顶部。
+    // 即使子页面 useEffect 在挂载后调用 scrollIntoView（如对话页滚动到底部消息），
+    // 后续 rAF 帧也会把页面拉回顶部，确保用户始终看到的是新页面顶部。
+    const MAX_TOP_RETRIES = 5;
+    const scrollToTopWithRetries = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      if (attempts < MAX_TOP_RETRIES) {
+        attempts += 1;
+        frame = window.requestAnimationFrame(scrollToTopWithRetries);
+      }
+    };
+
+    // 启动两个并行机制：
+    //  - hash 定位（如 /knowledge/:id#section）走原有逻辑；
+    //  - 顶部重试覆盖普通路由切换。
+    hashFrame = window.requestAnimationFrame(scrollToLocation);
+    frame = window.requestAnimationFrame(scrollToTopWithRetries);
+
+    // 最后兜底：在所有 useEffect/rAF 都跑完后（约一帧后）再校正一次。
+    // 防止某些页面在 useEffect 中显式调用 element.scrollIntoView() 或 focus() 改变滚动位置。
+    const timeoutId = window.setTimeout(() => {
+      if (!location.hash) {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+    }, 60);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(hashFrame);
+      window.clearTimeout(timeoutId);
+    };
   }, [location.pathname, location.search, location.hash, location.key]);
 
   return null;

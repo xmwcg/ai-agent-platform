@@ -14,7 +14,7 @@ import {
   SettingOutlined, BellOutlined, LockOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { billingAPI, profileAPI, referralAPI, marketplaceAPI, byokAPI, extractApiError, MediaByokKey } from '@/services/api';
+import { billingAPI, profileAPI, referralAPI, marketplaceAPI, byokAPI, authAPI, extractApiError, MediaByokKey } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { usePaymentStore } from '@/stores/payment';
 import { useUIStore } from '@/stores/ui';
@@ -54,6 +54,8 @@ export default function ProfilePage() {
   const [creditsHistoryLoading, setCreditsHistoryLoading] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [bindings, setBindings] = useState<any>(null);
+  const [bindingsLoading, setBindingsLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -80,6 +82,17 @@ export default function ProfilePage() {
     setByokLoading(false);
   };
   useEffect(() => { loadByokKeys(); }, []);
+
+  // 加载第三方账号绑定状态
+  const loadBindings = useCallback(async () => {
+    setBindingsLoading(true);
+    try {
+      const res: any = await authAPI.getBindings();
+      if (res?.data) setBindings(res.data);
+    } catch { /* 忽略 */ }
+    setBindingsLoading(false);
+  }, []);
+  useEffect(() => { loadBindings(); }, [loadBindings]);
 
   // 加载真实分销统计与邀请链接（替换原写死的收益/推荐人数与 demo 链接）
   const loadReferral = useCallback(async () => {
@@ -158,6 +171,9 @@ export default function ProfilePage() {
     },
     {
       key: 'security', label: <span><SafetyCertificateOutlined /> 安全设置</span>,
+    },
+    {
+      key: 'bindings', label: <span><KeyOutlined /> 账号绑定</span>,
     },
     {
       key: 'points', label: <span><GiftOutlined /> 积分记录</span>,
@@ -387,9 +403,112 @@ export default function ProfilePage() {
     </Card>
   );
 
+  const renderBindings = () => (
+    <Card title="第三方账号绑定" loading={bindingsLoading}>
+      <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+        绑定微信/抖音后，可使用对应方式快速登录。解绑最后一个登录方式时需先设置密码。
+      </Text>
+      <List
+        itemLayout="horizontal"
+        dataSource={[
+          {
+            key: 'email',
+            icon: <MailOutlined />,
+            title: '邮箱',
+            desc: bindings?.email || authUser?.email || '未设置',
+            bound: !!(bindings?.email || authUser?.email),
+            provider: 'email' as const,
+          },
+          {
+            key: 'wechat',
+            icon: <WechatOutlined />,
+            title: '微信',
+            desc: bindings?.wechat?.bound ? '已绑定' : '未绑定',
+            bound: !!bindings?.wechat?.bound,
+            provider: 'wechat' as const,
+          },
+          {
+            key: 'douyin',
+            icon: <span style={{ fontSize: 18 }}>🎵</span>,
+            title: '抖音',
+            desc: bindings?.douyin?.bound ? '已绑定' : '未绑定',
+            bound: !!bindings?.douyin?.bound,
+            provider: 'douyin' as const,
+          },
+        ]}
+        renderItem={(item) => (
+          <List.Item
+            actions={
+              item.provider === 'email' ? [] : [
+                item.bound ? (
+                  <Button
+                    key="unbind"
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    onClick={async () => {
+                      try {
+                        const fn = item.provider === 'wechat' ? authAPI.unbindWechat : authAPI.unbindDouyin;
+                        await fn();
+                        message.success(`${item.title}解绑成功`);
+                        loadBindings();
+                        fetchProfileAction();
+                      } catch (err) {
+                        const msg = extractApiError(err, '解绑失败');
+                        if (msg.includes('设置密码') || msg.includes('NEED_PASSWORD')) {
+                          message.warning('解绑后将无任何登录方式，请先在「安全设置」中设置密码');
+                          setActiveTab('security');
+                        } else {
+                          message.error(msg);
+                        }
+                      }
+                    }}
+                  >
+                    解绑
+                  </Button>
+                ) : (
+                  <Button
+                    key="bind"
+                    type="primary"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={async () => {
+                      try {
+                        const fn = item.provider === 'wechat' ? authAPI.wechatQr : authAPI.douyinQr;
+                        const res: any = await fn();
+                        if (res?.authorizeUrl) {
+                          // 打开 OAuth 授权页（扫码后回调带回 code，此处简化为提示）
+                          window.open(res.authorizeUrl, `${item.provider}_bind`, 'width=420,height=540');
+                          message.info(`请在弹窗中完成${item.title}授权`);
+                        } else if (res?.mock) {
+                          message.info(`${item.title}登录 Mock 模式：未配置密钥`);
+                        }
+                      } catch (err) {
+                        message.error(extractApiError(err, '绑定启动失败'));
+                      }
+                    }}
+                  >
+                    绑定
+                  </Button>
+                ),
+              ]
+            }
+          >
+            <List.Item.Meta
+              avatar={<Avatar style={{ background: 'var(--bg-sidebar)' }}>{item.icon}</Avatar>}
+              title={<Text>{item.title}{item.bound && <Tag color="green" style={{ marginLeft: 8 }}>已绑定</Tag>}</Text>}
+              description={<Text type="secondary" style={{ fontSize: 13 }}>{item.desc}</Text>}
+            />
+          </List.Item>
+        )}
+      />
+    </Card>
+  );
+
   const tabContentMap: Record<string, React.ReactNode> = {
     overview: renderOverview(),
     security: renderSecurity(),
+    bindings: renderBindings(),
     points: renderPoints(),
     referral: renderReferral(),
     byok: renderByok(),
