@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import apiClient, { extractApiError } from '@/services/api';
 import FileConverter from '@/components/FileConverter';
+import { repairKnowledgeDocument } from '@/utils/repairMojibake';
 
 const { Title, Text } = Typography;
 
@@ -267,7 +268,7 @@ export default function KnowledgeDetail() {
     try {
       const res: any = await apiClient.get(`/knowledge/${id}`);
       if (res?.data) {
-        setDocument(res.data);
+        setDocument(repairKnowledgeDocument(res.data));
         if (res.data.access !== 'full') {
           message.warning('积分不足，请先充值积分或升级会员');
         } else {
@@ -284,7 +285,7 @@ export default function KnowledgeDetail() {
     apiClient.get(`/knowledge/${id}`)
       .then((res: any) => {
         if (!res?.data) throw new Error('文档数据格式无效');
-        setDocument(res.data);
+        setDocument(repairKnowledgeDocument(res.data));
       })
       .catch((error) => {
         setDocument(null);
@@ -502,4 +503,3 @@ export default function KnowledgeDetail() {
     </div>
   );
 }
-
