@@ -321,6 +321,16 @@ export default function KnowledgeDetail() {
             <Anchor
               affix={false}
               targetOffset={80}
+              getContainer={() => (window.document.querySelector('.knowledge-detail-page') as HTMLElement) || window}
+              onChange={(currentLink: string) => {
+                if (!currentLink) return;
+                const id = currentLink.replace('#', '');
+                const el = window.document.getElementById(id);
+                if (el) {
+                  const top = el.getBoundingClientRect().top + window.scrollY - 80;
+                  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+                }
+              }}
               items={headings.map((h) => ({
                 key: h.id,
                 href: `#${h.id}`,

@@ -1,5 +1,5 @@
 import rateLimit from 'express-rate-limit';
-import { Request } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { realRedis, isUsingMemoryRedis } from '../config/database';
 
 /**
@@ -217,3 +217,91 @@ export const text2imgLimiter = rateLimit({
   message: { success: false, error: '生成请求过于频繁，请稍后再试', code: 'TEXT2IMG_RATE_LIMITED' },
   skip: isTest,
 });
+
+
+// ─────────────────────────────────────────────────────────────
+// 敏感厂商模型查询限流：生产环境严格依赖 Redis，绝不降级内存。
+// 每用户 5 次/分钟、30 次/日；API Key 不参与 key，也不会写入 Redis。
+// ─────────────────────────────────────────────────────────────
+const sensitiveMemoryCounters = new Map<string, { count: number; expiresAt: number }>();
+
+async function ensureSensitiveRedisReady(): Promise<boolean> {
+  if (isUsingMemoryRedis()) return false;
+  if (redisHealthy) return true;
+  const ok = await pingWithTimeout(1000);
+  redisHealthy = ok;
+  return ok;
+}
+
+function memoryCounterIncrement(key: string, ttlSeconds: number): number {
+  const now = Date.now();
+  const current = sensitiveMemoryCounters.get(key);
+  if (!current || current.expiresAt <= now) {
+    sensitiveMemoryCounters.set(key, { count: 1, expiresAt: now + ttlSeconds * 1000 });
+    return 1;
+  }
+  current.count += 1;
+  return current.count;
+}
+
+async function redisCounterIncrement(key: string, ttlSeconds: number): Promise<number> {
+  const count = await withTimeout(realRedis.incr(key) as Promise<number>, 1200);
+  if (count === 1) {
+    await withTimeout(realRedis.expire(key, ttlSeconds) as Promise<number>, 1200);
+  }
+  return count;
+}
+
+export async function modelFetchLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (isTest()) {
+    next();
+    return;
+  }
+
+  const identity = userIdOrIpKey(req).replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160);
+  const minuteBucket = Math.floor(Date.now() / 60000);
+  const dayBucket = new Date().toISOString().slice(0, 10);
+  const minuteKey = `rl:model-fetch:min:${identity}:${minuteBucket}`;
+  const dayKey = `rl:model-fetch:day:${identity}:${dayBucket}`;
+  const production = process.env.NODE_ENV === 'production';
+
+  try {
+    const redisReady = await ensureSensitiveRedisReady();
+    if (production && !redisReady) {
+      res.status(503).json({
+        success: false,
+        error: '限流服务暂不可用，请稍后重试',
+        code: 'RATE_LIMIT_STORAGE_UNAVAILABLE',
+      });
+      return;
+    }
+
+    const [minuteCount, dayCount] = redisReady
+      ? await Promise.all([
+        redisCounterIncrement(minuteKey, 120),
+        redisCounterIncrement(dayKey, 2 * 86400),
+      ])
+      : [memoryCounterIncrement(minuteKey, 120), memoryCounterIncrement(dayKey, 2 * 86400)];
+
+    if (minuteCount > 5 || dayCount > 30) {
+      res.status(429).json({
+        success: false,
+        error: minuteCount > 5 ? '模型列表查询过于频繁，请一分钟后再试' : '今日模型列表查询次数已达上限',
+        code: 'MODEL_FETCH_RATE_LIMITED',
+      });
+      return;
+    }
+    next();
+  } catch {
+    redisHealthy = false;
+    if (production) {
+      res.status(503).json({
+        success: false,
+        error: '限流服务暂不可用，请稍后重试',
+        code: 'RATE_LIMIT_STORAGE_UNAVAILABLE',
+      });
+      return;
+    }
+    next();
+  }
+}

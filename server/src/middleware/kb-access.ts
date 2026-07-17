@@ -1,6 +1,5 @@
-import { User } from '../models/User';
 import { KnowledgeDocument } from '../models/KnowledgeDocument';
-import { CreditsTransaction } from '../models/CreditsTransaction';
+import { deductCredits } from '../services/credit-ledger.service';
 import { logger } from '../lib/logger';
 
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, max: 2 };
@@ -34,7 +33,7 @@ export function resolveKbAccess(doc: any, user: any): KbAccessVerdict {
   }
 
   // 2) 已解锁（积分/付费），直接全文
-  if (user?.id && Array.isArray(doc.unlockedBy) && doc.unlockedBy.includes(user.id)) {
+  if (user?.id && Array.isArray(doc.unlockedBy) && doc.unlockedBy.some((id: unknown) => String(id) === String(user.id))) {
     return { level: 'full' };
   }
 
@@ -72,21 +71,23 @@ export async function applyKbAccess(doc: any, user: any, verdict: KbAccessVerdic
 
   // 全文：如需扣积分则扣减并记录解锁，避免重复扣
   if (verdict.deduct && user?.id) {
-    const userDoc = await User.findByIdAndUpdate(
-      user.id,
-      { $inc: { credits: -verdict.deduct } },
-      { new: true },
-    );
-    await CreditsTransaction.create({
-      userId: user.id,
-      type: 'deduction',
-      amount: -verdict.deduct,
-      balanceAfter: userDoc?.credits ?? 0,
+    const documentId = String(doc._id);
+    await deductCredits({
+      userId: String(user.id),
+      amount: verdict.deduct,
+      idempotencyKey: `knowledge-unlock:${user.id}:${documentId}`,
+      businessType: 'knowledge_unlock',
+      businessId: documentId,
       resource: 'knowledge',
+      transactionType: 'deduction',
       description: `解锁知识文档《${doc.title}》消耗 ${verdict.deduct} 积分`,
+      auditReason: `用户解锁知识文档 ${documentId}`,
     });
     doc.unlockedBy = Array.isArray(doc.unlockedBy) ? [...doc.unlockedBy, user.id] : [user.id];
-    await KnowledgeDocument.updateOne({ _id: doc._id }, { $addToSet: { unlockedBy: user.id } }).catch((e) => logger.error('kb-access', `记录解锁失败: ${e.message}`));
+    await KnowledgeDocument.updateOne(
+      { _id: doc._id },
+      { $addToSet: { unlockedBy: user.id } }
+    ).catch((error) => logger.error('kb-access', `记录解锁失败: ${error.message}`));
   }
   return { content: doc.content };
 }

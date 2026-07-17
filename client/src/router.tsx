@@ -45,6 +45,7 @@ import AboutPage from '@/pages/AboutPage';
 import ContactPage from '@/pages/ContactPage';
 import JoinPage from '@/pages/JoinPage';
 import CookiesPage from '@/pages/CookiesPage';
+import QueryCenterPage from '@/pages/QueryCenterPage';
 
 const router = createBrowserRouter([
   {
@@ -77,6 +78,7 @@ const router = createBrowserRouter([
       { path: 'code', element: <CodeExplanation /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: 'model-config', element: <ModelConfigPage /> },
+      { path: 'query-center', element: <QueryCenterPage /> },
       { path: 'customer-service', element: <CustomerServicePage /> },
       { path: 'customer-service/:id/audit', element: <AuditLogPage /> },
       { path: 'tools', element: <ToolsCenterPage /> },

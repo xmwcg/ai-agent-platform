@@ -86,8 +86,18 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
 
-    // 构建查询
-    let query: any = {};
+    // 构建查询：列表层先做资源隔离，避免私有知识标题/摘要/标签泄露。
+    const accessConditions: any[] = [{ isPublic: true }];
+    if (req.user?.id) {
+      const teams = await Team.find({
+        $or: [{ ownerId: req.user.id }, { 'members.userId': req.user.id }],
+      }).select('_id').lean();
+      accessConditions.push(
+        { author: req.user.id },
+        { teamId: { $in: teams.map((team: any) => team._id) } },
+      );
+    }
+    let query: any = { $or: accessConditions };
 
     // 全文搜索
     if (search) {

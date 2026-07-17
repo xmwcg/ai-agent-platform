@@ -4,10 +4,12 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 import { enforceQuota, quotaIncrement } from '../middleware/subscription';
 import { aiModelManager, AIBAK_FREE_MODELS } from '../config/ai-models';
 import { reloadCustomProviders } from '../gateway/ai-gateway.service';
-import { fetchProviderModels } from '../services/model-fetch.service';
+import { fetchCatalogProviderModels } from '../services/model-fetch.service';
 import { sendError } from '../lib/http-error';
 import { encryptSecret, decryptSecret } from '../lib/crypto';
 import { logSecretAudit, checkTestAbuse } from '../services/secret-audit.service';
+import { publicProviderCatalog } from '../config/provider-catalog';
+import { modelFetchLimiter } from '../middleware/rate-limit';
 
 const router = Router();
 
@@ -273,30 +275,33 @@ router.post('/:id/test', requireAuth, async (req: AuthRequest, res: Response) =>
   }
 });
 
-/** 平台内置 provider 信息（只读参考） */
-router.get('/providers/builtin', (req: Request, res: Response) => {
-  res.json({ success: true, data: aiModelManager.getEnabledProviders() });
+/** 服务端权威厂商目录（模型配置页与查询中心共用） */
+router.get('/providers/catalog', (_req: Request, res: Response) => {
+  res.json({ success: true, data: publicProviderCatalog() });
+});
+
+/** 兼容旧入口：统一返回权威目录，避免前后端两套厂商信息漂移 */
+router.get('/providers/builtin', (_req: Request, res: Response) => {
+  res.json({ success: true, data: publicProviderCatalog() });
 });
 
 /**
- * 自动获取厂商模型清单（OpenAI 兼容）：修复「获取慢 / 网络错误」
- * - 15s 超时 + 内存缓存（按 baseURL+apiKey 哈希），避免反复慢请求
- * - 同一 key 并发去重，避免重复叠加请求
+ * 登录后按服务端白名单查询厂商模型列表。
+ * 不接受用户自定义 baseURL；API Key 只用于本次请求，不缓存、不落库、不写日志。
  */
-router.post('/providers/fetch-models', async (req: Request, res: Response) => {
+router.post('/providers/fetch-models', requireAuth, modelFetchLimiter, async (req: AuthRequest, res: Response) => {
   try {
-    const { baseURL, apiKey } = req.body || {};
-    if (!baseURL || !apiKey) {
-      return res.status(400).json({ success: false, error: '缺少 baseURL 或 apiKey' });
+    const { providerId, endpointId, apiKey } = req.body || {};
+    if (!providerId || !apiKey) {
+      return res.status(400).json({ success: false, error: '缺少 providerId 或 apiKey' });
     }
-    const ids = await fetchProviderModels(baseURL, apiKey);
+    if ('baseURL' in (req.body || {}) || 'url' in (req.body || {})) {
+      return res.status(400).json({ success: false, error: '不允许自定义请求地址，请选择官方厂商 Endpoint' });
+    }
+    const ids = await fetchCatalogProviderModels({ providerId, endpointId, apiKey });
     res.json({ success: true, data: ids, count: ids.length });
-  } catch (err: any) {
-    res.status(502).json({
-      success: false,
-      error: err?.message || '获取失败',
-      hint: '请确认 Base URL 与 Key 正确、服务可达（需为 OpenAI 兼容的 /models 接口）',
-    });
+  } catch (err) {
+    sendError(res, err);
   }
 });
 

@@ -255,7 +255,8 @@ export const modelConfigAPI = {
   test: (id: string, model?: string) => apiClient.post(`/model-config/${id}/test`, model ? { model } : {}),
   builtinProviders: () => apiClient.get('/model-config/providers/builtin'),
   // 自动获取厂商模型清单（15s 超时 + 服务端缓存，修复慢/网络错误）
-  fetchModels: (data: { baseURL: string; apiKey: string }) =>
+  providerCatalog: () => apiClient.get('/model-config/providers/catalog'),
+  fetchModels: (data: { providerId: string; endpointId?: string; apiKey: string }) =>
     apiClient.post('/model-config/providers/fetch-models', data),
   // 平台免费额度（云函数 4 个免费模型）元信息
   aibakFree: () => apiClient.get('/model-config/providers/aibak-free'),

@@ -12,7 +12,7 @@ import {
   TeamOutlined, DashboardOutlined, AppstoreOutlined, NodeIndexOutlined,
   ApartmentOutlined, EditOutlined, MenuOutlined, GiftOutlined, ShareAltOutlined, ShopOutlined,
   SunOutlined, MoonOutlined, ThunderboltOutlined, PictureOutlined,
-  BarChartOutlined, ExperimentOutlined, BulbOutlined, SecurityScanOutlined,
+  BarChartOutlined, ExperimentOutlined, BulbOutlined, SecurityScanOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/auth';
 import { useUIStore } from '@/stores/ui';
@@ -20,6 +20,9 @@ import FreeExperienceFab from '@/components/FreeExperienceFab';
 import ScrollFab from '@/components/ScrollFab';
 import CustomerServiceFab from '@/components/CustomerServiceFab';
 import AppFooter from '@/components/AppFooter';
+import GlobalSearch from '@/components/GlobalSearch';
+import SiteQueryMenu from '@/components/SiteQueryMenu';
+import { NAVIGATION_GROUPS, SITE_FEATURES, visibleSiteFeatures } from '@/config/site-features';
 
 // ─── 品牌常量 ───
 const BRAND_NAME = 'AIbak';
@@ -29,67 +32,34 @@ const BRAND_URL = 'https://aibak.site';
 const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
 
-// ─── 常量化菜单配置 ───
-const MENU_GROUPS = (role?: string) => [
-  {
-    key: 'core', label: '核心功能', defaultOpen: true,
-    children: [
-      { key: '/', icon: <HomeOutlined />, label: '首页' },
-      { key: '/quickstart', icon: <RocketOutlined />, label: '快速启动' },
-      { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话' },
-      { key: '/knowledge', icon: <BookOutlined />, label: '通用知识库' },
-      { key: '/sandbox', icon: <CodeOutlined />, label: '实践沙盒' },
-    ],
-  },
-  {
-    key: 'create', label: '创作与学习',
-    children: [
-      { key: '/courses', icon: <ExperimentOutlined />, label: '学习中心' },
-      { key: '/learning-path', icon: <CompassOutlined />, label: '学习路径' },
-      { key: '/creative', icon: <BulbOutlined />, label: '创作工坊' },
-      { key: '/code', icon: <CodeOutlined />, label: '代码解释' },
-    ],
-  },
-  {
-    key: 'tools', label: '工具与分析',
-    children: [
-      { key: '/tools', icon: <ToolOutlined />, label: '智能工具箱' },
-      { key: '/compare', icon: <BarChartOutlined />, label: '对比分析' },
-      { key: '/calendar', icon: <CalendarOutlined />, label: '模型日历' },
-      { key: '/workflows', icon: <NodeIndexOutlined />, label: '工作流编辑器' },
-    ],
-  },
-  {
-    key: 'platform', label: '平台与生态',
-    children: [
-      { key: '/model-config', icon: <ApiOutlined />, label: '模型配置' },
-      { key: '/marketplace', icon: <ShopOutlined />, label: 'API 市场' },
-      { key: '/skills', icon: <AppstoreOutlined />, label: '技能市场' },
-      { key: '/plugins', icon: <SettingOutlined />, label: '插件管理' },
-      { key: '/customer-service', icon: <CustomerServiceOutlined />, label: '智能客服' },
-    ],
-  },
-  {
-    key: 'manage', label: '管理与账户',
-    children: [
-      { key: '/team', icon: <TeamOutlined />, label: '团队权限' },
-      { key: '/diagnostics', icon: <DashboardOutlined />, label: '部署自检' },
-      { key: '/ops-dashboard', icon: <BarChartOutlined />, label: '运营看板' },
-      ...(role === 'admin' ? [{ key: '/admin/users', icon: <SecurityScanOutlined />, label: '用户管理' }] : []),
-      { key: '/pricing', icon: <CrownOutlined />, label: '会员升级' },
-      { key: '/points-center', icon: <GiftOutlined />, label: '积分中心' },
-      { key: '/distribution', icon: <ShareAltOutlined />, label: '分销中心' },
-      { key: '/profile', icon: <ProfileOutlined />, label: '个人中心' },
-    ],
-  },
-];
+// ─── 全站功能注册表驱动菜单、面包屑和搜索 ───
+const FEATURE_ICONS: Record<string, React.ReactNode> = {
+  home: <HomeOutlined />, rocket: <RocketOutlined />, robot: <RobotOutlined />,
+  book: <BookOutlined />, code: <CodeOutlined />, experiment: <ExperimentOutlined />,
+  compass: <CompassOutlined />, bulb: <BulbOutlined />, tool: <ToolOutlined />,
+  chart: <BarChartOutlined />, calendar: <CalendarOutlined />, workflow: <NodeIndexOutlined />,
+  search: <SearchOutlined />, api: <ApiOutlined />, shop: <ShopOutlined />,
+  apps: <AppstoreOutlined />, setting: <SettingOutlined />, service: <CustomerServiceOutlined />,
+  team: <TeamOutlined />, dashboard: <DashboardOutlined />, security: <SecurityScanOutlined />,
+  crown: <CrownOutlined />, gift: <GiftOutlined />, share: <ShareAltOutlined />,
+  profile: <ProfileOutlined />,
+};
 
-// 从所有菜单中提取扁平的 key→label 映射，用于面包屑
-const ALL_MENU_FLAT: Record<string, string> = {};
-MENU_GROUPS('admin').forEach((g) =>
-  g.children.forEach((c) => {
-    ALL_MENU_FLAT[c.key] = c.label;
-  })
+const MENU_GROUPS = (role?: string) => {
+  const visible = new Map(visibleSiteFeatures(role).map((feature) => [feature.id, feature]));
+  return NAVIGATION_GROUPS.map((group) => ({
+    key: group.key,
+    label: group.label,
+    defaultOpen: group.defaultOpen,
+    children: group.featureIds
+      .map((id) => visible.get(id))
+      .filter((feature): feature is NonNullable<typeof feature> => Boolean(feature))
+      .map((feature) => ({ key: feature.path, label: feature.title, icon: FEATURE_ICONS[feature.icon] })),
+  })).filter((group) => group.children.length > 0);
+};
+
+const ALL_MENU_FLAT: Record<string, string> = Object.fromEntries(
+  SITE_FEATURES.map((feature) => [feature.path, feature.title]),
 );
 
 const PLAN_TAGS: Record<string, { text: string; color: string }> = {
@@ -541,72 +511,48 @@ function App() {
           position: 'sticky', top: 0, zIndex: 50,
           transition: 'background 0.3s',
         }}>
-          <Space size={12}>
-            {/* 移动端汉堡菜单 */}
-            {isMobile && (
-              <Button type="text" icon={<MenuOutlined />}
-                onClick={() => setSidebarMobileOpen(true)}
-                style={{ fontSize: 18, width: 36, height: 36 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 12, flex: 1, minWidth: 0 }}>
+            {isMobile ? (
+              <Button type="text" icon={<MenuOutlined />} onClick={() => setSidebarMobileOpen(true)} style={{ fontSize: 18, width: 36, height: 36, flexShrink: 0 }} />
+            ) : (
+              <Button type="text" icon={<MenuOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} style={{ fontSize: 16, width: 36, height: 36, flexShrink: 0 }} />
             )}
-            {/* 桌面端侧边栏折叠按钮 */}
-            {!isMobile && (
-              <Button
-                type="text"
-                icon={<MenuOutlined />}
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                style={{ fontSize: 16, width: 36, height: 36 }}
-              />
-            )}
-            {/* 品牌标题（悬浮锁定左上角，链接官网 aibak.site） */}
             <a
               href={BRAND_URL}
               target="_blank"
               rel="noopener noreferrer"
               title="访问官网 aibak.site"
-              style={{ display: 'flex', alignItems: 'baseline', gap: 8, textDecoration: 'none' }}
+              style={{ display: 'flex', alignItems: 'baseline', gap: 8, textDecoration: 'none', flexShrink: 0 }}
             >
-              <span style={{
-                fontWeight: 800, fontSize: isMobile ? 16 : 19,
-                color: 'var(--text-primary)', letterSpacing: '-0.3px',
-              }}>
+              <span style={{ fontWeight: 800, fontSize: isMobile ? 16 : 19, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
                 {BRAND_NAME}
               </span>
-              {!isMobile && (
-                <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--text-tertiary)' }}>
-                  {BRAND_SLOGAN}
-                </span>
+              {!isMobile && !isTablet && (
+                <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--text-tertiary)' }}>{BRAND_SLOGAN}</span>
               )}
             </a>
-          </Space>
-
-          {/* 面包屑（桌面） */}
-          {!isMobile && (
-            <div style={{
-              position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-              pointerEvents: 'auto',
-            }}>
-              {renderBreadcrumb()}
-            </div>
-          )}
+            <GlobalSearch compact={isMobile || isTablet} />
+            <SiteQueryMenu compact={isMobile || isTablet} />
+          </div>
 
           <Space size={4}>
-            {/* 主题切换 */}
-            <Tooltip title={themeMode === 'dark' ? '切换亮色' : '切换暗色'}>
+            {/* 移动端为搜索与查询入口让出空间，主题切换保留在桌面端 */}
+            {!isMobile && <Tooltip title={themeMode === 'dark' ? '切换亮色' : '切换暗色'}>
               <Button
                 type="text"
                 icon={themeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
                 onClick={toggleTheme}
                 style={{ width: 36, height: 36, fontSize: 16, borderRadius: 10 }}
               />
-            </Tooltip>
+            </Tooltip>}
 
             {/* 系统状态 */}
-            <Tooltip title="系统运行正常">
+            {!isMobile && <Tooltip title="系统运行正常">
               <Badge dot status="success" offset={[-2, 2]}>
                 <Button type="text" icon={<DashboardOutlined />}
                   style={{ width: 36, height: 36, borderRadius: 10 }} />
               </Badge>
-            </Tooltip>
+            </Tooltip>}
 
             {renderUserArea()}
           </Space>
@@ -621,6 +567,9 @@ function App() {
             paddingBottom: isMobile ? 64 : 0, // 为底部 TabBar 留空间
           }}
         >
+          {!isMobile && breadcrumbs.length > 1 && (
+            <div style={{ margin: '0 4px 12px', minHeight: 24 }}>{renderBreadcrumb()}</div>
+          )}
           <div style={{
             padding: isMobile ? 16 : 24,
             minHeight: 360,

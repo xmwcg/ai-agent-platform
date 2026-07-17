@@ -201,7 +201,7 @@ router.get('/orders/:orderNo/pay', requireAuth, async (req: AuthRequest, res: Re
       const balance = await grantCreditsPack(order.userId.toString(), order.packageId, order.orderNo);
       return res.json({ success: true, data: { paid: true, orderType: 'credits_pack', credits: balance } });
     }
-    await activateSubscription(order.userId.toString(), order.plan, order.period);
+    await activateSubscription(order.userId.toString(), order.plan, order.period, order.orderNo);
     res.json({ success: true, data: { paid: true, plan: order.plan } });
   } catch (err) {
     sendError(res, err);
@@ -375,3 +375,4 @@ router.get('/orders/history', requireAuth, async (req: AuthRequest, res: Respons
 router.use(webhookRoutes);
 
 export default router;
+

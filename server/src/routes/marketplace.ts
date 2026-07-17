@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router, Request, Response, NextFunction } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { sendError } from '../lib/http-error';
@@ -11,6 +12,8 @@ import { getCreditsCost, MarketplaceResource } from '../config/credits-pricing';
 import { recordApiRevenue } from '../services/marketplace-revenue.service';
 import { RESOURCE_PRICING_RANGE } from '../config/marketplace-fee';
 import { generateText } from '../services/ai-text.service';
+import { deductCredits, grantCredits } from '../services/credit-ledger.service';
+import { AppError } from '../lib/http-error';
 import {
   generateApiKey,
   hashKey,
@@ -22,6 +25,9 @@ import {
 /** 携带已鉴权 API Key 的请求（收敛 enforceApiKey 中间件挂载的任意断言） */
 interface ApiKeyRequest extends AuthRequest {
   apiKey: IApiKey;
+  usageRequestId: string;
+  creditsDeducted?: number;
+  quotaConsumed?: boolean;
 }
 
 /** enforceApiKey 中间件选项 */
@@ -82,31 +88,37 @@ export function enforceApiKey(options: EnforceApiKeyOptions = {}): (req: AuthReq
       res.status(401).json({ error: 'API Key 无效或已吊销' });
       return;
     }
+    const suppliedRequestId = String(req.header('Idempotency-Key') || '').trim();
+    if (suppliedRequestId && !/^[A-Za-z0-9._:-]{8,128}$/.test(suppliedRequestId)) {
+      res.status(400).json({ error: 'Idempotency-Key 格式无效', code: 'INVALID_IDEMPOTENCY_KEY' });
+      return;
+    }
+    (req as ApiKeyRequest).usageRequestId = suppliedRequestId || crypto.randomUUID();
     // 原子扣减日配额（避免并发超发）；返回 null 表示已用尽
     const consumed = await consumeQuotaAtomically(String(key._id));
     if (!consumed) {
       // 配额耗尽后尝试积分抵扣
       if (key.creditsEnabled) {
-        const user = await User.findOneAndUpdate(
-          { _id: key.ownerId, credits: { $gte: cost } },
-          { $inc: { credits: -cost } },
-          { new: true }
-        );
-        if (user) {
-          // 积分抵扣成功：记录变动明细（异步不阻塞响应）
-          void CreditsTransaction.create({
-            userId: key.ownerId,
-            type: 'deduction',
-            amount: -cost,
-            balanceAfter: user.credits,
+        try {
+          const request = req as ApiKeyRequest;
+          const result = await deductCredits({
+            userId: String(key.ownerId),
+            amount: cost,
+            idempotencyKey: `api-call:${String(key._id)}:${request.usageRequestId}`,
+            businessType: 'api_marketplace_usage',
+            businessId: request.usageRequestId,
             resource,
-            apiKeyId: key._id,
+            apiKeyId: String(key._id),
+            transactionType: 'deduction',
             description: `API 积分抵扣 (${resource})`,
+            auditReason: `API Key ${key.prefix} 超出日配额后的真实调用`,
           });
-          (req as ApiKeyRequest).apiKey = key;
-          (req as any)._creditsDeducted = cost;
-          logger.info('marketplace', `积分抵扣 ${cost} (${resource})，用户 ${key.ownerId} 余额 ${user.credits}`);
+          request.apiKey = key;
+          request.creditsDeducted = cost;
+          logger.info('marketplace', `积分抵扣 ${cost} (${resource})，requestId=${request.usageRequestId} balance=${result.balanceAfter}`);
           return next();
+        } catch (error) {
+          if ((error as any)?.code !== 'INSUFFICIENT_CREDITS') return next(error);
         }
       }
       res.status(429).json({
@@ -118,6 +130,7 @@ export function enforceApiKey(options: EnforceApiKeyOptions = {}): (req: AuthReq
       return;
     }
     (req as ApiKeyRequest).apiKey = consumed;
+    (req as ApiKeyRequest).quotaConsumed = true;
     next();
   };
 }
@@ -202,43 +215,112 @@ router.get('/usage', requireAuth, async (req: AuthRequest, res: Response) => {
 });
 
 /** 按量计费端点：开放 API 市场 - 对话 */
-router.post('/v1/chat', enforceApiKey({ resource: 'chat' }), validate(chatSchema), async (req: AuthRequest, res: Response) => {
+// P0 fix: validate before enforceApiKey so invalid requests don't deduct quota/credits
+router.post('/v1/chat', validate(chatSchema), enforceApiKey({ resource: 'chat' }), async (req: AuthRequest, res: Response) => {
+  const request = req as ApiKeyRequest;
+  const key = request.apiKey;
+  let actualProvider: string | undefined;
+  let actualModel: string | undefined;
+
   try {
     const { prompt, system } = req.body as { prompt: string; system?: string };
-    const key = (req as ApiKeyRequest).apiKey;
-    // 真实推理：优先第三方模型，未配置时回退 CloudBase 免费云函数，绝不返回假数据
-    const { text: reply } = await generateText({
+    const generated = await generateText({
       system: system || '你是一个专业 AI 助手，请用简洁、准确的语言回答用户问题。',
       user: prompt,
       temperature: 0.7,
     });
-    // 异步记录用量日志（不阻塞响应），支撑账单导出与积分抵扣审计
-    void logApiUsage({
+    actualProvider = generated.provider;
+    actualModel = generated.model;
+
+    // 用量记录属于商业计费证据，必须在响应前成功写入，不能异步忽略失败。
+    await logApiUsage({
       keyId: String(key._id),
-      ownerId: key.ownerId,
+      ownerId: String(key.ownerId),
       prefix: key.prefix,
       resource: 'chat',
+      requestId: request.usageRequestId,
+      modelId: actualModel,
+      providerId: actualProvider,
       promptBytes: Buffer.byteLength(String(prompt), 'utf8') || undefined,
-      replyBytes: Buffer.byteLength(reply, 'utf8') || undefined,
+      replyBytes: Buffer.byteLength(generated.text, 'utf8') || undefined,
       status: 'success',
-      creditsDeducted: (req as any)._creditsDeducted,
+      creditsDeducted: request.creditsDeducted,
     });
-    // 异步记录 API 市场收益（平台抽成 + 创作者分成）
-    void recordApiRevenue(
-      key.ownerId.toString(),
-      String(key._id),
-      'chat',
-      RESOURCE_PRICING_RANGE.chat.default,
-    );
+
+    try {
+      await recordApiRevenue(
+        key.ownerId.toString(),
+        String(key._id),
+        'chat',
+        RESOURCE_PRICING_RANGE.chat.default,
+      );
+    } catch (revenueError) {
+      logger.error('marketplace', `API 收益记录失败: ${revenueError instanceof Error ? revenueError.message : String(revenueError)}`);
+    }
+
     res.json({
-      provider: 'aibak-unified',
-      model: 'aibak-unified-router',
-      reply,
+      provider: actualProvider,
+      model: actualModel,
+      reply: generated.text,
+      requestId: request.usageRequestId,
       apiKeyId: String(key._id),
       remaining: remainingQuota(key as unknown as ApiKeyQuotaState),
     });
-  } catch (err) {
-    sendError(res, err);
+  } catch (error) {
+    let compensationError: unknown;
+    try {
+      if (request.creditsDeducted) {
+        await grantCredits({
+          userId: String(key.ownerId),
+          amount: request.creditsDeducted,
+          idempotencyKey: `api-compensation:${String(key._id)}:${request.usageRequestId}`,
+          businessType: 'api_marketplace_compensation',
+          businessId: request.usageRequestId,
+          sourceType: 'adjustment',
+          transactionType: 'adjustment',
+          resource: 'chat',
+          apiKeyId: String(key._id),
+          description: 'API 调用失败自动冲正',
+          auditReason: `真实模型调用或用量记录失败，冲正 requestId=${request.usageRequestId}`,
+        });
+      }
+      if (request.quotaConsumed) {
+        await ApiKey.updateOne(
+          { _id: key._id, usedToday: { $gt: 0 } },
+          { $inc: { usedToday: -1 } }
+        );
+      }
+    } catch (failedCompensation) {
+      compensationError = failedCompensation;
+      logger.error(
+        'marketplace',
+        `API 调用失败且额度补偿失败: requestId=${request.usageRequestId} error=${failedCompensation instanceof Error ? failedCompensation.message : String(failedCompensation)}`
+      );
+    }
+
+    try {
+      await logApiUsage({
+        keyId: String(key._id),
+        ownerId: String(key.ownerId),
+        prefix: key.prefix,
+        resource: 'chat',
+        requestId: request.usageRequestId,
+        modelId: actualModel,
+        providerId: actualProvider,
+        status: 'error',
+        creditsDeducted: 0,
+      });
+    } catch (logError) {
+      logger.error('marketplace', `API 失败用量记录写入失败: ${logError instanceof Error ? logError.message : String(logError)}`);
+    }
+
+    if (compensationError) {
+      return sendError(
+        res,
+        new AppError(503, '调用失败，积分补偿处理中，请联系客服并提供请求编号', 'API_CREDIT_COMPENSATION_FAILED')
+      );
+    }
+    sendError(res, error);
   }
 });
 

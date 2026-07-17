@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { Referral, Commission, IReferral } from '../models/Referral';
 import { User } from '../models/User';
-import { CreditsTransaction } from '../models/CreditsTransaction';
+import { grantCredits } from './credit-ledger.service';
 import { Withdrawal } from '../models/Withdrawal';
 
 // 佣金比例配置（三级分销）
@@ -93,6 +93,7 @@ export async function processReferralOnRegister(
       directReferrer._id.toString(),
       100,
       '推荐新用户注册奖励',
+      newUserId,
       session
     );
 
@@ -365,26 +366,19 @@ async function grantReferralCredits(
   userId: string,
   amount: number,
   description: string,
+  referredUserId: string,
   session?: mongoose.ClientSession
 ): Promise<void> {
-  const user = await User.findByIdAndUpdate(
+  await grantCredits({
     userId,
-    { $inc: { credits: amount } },
-    { new: true, session }
-  );
-
-  if (user) {
-    await CreditsTransaction.create(
-      [
-        {
-          userId: new mongoose.Types.ObjectId(userId),
-          type: 'grant',
-          amount,
-          balanceAfter: user.credits,
-          description,
-        },
-      ],
-      { session }
-    );
-  }
+    amount,
+    idempotencyKey: `referral-register:${referredUserId}:${userId}`,
+    businessType: 'referral_registration',
+    businessId: referredUserId,
+    sourceType: 'promotion_free',
+    transactionType: 'grant',
+    description,
+    auditReason: `被推荐用户 ${referredUserId} 完成注册`,
+    session,
+  });
 }

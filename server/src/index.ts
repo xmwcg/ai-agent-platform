@@ -48,6 +48,8 @@ import pointsRoutes from './routes/points';
 import marketplaceRevenueRoutes from './routes/marketplace-revenue';
 import opsRoutes from './routes/ops';
 import aibakChatRoutes from './routes/aibak-chat';
+import searchRoutes from './routes/search';
+import queryCenterRoutes from './routes/query-center';
 import { mcpService } from './services/mcp.service';
 import { sendError } from './lib/http-error';
 import { logger } from './lib/logger';
@@ -128,6 +130,8 @@ app.use('/api/compare', compareRoutes);
 app.use('/api/ai', aiLimiter(), aiRoutes);           // AI 端点：按用户级别限流
 app.use('/api/aibak', aiLimiter(), aibakChatRoutes);  // CloudBase 免费 AI：同样限流
 app.use('/api/knowledge', knowledgeRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/query-center', queryCenterRoutes);
 app.use('/api/rag', ragRoutes);
 app.use('/api/rag', ragPipelineRoutes);
 app.use('/api/courses', courseRoutes);

@@ -28,13 +28,15 @@ interface ModelCfg {
   createdAt: string;
 }
 
-const BUILTIN_OPTIONS = [
-  ...PROVIDER_PRESETS.map(p => ({
-    value: p.id, label: `${p.name} (${p.category === 'international' ? '国际' : '国内'})`,
-    group: p.category,
-  })),
-  { value: 'custom', label: '自定义 OpenAPI 兼容接口', group: 'other' },
-];
+interface ProviderCatalogItem {
+  id: string;
+  name: string;
+  category: 'domestic' | 'international';
+  endpoints: Array<{ id: string; baseUrl: string; region: string }>;
+  recommendedModels: string[];
+  capabilities: string[];
+  supportsModelFetch: boolean;
+}
 
 const ModelConfigPage: React.FC = () => {
   const [list, setList] = useState<ModelCfg[]>([]);
@@ -47,6 +49,7 @@ const ModelConfigPage: React.FC = () => {
   const [fetchingModels, setFetchingModels] = useState(false);
   const [aibakFree, setAibakFree] = useState<any[]>([]);
   const [selProvider, setSelProvider] = useState<string>('');
+  const [providerCatalog, setProviderCatalog] = useState<ProviderCatalogItem[]>([]);
 
   // 「测试连接」弹窗状态：复用 ModelSelector 选择要测试的具体模型
   const [testOpen, setTestOpen] = useState(false);
@@ -67,22 +70,37 @@ const ModelConfigPage: React.FC = () => {
 
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    modelConfigAPI.providerCatalog().then((response: any) => {
+      if (Array.isArray(response?.data)) setProviderCatalog(response.data);
+    }).catch((error) => message.error(extractApiError(error, '厂商目录加载失败')));
+  }, []);
+
+  const builtinOptions = [
+    ...providerCatalog.map((provider) => ({
+      value: provider.id,
+      label: `${provider.name} (${provider.category === 'international' ? '国际' : '国内'})`,
+      group: provider.category,
+    })),
+    { value: 'custom', label: '自定义 OpenAPI 兼容接口', group: 'other' },
+  ];
+
   // 加载平台免费额度（云函数 4 个免费模型）元信息
   useEffect(() => {
     modelConfigAPI.aibakFree().then((r: any) => { if (r?.data) setAibakFree(r.data); }).catch(() => { /* 忽略 */ });
   }, []);
 
-  // 自动获取厂商模型清单（OpenAI 兼容，服务端 15s 超时 + 缓存）
+  // 自动获取厂商模型清单：只请求服务端权威目录中的官方 Endpoint，不接受任意 URL。
   const onAutoFetchModels = async () => {
-    const baseURL = form.getFieldValue('baseURL');
     const apiKey = form.getFieldValue('apiKey');
-    if (!baseURL || !apiKey) {
-      message.warning('请先填写 API Base URL 与 API Key');
+    const provider = providerCatalog.find((item) => item.id === selProvider);
+    if (!provider || !provider.supportsModelFetch || !apiKey) {
+      message.warning('请选择支持实时查询的官方厂商并填写 API Key');
       return;
     }
     setFetchingModels(true);
     try {
-      const res: any = await modelConfigAPI.fetchModels({ baseURL, apiKey });
+      const res: any = await modelConfigAPI.fetchModels({ providerId: provider.id, endpointId: provider.endpoints[0]?.id, apiKey });
       const ids: string[] = res?.data || [];
       if (ids.length === 0) {
         message.info('未从该厂商拉取到模型，请手动填写');
@@ -103,16 +121,16 @@ const ModelConfigPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  // 选择厂商时自动填充默认配置
-  const onProviderChange = (provider: string) => {
-    setSelProvider(provider);
-    const preset = PROVIDER_PRESETS.find(p => p.id === provider);
-    if (preset) {
+  // 选择厂商时从服务端权威目录填充配置；自定义地址仅用于用户主动保存配置，不能用于模型列表探测。
+  const onProviderChange = (providerId: string) => {
+    setSelProvider(providerId);
+    const provider = providerCatalog.find((item) => item.id === providerId);
+    if (provider) {
       form.setFieldsValue({
-        baseURL: preset.apiBaseUrl,
-        models: preset.models,
-        defaultModel: preset.models[0],
-        name: preset.name,
+        baseURL: provider.endpoints[0]?.baseUrl || '',
+        models: provider.recommendedModels,
+        defaultModel: provider.recommendedModels[0] || '',
+        name: provider.name,
       });
     } else {
       form.setFieldsValue({ baseURL: '', models: [], defaultModel: '' });
@@ -121,6 +139,7 @@ const ModelConfigPage: React.FC = () => {
 
   const openEdit = (rec: ModelCfg) => {
     setEditing(rec);
+    setSelProvider(rec.provider);
     form.setFieldsValue(rec);
     setModalOpen(true);
   };
@@ -200,8 +219,9 @@ const ModelConfigPage: React.FC = () => {
     {
       title: '厂商', dataIndex: 'provider', key: 'provider',
       render: (p: string) => {
+        const provider = providerCatalog.find((item) => item.id === p);
         const preset = PROVIDER_PRESETS.find(pr => pr.id === p);
-        return <Tag color={preset?.category === 'international' ? 'blue' : 'purple'}>{preset?.name || p}</Tag>;
+        return <Tag color={(provider?.category || preset?.category) === 'international' ? 'blue' : 'purple'}>{provider?.name || preset?.name || p}</Tag>;
       }
     },
     {
@@ -297,14 +317,14 @@ const ModelConfigPage: React.FC = () => {
           <Form.Item name="provider" label="厂商 / Provider" rules={[{ required: true }]}>
             <Select onChange={onProviderChange}
               options={[
-                { label: '🌍 国际厂商', options: BUILTIN_OPTIONS.filter(o => o.group === 'international') },
-                { label: '🇨🇳 国内厂商', options: BUILTIN_OPTIONS.filter(o => o.group === 'domestic') },
-                { label: '🔧 其他', options: BUILTIN_OPTIONS.filter(o => o.group === 'other') },
+                { label: '🌍 国际厂商', options: builtinOptions.filter(o => o.group === 'international') },
+                { label: '🇨🇳 国内厂商', options: builtinOptions.filter(o => o.group === 'domestic') },
+                { label: '🔧 其他', options: builtinOptions.filter(o => o.group === 'other') },
               ]}
             />
           </Form.Item>
           <Form.Item name="baseURL" label="API Base URL" rules={[{ required: true, message: '请输入接口地址' }]}
-            tooltip="选择厂商后自动填写，可手动修改">
+            tooltip="官方厂商由服务端目录自动填写；自定义接口可手动输入，但不能用于实时模型探测">
             <Input placeholder="https://api.deepseek.com/v1" />
           </Form.Item>
           <Form.Item name="apiKey" label="API Key" rules={[{ required: true, message: '请输入 Key' }]}
@@ -319,16 +339,19 @@ const ModelConfigPage: React.FC = () => {
           </Form.Item>
           <Space style={{ marginBottom: 12, marginTop: -8 }} wrap>
             {(() => {
+              const provider = providerCatalog.find((item) => item.id === selProvider);
               const p = PROVIDER_PRESETS.find((x) => x.id === selProvider);
-              const tags = capabilityTags(p?.capabilities);
+              const tags = provider
+                ? provider.capabilities.map((text) => ({ text, color: text.includes('vision') ? 'blue' : text.includes('image') ? 'green' : 'purple' }))
+                : capabilityTags(p?.capabilities);
               return tags.length ? (
                 <>自动识别能力：{tags.map((t) => <Tag key={t.text} color={t.color}>{t.text}</Tag>)}</>
               ) : null;
             })()}
           </Space>
           {(() => {
-            const p = PROVIDER_PRESETS.find((x) => x.id === selProvider);
-            return p?.supportsAutoFetch ? (
+            const provider = providerCatalog.find((item) => item.id === selProvider);
+            return provider?.supportsModelFetch ? (
               <Button block icon={<ThunderboltOutlined />} loading={fetchingModels} onClick={onAutoFetchModels}
                 style={{ marginBottom: 4 }}>
                 自动获取模型（调用厂商 /models 接口，15s 超时）

@@ -15,6 +15,9 @@ export interface IApiUsageLog extends Document {
   ownerId: string;
   prefix: string;          // API Key 前缀，方便导出可读
   resource: string;        // 调用资源（chat / embed / compare / image）
+  requestId?: string;      // 单次业务调用 ID，用于幂等与补偿关联
+  modelId?: string;        // 真实执行模型 ID；未知时不写入
+  providerId?: string;     // 真实执行厂商 ID；未知时不写入
   promptBytes?: number;    // 输入字节数（粗略估算）
   replyBytes?: number;     // 输出字节数
   status: 'success' | 'quota_exceeded' | 'error';
@@ -28,6 +31,9 @@ const ApiUsageLogSchema = new Schema<IApiUsageLog>(
     ownerId: { type: String, required: true, index: true },
     prefix: { type: String, required: true },
     resource: { type: String, default: 'chat' },
+    requestId: { type: String },
+    modelId: { type: String },
+    providerId: { type: String },
     promptBytes: { type: Number },
     replyBytes: { type: Number },
     status: { type: String, enum: ['success', 'quota_exceeded', 'error'], default: 'success' },
@@ -39,6 +45,8 @@ const ApiUsageLogSchema = new Schema<IApiUsageLog>(
 
 // 复合索引：按密钥 + 时间查询用量报表
 ApiUsageLogSchema.index({ keyId: 1, timestamp: -1 });
+ApiUsageLogSchema.index({ ownerId: 1, requestId: 1 }, { unique: true, sparse: true });
+ApiUsageLogSchema.index({ ownerId: 1, modelId: 1, timestamp: -1 });
 // TTL 索引：90 天后自动清理（控制存储成本）
 ApiUsageLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: 90 * 86400 });
 

@@ -55,24 +55,26 @@ export async function logApiUsage(params: {
   ownerId: string;
   prefix: string;
   resource?: string;
+  requestId?: string;
+  modelId?: string;
+  providerId?: string;
   promptBytes?: number;
   replyBytes?: number;
   status?: 'success' | 'quota_exceeded' | 'error';
   creditsDeducted?: number;
 }): Promise<void> {
-  try {
-    await ApiUsageLog.create({
+  await ApiUsageLog.create({
       keyId: params.keyId,
       ownerId: params.ownerId,
       prefix: params.prefix,
       resource: params.resource || 'chat',
+      requestId: params.requestId,
+      modelId: params.modelId,
+      providerId: params.providerId,
       promptBytes: params.promptBytes,
       replyBytes: params.replyBytes,
       status: params.status || 'success',
       creditsDeducted: params.creditsDeducted,
       timestamp: new Date(),
     });
-  } catch {
-    // 日志写入失败不影响主流程
-  }
 }

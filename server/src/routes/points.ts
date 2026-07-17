@@ -1,92 +1,48 @@
-import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middleware/auth';
+import { Router, Response } from 'express';
+import { AuthRequest, requireAuth } from '../middleware/auth';
 import {
   dailyCheckIn,
   getCheckInStatus,
   getCheckInHistory,
-  awardTaskPoints,
   TASK_POINTS,
 } from '../services/points.service';
 import { sendError } from '../lib/http-error';
 
 const router = Router();
-
-// 所有路由需要登录
 router.use(requireAuth);
 
-/**
- * POST /api/points/checkin
- * 每日签到
- */
-router.post('/checkin', async (req: Request, res: Response) => {
+router.post('/checkin', async (req: AuthRequest, res: Response) => {
   try {
-    const result = await dailyCheckIn((req as any).user._id);
-    if (!result.success) {
-      return res.status(400).json({ error: result.message, data: result });
-    }
+    const result = await dailyCheckIn(req.user!.id);
+    if (!result.success) return res.status(400).json({ error: result.message, data: result });
     res.json({ success: true, data: result });
   } catch (error) {
     sendError(res, error);
   }
 });
 
-/**
- * GET /api/points/checkin/status
- * 获取签到状态
- */
-router.get('/checkin/status', async (req: Request, res: Response) => {
+router.get('/checkin/status', async (req: AuthRequest, res: Response) => {
   try {
-    const status = await getCheckInStatus((req as any).user._id);
+    const status = await getCheckInStatus(req.user!.id);
     res.json({ success: true, data: status });
   } catch (error) {
     sendError(res, error);
   }
 });
 
-/**
- * GET /api/points/checkin/history
- * 获取签到历史
- */
-router.get('/checkin/history', async (req: Request, res: Response) => {
+router.get('/checkin/history', async (req: AuthRequest, res: Response) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 30));
-    const data = await getCheckInHistory((req as any).user._id, page, pageSize);
+    const data = await getCheckInHistory(req.user!.id, page, pageSize);
     res.json({ success: true, data });
   } catch (error) {
     sendError(res, error);
   }
 });
 
-/**
- * POST /api/points/task
- * 任务积分奖励
- * Body: { taskType: string }
- */
-router.post('/task', async (req: Request, res: Response) => {
-  try {
-    const { taskType } = req.body;
-    if (!taskType) {
-      return res.status(400).json({ error: '缺少 taskType 参数' });
-    }
-
-    const amount = TASK_POINTS[taskType as keyof typeof TASK_POINTS];
-    if (!amount) {
-      return res.status(400).json({ error: `未知的任务类型: ${taskType}` });
-    }
-
-    await awardTaskPoints((req as any).user._id, amount, taskType);
-    res.json({ success: true, data: { amount, taskType } });
-  } catch (error) {
-    sendError(res, error);
-  }
-});
-
-/**
- * GET /api/points/tasks
- * 获取任务列表与积分配置
- */
-router.get('/tasks', async (_req: Request, res: Response) => {
+// 仅展示任务规则；任务奖励只能由已验证的内部业务事件触发。
+router.get('/tasks', (_req: AuthRequest, res: Response) => {
   res.json({
     success: true,
     data: {

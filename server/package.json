@@ -11,7 +11,8 @@
     "seed": "ts-node --transpile-only src/scripts/seed.ts",
     "rotate-key": "ts-node --transpile-only src/scripts/rotate-encryption-key.ts",
     "validate:production": "ts-node --transpile-only src/scripts/validate-production-config.ts",
-    "validate:production-contract": "ts-node --transpile-only src/scripts/validate-production-contract.ts"
+    "validate:production-contract": "ts-node --transpile-only src/scripts/validate-production-contract.ts",
+    "migrate:credit-lots": "ts-node --transpile-only src/scripts/migrate-credit-lots.ts"
   },
   "keywords": [
     "ai",
