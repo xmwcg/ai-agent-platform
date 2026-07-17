@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import {
   Card, Typography, Button, message, Spin, Tag, Space, Divider, Anchor, Tooltip, Dropdown, Skeleton, Alert,
 } from 'antd';
@@ -34,6 +35,11 @@ interface KnowledgeDocument {
   author: { username: string };
 }
 
+// 标题 slug：Markdown 与 HTML 两种提取方式共用，确保 TOC 锚点 id 一致
+function slugifyHeading(text: string): string {
+  return `heading-${text.toLowerCase().replace(/[^a-z0-9一-龥]+/g, '-')}`;
+}
+
 // 从 Markdown 提取标题层次结构
 function extractHeadings(content: string): { level: number; text: string; id: string }[] {
   const headingRegex = /^(#{2,4})\s+(.+)$/gm;
@@ -42,20 +48,46 @@ function extractHeadings(content: string): { level: number; text: string; id: st
   while ((match = headingRegex.exec(content)) !== null) {
     const level = match[1].length;
     const text = match[2].trim();
-    const id = `heading-${text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')}`;
-    headings.push({ level, text, id });
+    headings.push({ level, text, id: slugifyHeading(text) });
   }
   return headings;
+}
+
+// 文档内容是否为富文本编辑器生成的 HTML（而非 Markdown）
+function isHtmlContent(content: string): boolean {
+  return /<([a-z][a-z0-9]*)\b[^>]*>/i.test(content);
+}
+
+// 从 HTML 提取标题层次结构（供目录导航）
+function extractHeadingsFromHtml(html: string): { level: number; text: string; id: string }[] {
+  const headingRegex = /<h([2-4])[^>]*>([\s\S]*?)<\/h\1>/gi;
+  const headings: { level: number; text: string; id: string }[] = [];
+  let match;
+  while ((match = headingRegex.exec(html)) !== null) {
+    const level = parseInt(match[1], 10);
+    const text = match[2].replace(/<[^>]+>/g, '').trim();
+    if (text) headings.push({ level, text, id: slugifyHeading(text) });
+  }
+  return headings;
+}
+
+// 为 HTML 中的 h2~h4 注入与 TOC 一致的 id（便于锚点跳转）
+function addHeadingIds(html: string): string {
+  return html.replace(/<h([2-4])(\s[^>]*)?>([\s\S]*?)<\/h\1>/gi, (_m, level, attrs, inner) => {
+    const text = inner.replace(/<[^>]+>/g, '').trim();
+    const id = slugifyHeading(text);
+    return `<h${level}${attrs || ''} id="${id}">${inner}</h${level}>`;
+  });
 }
 
 // 简单的 Markdown to HTML 渲染（无依赖）
 function renderMarkdown(content: string): string {
   if (!content) return '';
-  const html = content
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<h4 id="heading-$1">$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3 id="heading-$1">$1</h3>')
-    .replace(/^# (.+)$/gm, '<h2 id="heading-$1">$1</h2>')
+    const html = content
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/^### (.+)$/gm, (_m, t) => `<h4 id="${slugifyHeading(t)}">${t}</h4>`)
+      .replace(/^## (.+)$/gm, (_m, t) => `<h3 id="${slugifyHeading(t)}">${t}</h3>`)
+      .replace(/^# (.+)$/gm, (_m, t) => `<h2 id="${slugifyHeading(t)}">${t}</h2>`)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`([^`]+)`/g, '<code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:13px">$1</code>')
@@ -81,8 +113,23 @@ export default function KnowledgeDetail() {
   // 实际展示正文：全文优先，否则用试看内容
   const shownContent = isFull ? (document?.content || '') : (document?.previewContent || '');
 
-  const headings = useMemo(() => (shownContent ? extractHeadings(shownContent) : []), [shownContent]);
-  const htmlContent = useMemo(() => (shownContent ? renderMarkdown(shownContent) : ''), [shownContent]);
+  const isHtml = useMemo(() => !!shownContent && isHtmlContent(shownContent), [shownContent]);
+  const headings = useMemo(
+    () => (shownContent ? (isHtml ? extractHeadingsFromHtml(shownContent) : extractHeadings(shownContent)) : []),
+    [shownContent, isHtml]
+  );
+  const htmlContent = useMemo(() => {
+    if (!shownContent) return '';
+    if (isHtml) {
+      // 富文本编辑器产出的是 HTML（外部内容不可信），净化后再渲染，防止 XSS
+      return DOMPurify.sanitize(addHeadingIds(shownContent), {
+        ADD_ATTR: ['target', 'rel'],
+        FORBID_TAGS: ['style', 'script'],
+      });
+    }
+    // Markdown 由本项目渲染器产出（可信），直接渲染
+    return renderMarkdown(shownContent);
+  }, [shownContent, isHtml]);
 
   // 解锁全文：重新拉取（服务端按积分扣减并记录，二次返回 full）
   const unlock = async () => {
