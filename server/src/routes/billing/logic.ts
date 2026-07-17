@@ -54,9 +54,9 @@ export async function activateSubscription(userId: string, plan: PlanId, period:
     },
     { new: true }
   );
-  // 记录订阅赠送积分明细（异步不阻塞）
+  // 账本写入属于履约的一部分，必须在返回前完成，避免响应后仍有数据库操作。
   if (user && p.credits > 0) {
-    void CreditsTransaction.create({
+    await CreditsTransaction.create({
       userId: user._id,
       type: 'grant',
       amount: p.credits,
@@ -65,11 +65,14 @@ export async function activateSubscription(userId: string, plan: PlanId, period:
       description: `${p.name}订阅赠送 ${p.credits} 积分`,
     });
   }
-  // 异步处理推荐佣金激活（不阻塞订阅激活响应）
+  // 推荐佣金失败不回滚主权益，但必须等待任务收敛，禁止留下响应后的悬空数据库操作。
   if (user && plan !== 'free') {
-    void activateReferralOnPayment(userId, period === 'yearly' ? p.priceYearly : p.priceMonthly, orderNo).catch((err) => {
-      logger.error('billing', `推荐佣金激活失败: ${err.message}`);
-    });
+    try {
+      await activateReferralOnPayment(userId, period === 'yearly' ? p.priceYearly : p.priceMonthly, orderNo);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('billing', `推荐佣金激活失败: ${message}`);
+    }
   }
 }
 
@@ -79,8 +82,8 @@ export async function grantCreditsPack(userId: string, packageId: string, orderN
   if (!pkg) throw new Error(`未知积分包: ${packageId}`);
   const user = await User.findByIdAndUpdate(userId, { $inc: { credits: pkg.credits } }, { new: true });
   if (!user) throw new Error('用户不存在');
-  // 记录积分购买明细（异步不阻塞）
-  void CreditsTransaction.create({
+  // 账本写入属于充值履约的一部分，失败时必须让调用方执行补偿/重试。
+  await CreditsTransaction.create({
     userId: user._id,
     type: 'purchase',
     amount: pkg.credits,
