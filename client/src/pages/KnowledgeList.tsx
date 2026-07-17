@@ -14,6 +14,7 @@ import {
 import { knowledgeAPI } from '@/services/api';
 import FileConverter from '@/components/FileConverter';
 import KnowledgeImport from '@/components/KnowledgeImport';
+import { repairKnowledgeDocument, repairStringList } from '@/utils/repairMojibake';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -63,7 +64,7 @@ export default function KnowledgeList() {
       const params: any = { ...searchParams, page: pagination.current, limit: pagination.pageSize };
       const response: any = await knowledgeAPI.list(params);
       if (response?.data) {
-        setDocuments(response.data);
+        setDocuments(response.data.map(repairKnowledgeDocument));
         setPagination((p) => ({ ...p, total: response.pagination?.total || 0 }));
       }
     } catch {
@@ -77,8 +78,8 @@ export default function KnowledgeList() {
     try {
       const response: any = await knowledgeAPI.getMeta();
       if (response?.data) {
-        setTags(response.data.tags || []);
-        setCategories(response.data.categories || []);
+        setTags(repairStringList(response.data.tags));
+        setCategories(repairStringList(response.data.categories));
       }
     } catch { /* ignore */ }
     try {

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useCallback, useMemo, useState } from 'react';
 import {
   Layout, Menu, Typography, Button, Avatar, Dropdown, Space, Tag,
   Drawer, Breadcrumb, Badge, Tooltip, Switch, Divider,
@@ -173,6 +173,53 @@ function BottomTabBar({ onMenuOpen }: { onMenuOpen: () => void }) {
       </button>
     </div>
   );
+}
+
+function RouteScrollRestoration() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    let frame = 0;
+    let attempts = 0;
+
+    const scrollToLocation = () => {
+      if (location.hash) {
+        let id = location.hash.slice(1);
+        try {
+          id = decodeURIComponent(id);
+        } catch {
+          // 非法 hash 不应阻塞页面回到顶部。
+        }
+        const element = window.document.getElementById(id);
+        if (element) {
+          const top = element.getBoundingClientRect().top + window.scrollY - 80;
+          window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'auto' });
+          return;
+        }
+        // 详情正文可能在异步请求后才生成，短暂重试避免深链接落在旧页面位置。
+        if (attempts < 8) {
+          attempts += 1;
+          frame = window.requestAnimationFrame(scrollToLocation);
+          return;
+        }
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    };
+
+    // 页面切换和异步正文渲染都完成后再定位，避免先滚到旧页面的底部。
+    frame = window.requestAnimationFrame(scrollToLocation);
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname, location.search, location.hash, location.key]);
+
+  return null;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -425,7 +472,9 @@ function App() {
   }, [location.pathname]);
 
   return (
-    <Layout style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
+    <>
+      <RouteScrollRestoration />
+      <Layout style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
       {/* 桌面端/平板侧边栏 */}
       {!isMobile && sidebarSider}
 
@@ -566,7 +615,8 @@ function App() {
 
       {/* 左下角自动客服弹窗（接入云函数 4 模型，售前售后问答） */}
       <CustomerServiceFab />
-    </Layout>
+      </Layout>
+    </>
   );
 }
 
