@@ -9,7 +9,12 @@ COPY public ./public
 COPY src ./src
 RUN npm run build
 
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.30.0-alpine3.23 AS runtime
+
+# The official tag is refreshed independently of Alpine security packages.
+# Upgrade the pinned Alpine release during every --pull build so Trivy scans
+# the latest patched packages instead of the base image's stale package set.
+RUN apk upgrade --no-cache
 
 ARG APP_COMMIT_SHA=unknown
 LABEL org.opencontainers.image.title="AIbak Web" \

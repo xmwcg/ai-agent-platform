@@ -5,6 +5,7 @@ import test from 'node:test';
 const watcherPath = new URL('./cnb-watcher.sh', import.meta.url);
 const cnbPath = new URL('../.cnb.yml', import.meta.url);
 const serverDockerfilePath = new URL('../server/Dockerfile', import.meta.url);
+const clientDockerfilePath = new URL('../client/Dockerfile', import.meta.url);
 
 test('watcher retries and alerts when the CNB production ref cannot be read', async () => {
   const watcher = await readFile(watcherPath, 'utf8');
@@ -56,6 +57,14 @@ test('server runtime image excludes npm tooling and its bundled dependency tree'
     dockerfile.indexOf('rm -rf /usr/local/lib/node_modules/npm') < dockerfile.indexOf('USER node'),
     'npm must be removed from the runtime stage before dropping privileges'
   );
+});
+
+test('client runtime image uses the patched stable Nginx Alpine line', async () => {
+  const dockerfile = await readFile(clientDockerfilePath, 'utf8');
+
+  assert.match(dockerfile, /^FROM nginx:1\.30\.0-alpine3\.23 AS runtime$/m);
+  assert.match(dockerfile, /^RUN apk upgrade --no-cache$/m);
+  assert.doesNotMatch(dockerfile, /^FROM nginx:1\.27-alpine AS runtime$/m);
 });
 
 test('CNB long-running dependency installs and image builds keep the runner alive without hiding failures', async () => {
