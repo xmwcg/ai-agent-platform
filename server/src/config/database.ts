@@ -183,8 +183,10 @@ export async function connectRedis(): Promise<any> {
   }
 
   try {
-    // 只要主连接不是 ready 就主动建立（覆盖 lazyConnect 初始 idle / wait / end / reconnecting 等态）
-    if ((realRedis as any).status !== 'ready') {
+    // 仅在未连接态（wait/lazy 初始、end 已断开）触发 connect；
+    // connecting/ready 态再调用 connect() 会抛 "already connecting/connected"。
+    const status = (realRedis as any).status;
+    if (status === 'wait' || status === 'end') {
       await realRedis.connect();
     }
     const pong = await withTimeout(realRedis.ping() as Promise<string>, 5000, 'redis startup');
