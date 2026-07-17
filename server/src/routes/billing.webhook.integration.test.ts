@@ -22,8 +22,15 @@ let token: string;
 let testUserId: string;
 
 function isMongoClientAlreadyClosed(error: unknown): boolean {
-  return error instanceof Error
-    && (error.name === 'MongoClientClosedError' || /client was closed/i.test(error.message));
+  if (!error || typeof error !== 'object') return false;
+
+  const candidate = error as {
+    name?: unknown;
+    message?: unknown;
+  };
+
+  return candidate.name === 'MongoClientClosedError'
+    || (typeof candidate.message === 'string' && /client was closed/i.test(candidate.message));
 }
 
 async function disconnectTestMongoose(): Promise<void> {
