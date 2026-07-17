@@ -6,6 +6,7 @@ import {
   getCommissionList,
   requestWithdrawal,
 } from '../services/referral.service';
+import { sendError } from '../lib/http-error';
 import { Withdrawal } from '../models/Withdrawal';
 
 const router = Router();
@@ -21,8 +22,8 @@ router.get('/stats', async (req: Request, res: Response) => {
   try {
     const stats = await getReferralStats((req as any).user._id);
     res.json({ success: true, data: stats });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || '获取推荐统计失败' });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -36,8 +37,8 @@ router.get('/list', async (req: Request, res: Response) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 20));
     const data = await getReferralList((req as any).user._id, page, pageSize);
     res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || '获取推荐列表失败' });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -51,8 +52,8 @@ router.get('/commissions', async (req: Request, res: Response) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 20));
     const data = await getCommissionList((req as any).user._id, page, pageSize);
     res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || '获取佣金列表失败' });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -74,8 +75,8 @@ router.get('/code', async (req: Request, res: Response) => {
           : '',
       },
     });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || '获取推荐码失败' });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -92,8 +93,8 @@ router.post('/withdraw', async (req: Request, res: Response) => {
       account,
     );
     res.json({ success: true, data: result });
-  } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message || '提现申请失败' });
+  } catch (err) {
+    sendError(res, err);
   }
 });
 
@@ -105,8 +106,8 @@ router.get('/withdrawals', async (req: Request, res: Response) => {
       .limit(50)
       .lean();
     res.json({ success: true, data: list });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || '查询失败' });
+  } catch (err) {
+    sendError(res, err);
   }
 });
 

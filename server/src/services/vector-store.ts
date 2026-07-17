@@ -16,13 +16,13 @@ export type VectorStoreKind = 'memory' | 'qdrant' | 'pinecone';
 export interface VectorCandidate {
   id: string;
   vector: number[];
-  payload?: Record<string, any>;
+  payload?: Record<string, unknown>;
 }
 
 export interface RankedHit {
   id: string;
   similarity: number;
-  payload?: Record<string, any>;
+  payload?: Record<string, unknown>;
 }
 
 export interface VectorSearchOptions {
@@ -78,7 +78,7 @@ export interface VectorStoreProvider {
   /** 在候选集（memory）或远程库（qdrant/pinecone）中检索 TopK */
   search(queryVec: number[], options?: VectorSearchOptions, candidates?: VectorCandidate[]): Promise<RankedHit[]>;
   /** 写入向量（远程库使用；memory 模式为 no-op） */
-  upsert(points: VectorCandidate[], payloads?: Record<string, any>[]): Promise<void>;
+  upsert(points: VectorCandidate[], payloads?: Record<string, unknown>[]): Promise<void>;
 }
 
 class MemoryVectorStore implements VectorStoreProvider {
@@ -112,7 +112,7 @@ class QdrantVectorStore implements VectorStoreProvider {
   isConfigured() {
     return !!this.env.QDRANT_URL && !!this.env.QDRANT_API_KEY;
   }
-  async upsert(points: VectorCandidate[], payloads: Record<string, any>[] = []): Promise<void> {
+  async upsert(points: VectorCandidate[], payloads: Record<string, unknown>[] = []): Promise<void> {
     if (!this.isConfigured()) return;
     const body = {
       points: points.map((p, i) => ({
@@ -134,8 +134,8 @@ class QdrantVectorStore implements VectorStoreProvider {
       { vector: queryVec, limit: topK, score_threshold: minSimilarity, with_payload: true },
       { headers: { 'Api-Key': this.apiKey }, timeout: 10000 }
     );
-    const result = (resp.data?.result || []) as Array<{ id: any; score: number; payload?: any }>;
-    return result.map((r) => ({ id: String(r.id), similarity: r.score, payload: r.payload }));
+    const result = (resp.data?.result || []) as Array<{ id: string | number; score: number; payload?: unknown }>;
+    return result.map((r) => ({ id: String(r.id), similarity: r.score, payload: r.payload as Record<string, unknown> | undefined }));
   }
 }
 
@@ -154,7 +154,7 @@ class PineconeVectorStore implements VectorStoreProvider {
   isConfigured() {
     return !!this.env.PINECONE_API_KEY && !!this.env.PINECONE_INDEX_HOST;
   }
-  async upsert(points: VectorCandidate[], payloads: Record<string, any>[] = []): Promise<void> {
+  async upsert(points: VectorCandidate[], payloads: Record<string, unknown>[] = []): Promise<void> {
     if (!this.isConfigured()) return;
     const body = {
       vectors: points.map((p, i) => ({
@@ -176,8 +176,8 @@ class PineconeVectorStore implements VectorStoreProvider {
       { vector: queryVec, topK, includeMetadata: true, scoreThreshold: minSimilarity },
       { headers: { 'Api-Key': this.apiKey }, timeout: 10000 }
     );
-    const matches = (resp.data?.matches || []) as Array<{ id: string; score: number; metadata?: any }>;
-    return matches.map((m) => ({ id: m.id, similarity: m.score, payload: m.metadata }));
+    const matches = (resp.data?.matches || []) as Array<{ id: string; score: number; metadata?: unknown }>;
+    return matches.map((m) => ({ id: m.id, similarity: m.score, payload: m.metadata as Record<string, unknown> | undefined }));
   }
 }
 

@@ -34,7 +34,7 @@ export function decryptWeChatResource(
   nonce: string,
   associatedData: string,
   apiV3Key: string
-): any {
+): Record<string, unknown> {
   const key = Buffer.from(apiV3Key, 'utf8');
   const data = Buffer.from(ciphertext, 'base64');
   const authTag = data.subarray(data.length - 16);

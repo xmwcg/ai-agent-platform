@@ -13,6 +13,7 @@
  *  DELETE /api/skills/:id          删除自己的用户技能（需登录）
  */
 import { Router } from 'express';
+import { sendError } from '../lib/http-error';
 import { listSkills, listMarketableSkills, getSkill } from '../skills/registry';
 import { enforceQuota } from '../middleware/subscription';
 import { optionalAuth, requireAuth, type AuthRequest } from '../middleware/auth';
@@ -198,8 +199,8 @@ router.post('/import', requireAuth, async (req: AuthRequest, res) => {
       imported.push({ id: skillId, name: m.name });
     }
     res.json({ ok: true, imported: imported.length, skills: imported });
-  } catch (e: any) {
-    res.status(500).json({ ok: false, error: e.message });
+  } catch (e) {
+    sendError(res, e);
   }
 });
 
@@ -252,8 +253,8 @@ router.post('/catalog/:id/install', requireAuth, async (req: AuthRequest, res) =
       return res.json({ ok: true, type: 'skill', message: `已安装技能：${entry.name}`, id: pkg.manifest.id });
     }
     return res.status(400).json({ ok: false, error: '该条目暂不支持一键安装' });
-  } catch (e: any) {
-    res.status(500).json({ ok: false, error: e.message });
+  } catch (e) {
+    sendError(res, e);
   }
 });
 
@@ -368,8 +369,8 @@ router.post('/:id/invoke', optionalAuth, async (req: AuthRequest, res) => {
 
     const result = await runUserSkill(us, { userId: req.user?.id, input: req.body || {} });
     res.json({ ok: true, result });
-  } catch (e: any) {
-    res.status(500).json({ ok: false, error: e.message });
+  } catch (e) {
+    sendError(res, e);
   }
 });
 

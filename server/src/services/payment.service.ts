@@ -260,8 +260,8 @@ class WeChatPayGateway implements PaymentGateway {
           data.resource.associated_data || '',
           this.apiKey
         );
-        orderNo = res?.out_trade_no;
-        transactionId = res?.transaction_id;
+        orderNo = res?.out_trade_no as string | undefined;
+        transactionId = res?.transaction_id as string | undefined;
       } else {
         orderNo = data?.out_trade_no || data?.resource?.out_trade_no;
         transactionId = data?.transaction_id;

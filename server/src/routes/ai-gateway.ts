@@ -4,6 +4,7 @@
  *   POST /api/gateway/chat        统一对话入口（前缀寻址 + fallback）
  */
 import { Router } from 'express';
+import { sendError } from '../lib/http-error';
 import { route, listGatewayProviders, listGatewayModels } from '../gateway/ai-gateway.service';
 import { optionalAuth } from '../middleware/auth';
 
@@ -26,8 +27,8 @@ router.post('/chat', optionalAuth, async (req, res) => {
     }
     const result = await route({ model, messages, temperature, maxTokens, provider });
     res.json({ ok: true, ...result });
-  } catch (e: any) {
-    res.status(502).json({ ok: false, error: e.message });
+  } catch (e) {
+    sendError(res, e);
   }
 });
 
