@@ -162,7 +162,7 @@ main:
                   return 0
                 fi
 
-                if grep -Eqi 'manifest unknown|no such manifest|manifest.*not found|not found.*manifest' "$inspection_error"; then
+                if grep -Eqi 'manifest unknown|no such manifest|manifest.*not found|not found.*manifest|resource not found|package .* not found' "$inspection_error"; then
                   rm -f "$inspection_file" "$inspection_error"
                   return 2
                 fi
