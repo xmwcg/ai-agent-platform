@@ -46,6 +46,57 @@ test('CNB scripts remain compatible with the runner shell', async () => {
   assert.doesNotMatch(pipeline, /pipefail/);
 });
 
+test('CNB long-running dependency installs and image builds keep the runner alive without hiding failures', async () => {
+  const pipeline = await readFile(cnbPath, 'utf8');
+  const installIndex = pipeline.indexOf('- name: install-locked-dependencies');
+  const buildGateIndex = pipeline.indexOf('- name: typescript-and-build-gate', installIndex);
+  const imageBuildIndex = pipeline.indexOf('- name: build-and-push-immutable-images');
+  const mirrorIndex = pipeline.indexOf('- name: mirror-github-safely', imageBuildIndex);
+  const installStage = pipeline.slice(installIndex, buildGateIndex);
+  const imageBuildStage = pipeline.slice(imageBuildIndex, mirrorIndex);
+
+  assert.ok(installIndex >= 0 && buildGateIndex > installIndex, 'missing dependency install stage');
+  assert.ok(imageBuildIndex >= 0 && mirrorIndex > imageBuildIndex, 'missing immutable image build stage');
+
+  for (const stage of [installStage, imageBuildStage]) {
+    assert.match(stage, /run_with_heartbeat\(\)/);
+    assert.match(stage, /while kill -0 "\$command_pid" 2>\/dev\/null; do/);
+    assert.match(stage, /\) &\s+heartbeat_pid=\$!/);
+    assert.match(stage, /if wait "\$command_pid"; then[\s\S]*command_status=\$\?[\s\S]*return "\$command_status"/);
+    assert.match(stage, /kill "\$heartbeat_pid" 2>\/dev\/null \|\| true/);
+    assert.doesNotMatch(stage, /while\s+(?:true|:)/);
+    assert.doesNotMatch(stage, /wait "\$command_pid"\s*\|\|\s*true/);
+
+    const heartbeatSeconds = [...stage.matchAll(/sleep (\d+)/g)].map((match) => Number(match[1]));
+    assert.ok(heartbeatSeconds.length > 0, 'heartbeat interval must be explicit');
+    assert.ok(heartbeatSeconds.every((seconds) => seconds > 0 && seconds < 600),
+      'heartbeat interval must remain below the CNB 10-minute idle timeout');
+  }
+
+  assert.match(installStage, /run_with_heartbeat server-npm-ci npm ci --no-audit --no-fund/);
+  assert.match(installStage, /run_with_heartbeat client-npm-ci env NODE_OPTIONS=--max-old-space-size=8192[\s\\]*npm ci --no-audit --no-fund/);
+  assert.match(imageBuildStage, /run_with_heartbeat "docker-build-\$context" docker build --progress=plain --pull/);
+});
+
+test('CNB Docker-only stages use an available CLI image while Git stages retain Git tooling', async () => {
+  const pipeline = await readFile(cnbPath, 'utf8');
+  const imageBuildIndex = pipeline.indexOf('- name: build-and-push-immutable-images');
+  const imageScanIndex = pipeline.indexOf('- name: image-security-scan', imageBuildIndex);
+  const mirrorIndex = pipeline.indexOf('- name: mirror-github-safely', imageScanIndex);
+  const promoteIndex = pipeline.indexOf('- name: promote-production-ref', mirrorIndex);
+  const verifyIndex = pipeline.indexOf('- name: verify-production-release', promoteIndex);
+  const imageBuildStage = pipeline.slice(imageBuildIndex, imageScanIndex);
+  const imageScanStage = pipeline.slice(imageScanIndex, mirrorIndex);
+  const mirrorStage = pipeline.slice(mirrorIndex, promoteIndex);
+  const promoteStage = pipeline.slice(promoteIndex, verifyIndex);
+
+  assert.match(imageBuildStage, /image: docker:27-cli/);
+  assert.match(imageScanStage, /image: docker:27-cli/);
+  assert.doesNotMatch(imageBuildStage, /docker:27-git/);
+  assert.doesNotMatch(imageScanStage, /docker:27-git/);
+  assert.match(mirrorStage, /image: docker:27-git/);
+  assert.match(promoteStage, /image: docker:27-git/);
+});
 test('production deployment stays outbound-pull only and embeds no deploy webhook secret', async () => {
   const pipeline = await readFile(cnbPath, 'utf8');
 

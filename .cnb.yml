@@ -20,10 +20,39 @@ main:
         - name: install-locked-dependencies
           script: |
             set -eu
+
+            # CNB 会终止连续 10 分钟没有输出的任务；长时间安装必须定期输出心跳，
+            # 同时通过 wait 原样传播 npm ci 的真实退出码。
+            run_with_heartbeat() {
+              label=$1
+              shift
+              "$@" &
+              command_pid=$!
+              (
+                while kill -0 "$command_pid" 2>/dev/null; do
+                  sleep 60
+                  if kill -0 "$command_pid" 2>/dev/null; then
+                    echo "[$label] 仍在执行..."
+                  fi
+                done
+              ) &
+              heartbeat_pid=$!
+
+              if wait "$command_pid"; then
+                command_status=0
+              else
+                command_status=$?
+              fi
+              kill "$heartbeat_pid" 2>/dev/null || true
+              wait "$heartbeat_pid" 2>/dev/null || true
+              return "$command_status"
+            }
+
             cd server
-            npm ci --no-audit --no-fund
+            run_with_heartbeat server-npm-ci npm ci --no-audit --no-fund
             cd ../client
-            npm ci --no-audit --no-fund
+            run_with_heartbeat client-npm-ci env NODE_OPTIONS=--max-old-space-size=8192 \
+              npm ci --no-audit --no-fund
 
         - name: typescript-and-build-gate
           script: |
@@ -61,7 +90,7 @@ main:
             npm_config_registry=https://registry.npmjs.org npm audit --audit-level=high
 
         - name: build-and-push-immutable-images
-          image: docker:27-git
+          image: docker:27-cli
           script: |
             set -eu
             test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
@@ -72,7 +101,34 @@ main:
             client_tag="$IMAGE_REPOSITORY/client:$CNB_COMMIT"
             export DOCKER_BUILDKIT=1
 
-            # 全局返回值，保持脚本兼容 docker:27-git 的 POSIX /bin/sh。
+            # CNB 会终止连续 10 分钟没有输出的任务。Docker BuildKit 虽启用 plain
+            # 进度，也使用心跳兜底；wait 必须传播 docker build 的真实退出码。
+            run_with_heartbeat() {
+              label=$1
+              shift
+              "$@" &
+              command_pid=$!
+              (
+                while kill -0 "$command_pid" 2>/dev/null; do
+                  sleep 60
+                  if kill -0 "$command_pid" 2>/dev/null; then
+                    echo "[$label] 仍在执行..."
+                  fi
+                done
+              ) &
+              heartbeat_pid=$!
+
+              if wait "$command_pid"; then
+                command_status=0
+              else
+                command_status=$?
+              fi
+              kill "$heartbeat_pid" 2>/dev/null || true
+              wait "$heartbeat_pid" 2>/dev/null || true
+              return "$command_status"
+            }
+
+            # 全局返回值，保持脚本兼容 docker:27-cli 的 POSIX /bin/sh。
             RESOLVED_IMAGE=''
             resolve_existing_image() {
               tag=$1
@@ -137,7 +193,7 @@ main:
               [ "$lookup_status" -eq 2 ] || return "$lookup_status"
 
               echo "SHA 镜像不存在，首次构建: $tag"
-              docker build --pull \
+              run_with_heartbeat "docker-build-$context" docker build --progress=plain --pull \
                 --build-arg APP_COMMIT_SHA="$CNB_COMMIT" \
                 -t "$tag" "$context"
               docker push "$tag"
@@ -166,7 +222,7 @@ main:
             cat .release/image-metadata.env
 
         - name: image-security-scan
-          image: docker:27-git
+          image: docker:27-cli
           script: |
             set -eu
             . .release/image-metadata.env
