@@ -246,11 +246,12 @@ main:
               "$CLIENT_IMAGE"
 
         - name: mirror-github-safely
-          image: docker:27-git
+          image: alpine:3.21.3
           imports:
             - https://cnb.cool/aibak.site/cnb-github-migration-guide/-/blob/main/secrets.yml
           script: |
             set -eu
+            apk add --no-cache git ca-certificates
             test -n "${GH_TOKEN:-}" || { echo "GH_TOKEN 未配置"; exit 1; }
 
             export GIT_TERMINAL_PROMPT=0
@@ -290,9 +291,10 @@ main:
             }
 
         - name: promote-production-ref
-          image: docker:27-git
+          image: alpine:3.21.3
           script: |
             set -eu
+            apk add --no-cache git ca-certificates
             test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
 
             export GIT_TERMINAL_PROMPT=0

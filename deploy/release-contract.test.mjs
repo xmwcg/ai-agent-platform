@@ -99,7 +99,7 @@ test('CNB long-running dependency installs and image builds keep the runner aliv
   assert.match(imageBuildStage, /run_with_heartbeat "docker-build-\$context" docker build --progress=plain --pull/);
 });
 
-test('CNB Docker-only stages use an available CLI image while Git stages retain Git tooling', async () => {
+test('CNB Docker-only stages use an available CLI image while Git stages install Git explicitly', async () => {
   const pipeline = await readFile(cnbPath, 'utf8');
   const imageBuildIndex = pipeline.indexOf('- name: build-and-push-immutable-images');
   const imageScanIndex = pipeline.indexOf('- name: image-security-scan', imageBuildIndex);
@@ -115,8 +115,12 @@ test('CNB Docker-only stages use an available CLI image while Git stages retain 
   assert.match(imageScanStage, /image: docker:27-cli/);
   assert.doesNotMatch(imageBuildStage, /docker:27-git/);
   assert.doesNotMatch(imageScanStage, /docker:27-git/);
-  assert.match(mirrorStage, /image: docker:27-git/);
-  assert.match(promoteStage, /image: docker:27-git/);
+  assert.match(mirrorStage, /image: alpine:3\.21\.3/);
+  assert.match(promoteStage, /image: alpine:3\.21\.3/);
+  assert.match(mirrorStage, /apk add --no-cache git ca-certificates/);
+  assert.match(promoteStage, /apk add --no-cache git ca-certificates/);
+  assert.doesNotMatch(mirrorStage, /docker:27-git/);
+  assert.doesNotMatch(promoteStage, /docker:27-git/);
 });
 test('production deployment stays outbound-pull only and embeds no deploy webhook secret', async () => {
   const pipeline = await readFile(cnbPath, 'utf8');
