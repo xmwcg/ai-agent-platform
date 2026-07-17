@@ -319,6 +319,28 @@ capture_running_release() {
   write_release_state "$output_file" "$fallback_sha" "$server_image" "$client_image" "$compose_file" "$nginx_config"
 }
 
+validate_production_configuration() {
+  local state_file=$1
+  load_state "$state_file"
+  state_is_complete || {
+    log "发布状态不完整，拒绝校验生产配置: $state_file"
+    return 1
+  }
+
+  log "使用候选 Server 镜像校验真实生产配置（不进行网络连接）"
+  docker run --rm \
+    --network none \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --env-file "$PRODUCTION_ENV_FILE" \
+    -e NODE_ENV=production \
+    -e PRODUCTION_ENV_FILE=/dev/null \
+    --entrypoint node \
+    "$LOADED_SERVER_IMAGE" \
+    dist/scripts/validate-production-config.js >>"$DEPLOY_LOG" 2>&1
+}
+
 compose_up() {
   local state_file=$1
   load_state "$state_file"
@@ -388,6 +410,10 @@ preflight() {
     log "生产环境文件不可读: $PRODUCTION_ENV_FILE"
     return 1
   }
+  if find "$PRODUCTION_ENV_FILE" -perm /077 -print -quit | grep -q .; then
+    log "生产环境文件权限过宽，必须仅 root 可读: $PRODUCTION_ENV_FILE"
+    return 1
+  fi
   require_alert_channel || return 1
   docker info >/dev/null 2>&1 || {
     log "Docker daemon 不可用"
@@ -464,7 +490,8 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
     write_release_state "$CANDIDATE_STATE" "$REMOTE_SHA" "$SERVER_IMAGE" "$CLIENT_IMAGE" \
       "$RELEASE_DIR/docker-compose.production.yml" "$RELEASE_DIR/nginx.ssl.runtime.conf"
 
-    if compose_up "$CANDIDATE_STATE" \
+    if validate_production_configuration "$CANDIDATE_STATE" \
+      && compose_up "$CANDIDATE_STATE" \
       && verify_release "$CANDIDATE_STATE" internal \
       && verify_release "$CANDIDATE_STATE" public; then
       mv -f "$CANDIDATE_STATE" "$STATE_FILE"

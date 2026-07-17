@@ -7,8 +7,6 @@ main:
         image: node:22-bookworm
       services:
         - docker
-      imports:
-        - https://cnb.cool/aibak.site/cnb-github-migration-guide/-/blob/main/secrets.yml
       env:
         PRODUCTION_BASE_URL: https://aibak.site
         DEPLOY_BRANCH: deploy/production
@@ -50,15 +48,9 @@ main:
           script: |
             set -eu
             cd server
-            export NODE_ENV=production
-            export ENABLE_MOCK_MODE=false
-            export MOCK_MODE=false
-            export DEFAULT_PAY_PROVIDER=wechat
-            export SANDBOX_MODE=remote
-            export PUBLIC_BASE_URL="$PRODUCTION_BASE_URL"
-            export APP_COMMIT_SHA="$CNB_COMMIT"
-            export NOTIFY_CHANNEL="${NOTIFY_CHANNEL:-disabled}"
-            npm run validate:production
+            # CI 只验证生产配置契约和密钥/证书格式，不读取真实生产密钥。
+            # 真实 /etc/aibak/server.env 由服务器 watcher 在切换容器前验证。
+            npm run validate:production-contract
 
         - name: dependency-security-scan
           script: |
@@ -199,6 +191,8 @@ main:
 
         - name: mirror-github-safely
           image: docker:27-git
+          imports:
+            - https://cnb.cool/aibak.site/cnb-github-migration-guide/-/blob/main/secrets.yml
           script: |
             set -eu
             test -n "${GH_TOKEN:-}" || { echo "GH_TOKEN 未配置"; exit 1; }

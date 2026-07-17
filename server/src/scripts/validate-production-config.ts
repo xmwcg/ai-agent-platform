@@ -7,8 +7,6 @@ import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { assertStartupEnv } from '../config/env-check';
 
-dotenv.config({ path: process.env.PRODUCTION_ENV_FILE || '.env' });
-
 function normalizePem(value: string): string {
   return value.replace(/\\n/g, '\n').trim();
 }
@@ -51,6 +49,7 @@ export function validateProductionCredentials(env: NodeJS.ProcessEnv = process.e
 
 if (require.main === module) {
   try {
+    dotenv.config({ path: process.env.PRODUCTION_ENV_FILE || '.env' });
     validateProductionCredentials();
     console.log(JSON.stringify({
       success: true,
