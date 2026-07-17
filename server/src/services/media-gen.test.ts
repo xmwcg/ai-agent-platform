@@ -39,12 +39,12 @@ describe('媒体生成 - 多厂商 Provider 抽象', () => {
     expect(q.outputUrl).toContain('data:image/svg+xml'); // Mock 占位图
   });
 
-  it('列出 6 个厂商，免费额度可用、其余真实厂商默认未配置、Mock 始终可用', () => {
+  it('列出 7 个厂商，免费额度可用、其余真实厂商默认未配置、Mock 始终可用', () => {
     const list = listMediaProviders();
-    expect(list.length).toBe(6);
+    expect(list.length).toBe(7);
     // cloudbase-free 为平台免费额度，默认可用（无需密钥），故 configured=true
     expect(list.find((p) => p.name === 'cloudbase-free')!.configured).toBe(true);
-    // 其余真实厂商（混元/可灵/即梦/MPT）默认无密钥，应未配置
+    // 其余真实厂商（混元/可灵/即梦/MPT/通义）默认无密钥，应未配置
     const real = list.filter((p) => p.name !== 'mock' && p.name !== 'cloudbase-free');
     expect(real.every((p) => p.configured === false)).toBe(true);
     expect(list.find((p) => p.name === 'mock')!.configured).toBe(true);

@@ -6,6 +6,7 @@
 import { MockProvider } from './media-providers/mock.provider';
 import { CloudbaseImageProvider } from './media-providers/cloudbase.provider';
 import { HunyuanProvider } from './media-providers/hunyuan.provider';
+import { TongyiProvider } from './media-providers/tongyi.provider';
 import { KelingProvider } from './media-providers/keling.provider';
 import { JimengProvider } from './media-providers/jimeng.provider';
 import { MoneyPrinterTurboProvider } from './media-providers/moneyprinterturbo.provider';
@@ -33,6 +34,7 @@ export {
   HunyuanProvider,
   KelingProvider,
   JimengProvider,
+  TongyiProvider,
 };
 
 const PROVIDERS: Record<MediaProviderName, MediaProvider> = {
@@ -42,6 +44,7 @@ const PROVIDERS: Record<MediaProviderName, MediaProvider> = {
   jimeng: new JimengProvider(),
   moneyprinterturbo: new MoneyPrinterTurboProvider(),
   'cloudbase-free': new CloudbaseImageProvider(),
+  tongyi: new TongyiProvider(),
 };
 
 function isProduction(): boolean {
@@ -57,7 +60,7 @@ function assertMockAllowed(providerName: MediaProviderName): void {
 function hasInjectedCredentials(providerName: MediaProviderName, credentials?: MediaCredentials): boolean {
   if (!credentials) return false;
   if (providerName === 'hunyuan') return !!credentials.secretId && !!credentials.secretKey;
-  if (providerName === 'keling' || providerName === 'jimeng') return !!credentials.secretKey;
+  if (providerName === 'keling' || providerName === 'jimeng' || providerName === 'tongyi') return !!credentials.secretKey;
   return false;
 }
 
@@ -91,7 +94,7 @@ export function selectMediaProvider(
     }
     if (selected.isConfigured() || hasInjectedCredentials(preferred, credentials)) return selected;
   }
-  for (const name of ['hunyuan', 'keling', 'jimeng', 'moneyprinterturbo'] as MediaProviderName[]) {
+  for (const name of ['hunyuan', 'keling', 'jimeng', 'moneyprinterturbo', 'tongyi'] as MediaProviderName[]) {
     const p = PROVIDERS[name];
     if (p.isConfigured() && p.supportedTypes.includes(requestedType)) return p;
   }

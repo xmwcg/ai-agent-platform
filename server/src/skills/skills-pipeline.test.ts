@@ -37,6 +37,6 @@ describe('视频生产流水线技能 - 端到端闭环（Mock）', () => {
     const mpt = ps.find((p) => p.name === 'moneyprinterturbo');
     expect(mpt).toBeDefined();
     expect(mpt!.configured).toBe(false);
-    expect(ps.length).toBe(6);
+    expect(ps.length).toBe(7);
   });
 });

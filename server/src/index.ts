@@ -51,7 +51,9 @@ import aibakChatRoutes from './routes/aibak-chat';
 import { mcpService } from './services/mcp.service';
 import { sendError } from './lib/http-error';
 import { logger } from './lib/logger';
-import { apmMiddleware, vitalsHandler } from './middleware/apm';
+import { apmMiddleware, vitalsHandler, collectApmMetrics } from './middleware/apm';
+import { renderPrometheusMetrics } from './lib/prometheus';
+import { requireAdmin } from './middleware/requireAdmin';
 import { requestIdMiddleware } from './middleware/request-id';
 import { reloadCustomProviders } from './gateway/ai-gateway.service';
 import { mediaWorker } from './services/queue.service';
@@ -110,6 +112,12 @@ app.get('/health', (_req, res) => res.json({
   timestamp: new Date().toISOString(),
 }));
 app.get('/health/vitals', vitalsHandler);
+
+// Prometheus 指标端点（管理员可抓取，供 Grafana 告警 / 看板接入）
+app.get('/api/metrics', requireAdmin, (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+  res.send(renderPrometheusMetrics(collectApmMetrics()));
+});
 
 // 限流（全局 API）
 app.use('/api/', apiLimiter);

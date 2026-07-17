@@ -52,3 +52,27 @@
   - `middleware/rate-limit.ts`：实现 Redis 优先 + 内存自动降级的限流存储（express-rate-limit v7 Store 接口）。
   - 新增 Redis 健康检查探针（启动延迟首探 + 15s 周期；内存替身直接标记不可用），半开/断连时降级为进程内存，避免全站 500 或误 429；恢复后自动切回。
 - 验证：server `tsc --noEmit` 干净；server `jest` **503 用例全过**；client `tsc --noEmit` 干净；client `eslint` **0 error / 97 warning（均为既有）**。
+
+## ✅ 第十八轮（A 平台审计闭环 / B billing 拆分 / C 可观测性 Prometheus+告警 / D 通义万相 Provider）✅ 已落地，tsc 干净 + 全量 522 测试通过
+- **A. 平台管理操作审计闭环**
+  - `models/PlatformAuditLog.ts`（新建）：复用 TeamAuditLog 模式，`action` 枚举 `user_role_changed | user_banned | user_unbanned`，`actorId/targetId` 索引 + 复合索引 `{action:1, createdAt:-1}`。
+  - `services/platform-audit.service.ts`（新建）：`logPlatformAudit()` 异步写库不阻塞主流程（失败静默）。
+  - `routes/auth.ts`：接管 role 变更与 ban/unban 两接口审计埋点；新增 `GET /admin/audit`（action 过滤 + 分页）。
+  - 单测 `platform-audit.service.test.ts`：3 例全过（role_changed / banned / unbanned / 写库失败不抛）。
+- **B. billing.ts 渐进拆分（降低单文件复杂度）**
+  - `routes/billing/logic.ts`（新建）：抽离业务函数层 `createOrderSchema / genOrderNo / resolvePaymentProvider / activateSubscription / grantCreditsPack`（import 回退两级，零相对 billing 依赖）。
+  - `routes/billing/webhook.routes.ts`（新建）：独立 webhook 子模块，逐字迁移回调（验签/幂等/重放防护/审计）与 `GET /webhook-events`，由 `billing.ts` 末尾 `router.use(webhookRoutes)` 挂载。
+  - `routes/billing.ts`：头部改为装配式（移除内联函数与未用 import，改从 `./billing/logic` 与 `./billing/webhook.routes` 导入）；逻辑/路由行为零变更。
+- **C. 可观测性增强（Prometheus 导出 + 告警阈值）**
+  - `middleware/apm.ts`（重写）：抽取 `collectApmMetrics()` 供 vitals/prometheus 复用；新增纯函数 `evaluateAlert(bucket, thresholds?)`（默认 `{errorRate:0.2, slowRate:0.3}`）+ 导出 `DEFAULT_ALERT_THRESHOLDS`；告警判定带 `lastAlertAt` 60s 冷却防刷屏；导出 `RouteMetric/SlowLog/ApmSnapshot` 接口。
+  - `lib/prometheus.ts`（新建）：`renderPrometheusMetrics(s)` 渲染标准 text exposition（version 0.0.4），含 `ai_agent_http_requests_total/_errors_total/_active_requests/by_route_total/by_route_errors/duration_seconds_avg|max/process_uptime_seconds/process_resident_memory_bytes/nodejs_heap_used_bytes`；`fmt()` 保留 3 位小数避免科学计数。
+  - `index.ts`：新增 `GET /api/metrics`（`requireAdmin`），`Content-Type: text/plain; version=0.0.4`。
+  - 单测 `apm.test.ts`（5 例）/ `prometheus.test.ts`（4 例）：全过。
+- **D. 文生图真实厂商接入（通义万相）**
+  - `services/media-providers/tongyi.provider.ts`（新建）：阿里云 DashScope `wanx2.1-t2i-turbo` 文生图 Provider，`MediaProvider` 实现；支持 `TONGYI_API_KEY` 鉴权、size 换算、`n` 1-4、`X-DashScope-Async` 异步任务轮询（SUCCEEDED/FAILED/PENDING 映射 completed/processing）。
+  - `media-gen.shared.ts`：`MediaProviderName` 新增 `'tongyi'`。
+  - `media-gen.service.ts`：注册 `PROVIDERS.tongyi` + 重导出 + `hasInjectedCredentials` 分支 + 自动候选数组并入 `tongyi`。
+  - `.env.example`：新增 `TONGYI_API_KEY` 注释说明。
+  - 单测 `tongyi.provider.test.ts`：7 例全过（supportedTypes/isConfigured/generate 提交/未配置抛错/queryTask 三态）。
+  - 修复既有 3 例厂商数量断言：6 → 7（含通义），`media-gen.test.ts` / `media-gen.task.test.ts` / `skills-pipeline.test.ts`。
+- 验证：server `tsc --noEmit` 干净；server `jest` **522 用例 · 77 suite 全过**（+19 例：A3 / C9 / D7，外加 B 行为零回归）；client `tsc --noEmit` 干净；client `eslint` **0 error / 97 warning（均为既有）**。

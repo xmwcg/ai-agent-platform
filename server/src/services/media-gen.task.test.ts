@@ -9,13 +9,13 @@ describe('媒体生成 - 异步任务与厂商抽象', () => {
     delete process.env.MONEY_PRINTER_TURBO_URL;
   });
 
-  it('listMediaProviders 含 6 个厂商，Mock 与免费额度可用、其余真实厂商默认未配置', () => {
+  it('listMediaProviders 含 7 个厂商，Mock 与免费额度可用、其余真实厂商默认未配置', () => {
     const list = listMediaProviders();
-    expect(list.length).toBe(6);
+    expect(list.length).toBe(7);
     expect(list.find((p) => p.name === 'mock')!.configured).toBe(true);
     // cloudbase-free 为平台免费额度，默认可用
     expect(list.find((p) => p.name === 'cloudbase-free')!.configured).toBe(true);
-    // 其余真实厂商（混元/可灵/即梦/MPT）默认无密钥，应未配置
+    // 其余真实厂商（混元/可灵/即梦/MPT/通义）默认无密钥，应未配置
     expect(
       list.filter((p) => p.name !== 'mock' && p.name !== 'cloudbase-free').every((p) => p.configured === false)
     ).toBe(true);

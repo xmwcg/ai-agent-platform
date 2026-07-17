@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import { User } from '../models/User';
+import { PlatformAuditLog } from '../models/PlatformAuditLog';
+import { logPlatformAudit } from '../services/platform-audit.service';
 import { generateToken, requireAuth, AuthRequest } from '../middleware/auth';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { authLimiter } from '../middleware/rate-limit';
@@ -355,8 +357,15 @@ router.put('/admin/users/:id/role', requireAuth, requireAdmin, async (req: AuthR
       const adminCount = await User.countDocuments({ role: 'admin' });
       if (adminCount <= 1) return res.status(400).json({ error: '至少保留一名管理员' });
     }
+    const oldRole = target.role;
     target.role = role;
     await target.save();
+    logPlatformAudit({
+      actorId: req.user!.id,
+      action: 'user_role_changed',
+      targetId: target._id.toString(),
+      detail: { oldRole, newRole: role },
+    });
     res.json({ success: true, user: target.toJSON() });
   } catch (error) {
     sendError(res, error);
@@ -378,7 +387,43 @@ router.put('/admin/users/:id/ban', requireAuth, requireAdmin, async (req: AuthRe
     }
     target.isBanned = banned;
     await target.save();
+    logPlatformAudit({
+      actorId: req.user!.id,
+      action: banned ? 'user_banned' : 'user_unbanned',
+      targetId: target._id.toString(),
+      detail: { banned },
+    });
     res.json({ success: true, user: target.toJSON() });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+// 平台审计日志查看（管理员操作留痕），支持 action 过滤 + 分页
+router.get('/admin/audit', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || '20', 10)));
+    const action = (req.query.action as string) || '';
+    const filter: Record<string, unknown> = {};
+    if (action) filter.action = action;
+    const total = await PlatformAuditLog.countDocuments(filter);
+    const logs = await PlatformAuditLog.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize);
+    res.json({
+      success: true,
+      logs: logs.map((l) => ({
+        id: l._id.toString(),
+        actorId: l.actorId,
+        action: l.action,
+        targetId: l.targetId,
+        detail: l.detail,
+        createdAt: l.createdAt,
+      })),
+      pagination: { page, limit: pageSize, total },
+    });
   } catch (error) {
     sendError(res, error);
   }
