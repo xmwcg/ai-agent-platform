@@ -132,6 +132,7 @@ export const aiAPI = {
     sessionId?: string;
     provider?: string;
     model?: string;
+    config?: { systemPrompt?: string; temperature?: number; maxTokens?: number };
   }) => apiClient.post('/ai/chat', data),
 
   // 获取可用模型（旧：仅 provider 维度，保留兼容）
@@ -474,6 +475,16 @@ export const pointsAPI = {
 // ⚠️ 关键：全局 apiClient 超时为 10s，但后端 /aibak/chat 上限 60s、/aibak/image 上限 170s，
 // 若不单独放大超时，所有 AI 请求都会在前端 10s 被中断，表现为「请求频繁 / 超时 / 网络失败」。
 // 因此 chat / image 单独覆盖 timeout。
+// 管理员：用户权限管理
+export const adminAPI = {
+  listUsers: (params: { page?: number; limit?: number; search?: string }) =>
+    apiClient.get('/auth/admin/users', { params }),
+  setRole: (id: string, role: 'user' | 'admin') =>
+    apiClient.put(`/auth/admin/users/${id}/role`, { role }),
+  setBanned: (id: string, banned: boolean) =>
+    apiClient.put(`/auth/admin/users/${id}/ban`, { banned }),
+};
+
 export const aibakAPI = {
   chat: (data: {
     message?: string;

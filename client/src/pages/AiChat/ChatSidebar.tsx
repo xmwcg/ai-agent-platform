@@ -3,7 +3,7 @@ import { Button, Input, List, Typography, Space, Tag, Popconfirm, Badge, Tooltip
 import {
   PlusOutlined, MessageOutlined, DeleteOutlined,
   EditOutlined, QuestionCircleOutlined, OrderedListOutlined,
-  ThunderboltOutlined, FileOutlined, ClockCircleOutlined,
+  ThunderboltOutlined, FileOutlined, ClockCircleOutlined, RobotOutlined,
 } from '@ant-design/icons';
 import { useChatStore, ChatMode } from '@/stores/chat';
 
@@ -15,7 +15,7 @@ const modeConfig: Record<ChatMode, { label: string; icon: React.ReactNode; color
   execute: { label: '直接执行', icon: <ThunderboltOutlined />, color: '#10b981', desc: '跳过规划，直接操作工具执行' },
 };
 
-export default function ChatSidebar() {
+export default function ChatSidebar({ onOpenCreateAgent }: { onOpenCreateAgent?: () => void }) {
   const {
     sessions, activeSessionId, mode, createSession,
     switchSession, deleteSession, renameSession, setMode,
@@ -50,7 +50,7 @@ export default function ChatSidebar() {
 
   return (
     <div className="chat-sidebar">
-      {/* 新建对话 */}
+      {/* 新建对话 / 创建智能体 */}
       <div style={{ padding: '12px' }}>
         <Button
           type="primary"
@@ -65,6 +65,14 @@ export default function ChatSidebar() {
           }}
         >
           新建对话
+        </Button>
+        <Button
+          block
+          icon={<RobotOutlined />}
+          onClick={onOpenCreateAgent}
+          style={{ marginTop: 8, borderRadius: 10, height: 40 }}
+        >
+          创建智能体
         </Button>
       </div>
 

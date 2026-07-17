@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import {
   Typography, Space, Tag, Button, Tooltip, Drawer, Empty, Divider,
-  Progress, Statistic,
+  Progress, Statistic, Modal, Form, Input, Select, message,
 } from 'antd';
 import {
   MenuFoldOutlined, MenuUnfoldOutlined, InfoCircleOutlined,
@@ -28,6 +28,27 @@ export default function AiChat() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [optimizerOpen, setOptimizerOpen] = useState(false);
   const [optimizerPrompt, setOptimizerPrompt] = useState('');
+  const [createAgentOpen, setCreateAgentOpen] = useState(false);
+  const [agentForm] = Form.useForm();
+
+  // 创建智能体（复用会话机制 + 系统提示词）
+  const handleCreateAgent = useCallback(async () => {
+    try {
+      const values = await agentForm.validateFields();
+      createSession({
+        title: values.title,
+        description: values.description,
+        model: values.model || model,
+        mode: values.mode || 'qa',
+        systemPrompt: values.systemPrompt,
+      });
+      setCreateAgentOpen(false);
+      agentForm.resetFields();
+      message.success('智能体已创建，开始对话吧');
+    } catch {
+      /* 表单校验失败，等待用户修正 */
+    }
+  }, [createSession, model, agentForm]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +93,7 @@ export default function AiChat() {
           history: history.slice(-10),
           sessionId: sid,
           model,
+          config: activeSession?.systemPrompt ? { systemPrompt: activeSession.systemPrompt } : undefined,
         });
 
         // 更新 AI 消息
@@ -108,7 +130,7 @@ export default function AiChat() {
   return (
     <div className="chat-container" ref={containerRef}>
       {/* ===== 左侧边栏 ===== */}
-      {!isMobile && sidebarOpen && <ChatSidebar />}
+      {!isMobile && sidebarOpen && <ChatSidebar onOpenCreateAgent={() => setCreateAgentOpen(true)} />}
       {isMobile && (
         <Drawer
           open={sidebarOpen}
@@ -117,7 +139,7 @@ export default function AiChat() {
           placement="left"
           styles={{ body: { padding: 0 } }}
         >
-          <ChatSidebar />
+          <ChatSidebar onOpenCreateAgent={() => setCreateAgentOpen(true)} />
         </Drawer>
       )}
 
@@ -145,6 +167,7 @@ export default function AiChat() {
           </Space>
 
           <Space size={8}>
+            <Text type="secondary" style={{ fontSize: 13 }}>🤖 模型</Text>
             <ModelSelector
               value={model}
               onChange={setModel}
@@ -179,6 +202,14 @@ export default function AiChat() {
                 开始对话
               </Title>
               <Text type="secondary">选择模型和模式，输入问题开始体验</Text>
+              <Button
+                type="primary"
+                icon={<RobotOutlined />}
+                onClick={() => setCreateAgentOpen(true)}
+                style={{ marginTop: 16 }}
+              >
+                创建智能体（Agent）
+              </Button>
               <div className="quick-tags">
                 {[
                   { t: '代码解释', m: '请解释以下代码的逻辑：' },
@@ -271,6 +302,52 @@ export default function AiChat() {
           handleSend(optimized);
         }}
       />
+
+      {/* 创建智能体（Agent）弹窗 */}
+      <Modal
+        title={
+          <Space>
+            <RobotOutlined />
+            创建智能体（Agent）
+          </Space>
+        }
+        open={createAgentOpen}
+        onCancel={() => { setCreateAgentOpen(false); agentForm.resetFields(); }}
+        onOk={handleCreateAgent}
+        okText="创建并对话"
+        width={560}
+        destroyOnClose
+      >
+        <Form form={agentForm} layout="vertical" style={{ marginTop: 12 }}>
+          <Form.Item name="title" label="名称" rules={[{ required: true, message: '请输入智能体名称' }]}>
+            <Input placeholder="如：Python 编程导师" maxLength={40} />
+          </Form.Item>
+          <Form.Item name="description" label="描述（可选）">
+            <Input placeholder="如：擅长讲解 Python 并给出示例" maxLength={80} />
+          </Form.Item>
+          <Form.Item name="model" label="模型" initialValue={model}>
+            <ModelSelector style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="mode" label="对话模式" initialValue="qa">
+            <Select options={[
+              { label: '问答模式', value: 'qa' },
+              { label: '计划模式', value: 'plan' },
+              { label: '直接执行', value: 'execute' },
+            ]} />
+          </Form.Item>
+          <Form.Item
+            name="systemPrompt"
+            label="系统提示词"
+            rules={[{ required: true, message: '请设定智能体的角色与行为规范' }]}
+            extra="定义该智能体的身份、擅长领域与回答风格，对话时自动生效。"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="例如：你是一位资深的 Python 编程导师，讲解清晰、循序渐进，多用示例说明。"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <style>{`
         .chat-container {

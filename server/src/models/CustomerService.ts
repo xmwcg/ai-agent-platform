@@ -48,7 +48,7 @@ const CustomerServiceSchema = new Schema<ICustomerService>(
     },
     escalationTriggers: { type: [String], default: [] }, // 行业合规触发词，命中即转人工（如诊所「胸痛」、律所「起诉」）
     embedCode: { type: String, unique: true },
-    ownerId: { type: String, required: true },
+    ownerId: { type: String, required: true, index: true },
     teamId: { type: String, index: true }, // 归属团队（资源级隔离）
     conversationCount: { type: Number, default: 0 },
   },

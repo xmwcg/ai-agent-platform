@@ -1,5 +1,6 @@
 import rateLimit from 'express-rate-limit';
 import { Request } from 'express';
+import { realRedis, isUsingMemoryRedis } from '../config/database';
 
 /**
  * 限流中间件（L5+）
@@ -9,10 +10,144 @@ import { Request } from 'express';
  * - aiLimiter：AI 对话/生成端点限流（按用户 ID 区分付费/免费用户，防滥用）。
  * - text2imgLimiter：文生图专属频率闸门。
  *
+ * 存储后端：优先 Redis（多实例部署时共享计数，避免单实例内存各自为政），
+ * 当 Redis 不可用（断连/半开）时自动降级为进程内存，保证限流中间件永不
+ * 因底层存储异常而把请求变成 500 或全站 429。Redis 恢复后探测自动切回。
+ *
  * test 环境统一 skip，避免集成测试因高频请求被误拦。
  */
 
 const isTest = () => process.env.NODE_ENV === 'test';
+
+// ─────────────────────────────────────────────────────────────
+// Redis 健康检查 + 降级存储
+// ─────────────────────────────────────────────────────────────
+
+// 模块级健康标志：Redis 探针定期刷新；store 在 !healthy 时直接走内存，
+// 避免在 Redis 半开（status=ready 但命令超时）场景下每次请求都卡到超时。
+let redisHealthy = false;
+let probeStarted = false;
+
+function pingWithTimeout(ms: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), ms);
+    (realRedis.ping() as Promise<string>).then(
+      (r) => {
+        clearTimeout(timer);
+        resolve(r === 'PONG');
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(false);
+      }
+    );
+  });
+}
+
+function probeRedis() {
+  // 明确使用内存替身（开发/测试无 Redis）时，直接标记不可用，不再探测
+  if (isUsingMemoryRedis()) {
+    redisHealthy = false;
+    return;
+  }
+  pingWithTimeout(1500)
+    .then((ok) => {
+      redisHealthy = ok;
+    })
+    .catch(() => {
+      redisHealthy = false;
+    });
+}
+
+function startProbe() {
+  if (probeStarted || isTest()) return;
+  probeStarted = true;
+  // 延迟首探，避开启动期 Redis 尚未就绪
+  setTimeout(probeRedis, 1000);
+  setInterval(probeRedis, 15000);
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('redis command timeout')), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+
+/**
+ * 限流存储：Redis 优先 + 内存降级。
+ * 实现 express-rate-limit v7 的 Store 接口（increment/decrement/resetKey/init）。
+ */
+class RedisRateLimitStore {
+  private windowMs: number;
+  private prefix: string;
+  private mem = new Map<string, { count: number; reset: number }>();
+
+  constructor(windowMs: number, prefix: string) {
+    this.windowMs = windowMs;
+    this.prefix = prefix;
+  }
+
+  init(options: any) {
+    if (options && options.windowMs) this.windowMs = options.windowMs;
+  }
+
+  async increment(key: string): Promise<{ totalHits: number; resetTime: Date | undefined }> {
+    const full = `${this.prefix}:${key}`;
+    // 降级路径：Redis 不健康时直接走内存，绝不触碰 Redis（避免挂起/超时放大）
+    if (!redisHealthy) return this.memInc(key);
+    try {
+      const count = await withTimeout(realRedis.incr(full) as Promise<number>, 1500);
+      if (count === 1) {
+        // 仅首次写入时设置过期，避免每次命中重置 TTL
+        (realRedis.pexpire(full, Math.ceil(this.windowMs / 1000)) as Promise<number>).catch(
+          () => undefined
+        );
+      }
+      return { totalHits: count, resetTime: new Date(Date.now() + this.windowMs) };
+    } catch {
+      // Redis 命令异常：标记不健康并降级内存，后续请求不再重复打 Redis
+      redisHealthy = false;
+      return this.memInc(key);
+    }
+  }
+
+  private memInc(key: string): { totalHits: number; resetTime: Date | undefined } {
+    const now = Date.now();
+    const hit = this.mem.get(key);
+    if (!hit || hit.reset <= now) {
+      const reset = now + this.windowMs;
+      this.mem.set(key, { count: 1, reset });
+      return { totalHits: 1, resetTime: new Date(reset) };
+    }
+    hit.count += 1;
+    return { totalHits: hit.count, resetTime: new Date(hit.reset) };
+  }
+
+  decrement(key: string): void {
+    if (!redisHealthy) return;
+    (realRedis.decr(`${this.prefix}:${key}`) as Promise<number>).catch(() => undefined);
+  }
+
+  resetKey(key: string): void {
+    if (!redisHealthy) return;
+    (realRedis.del(`${this.prefix}:${key}`) as Promise<number>).catch(() => undefined);
+  }
+}
+
+function makeStore(windowMs: number, prefix: string): any {
+  startProbe();
+  return new RedisRateLimitStore(windowMs, prefix);
+}
 
 // Key generator：优先用用户 ID，退回到 IP（与 Nginx X-Forwarded-For 配合）
 const userIdOrIpKey = (req: Request): string => {
@@ -22,31 +157,36 @@ const userIdOrIpKey = (req: Request): string => {
 };
 
 // 全局 API 限流：15 分钟窗口，每 IP 100 次
+const apiWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 export const apiLimiter = rateLimit({
-  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  windowMs: apiWindowMs,
   max: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
   standardHeaders: true,
   legacyHeaders: false,
+  store: makeStore(apiWindowMs, 'rl:api'),
   message: { success: false, error: '请求过于频繁，请稍后再试', code: 'RATE_LIMITED' },
   skip: isTest,
 });
 
 // 认证端点严格限流：15 分钟窗口，每 IP 最多 10 次尝试（防暴力破解）
+const authWindowMs = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 export const authLimiter = rateLimit({
-  windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  windowMs: authWindowMs,
   max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,
   keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
   standardHeaders: true,
   legacyHeaders: false,
+  store: makeStore(authWindowMs, 'rl:auth'),
   message: { success: false, error: '登录尝试过于频繁，请 15 分钟后再试', code: 'AUTH_RATE_LIMITED' },
   skip: isTest,
 });
 
 // AI 对话/生成端点限流：按用户 ID（免费 20/分钟，付费 60/分钟）
+const aiWindowMs = Number(process.env.AI_RATE_WINDOW_MS) || 60 * 1000;
 export function aiLimiter() {
   return rateLimit({
-    windowMs: Number(process.env.AI_RATE_WINDOW_MS) || 60 * 1000,
+    windowMs: aiWindowMs,
     max: (req) => {
       // 付费用户更高限额
       const plan = (req as any).user?.plan;
@@ -58,6 +198,7 @@ export function aiLimiter() {
     keyGenerator: userIdOrIpKey,
     standardHeaders: true,
     legacyHeaders: false,
+    store: makeStore(aiWindowMs, 'rl:ai'),
     message: { success: false, error: 'AI 请求过于频繁，请稍后再试', code: 'AI_RATE_LIMITED' },
     skip: isTest,
     skipFailedRequests: true, // 不消耗认证失败用户的配额
@@ -65,12 +206,14 @@ export function aiLimiter() {
 }
 
 // 文生图生成专属限流：频率闸门，与「匿名每日限次」「登录配额/成本阀门」三层互补。
+const imgWindowMs = Number(process.env.TEXT2IMG_RATE_WINDOW_MS) || 60 * 1000;
 export const text2imgLimiter = rateLimit({
-  windowMs: Number(process.env.TEXT2IMG_RATE_WINDOW_MS) || 60 * 1000,
+  windowMs: imgWindowMs,
   max: Number(process.env.TEXT2IMG_RATE_MAX) || 10,
   keyGenerator: userIdOrIpKey,
   standardHeaders: true,
   legacyHeaders: false,
+  store: makeStore(imgWindowMs, 'rl:img'),
   message: { success: false, error: '生成请求过于频繁，请稍后再试', code: 'TEXT2IMG_RATE_LIMITED' },
   skip: isTest,
 });

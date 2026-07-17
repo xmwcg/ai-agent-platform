@@ -17,6 +17,7 @@ export interface IUser extends Document {
   phoneHash?: string;      // HMAC-SHA256 确定性 hash，用于 unique 索引 + 登录查找
   wechatOpenid?: string;
   role: 'user' | 'admin';
+  isBanned?: boolean;
   provider: string;
   providerId?: string;
   // 商业变现字段
@@ -73,6 +74,11 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ['user', 'admin'],
       default: 'user',
+    },
+    isBanned: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     provider: {
       type: String,

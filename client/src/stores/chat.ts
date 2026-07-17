@@ -21,6 +21,10 @@ export interface ChatSession {
   model: string;
   createdAt: number;
   updatedAt: number;
+  /** 智能体(Agent)系统提示词：创建时配置，对话时自动注入 */
+  systemPrompt?: string;
+  /** 智能体描述（可选） */
+  description?: string;
 }
 
 export interface UploadedFile {
@@ -43,7 +47,7 @@ interface ChatState {
   rightPanelOpen: boolean;
 
   // 会话管理
-  createSession: () => string;
+  createSession: (init?: Partial<Pick<ChatSession, 'title' | 'mode' | 'model' | 'systemPrompt' | 'description'>>) => string;
   switchSession: (id: string) => void;
   deleteSession: (id: string) => void;
   renameSession: (id: string, title: string) => void;
@@ -86,16 +90,18 @@ export const useChatStore = create<ChatState>()(
       files: [],
       rightPanelOpen: false,
 
-      createSession: () => {
+      createSession: (init) => {
         const id = nextSessionId();
         const session: ChatSession = {
           id,
-          title: '新对话',
-          mode: get().mode,
+          title: init?.title ?? '新对话',
+          mode: init?.mode ?? get().mode,
           messages: [],
-          model: get().model,
+          model: init?.model ?? get().model,
           createdAt: Date.now(),
           updatedAt: Date.now(),
+          systemPrompt: init?.systemPrompt,
+          description: init?.description,
         };
         set((s) => ({
           sessions: [session, ...s.sessions],

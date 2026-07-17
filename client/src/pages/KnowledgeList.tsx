@@ -257,7 +257,20 @@ export default function KnowledgeList() {
       {/* 内容区 */}
       {displayDocs.length === 0 ? (
         <div style={{ padding: '60px 0', textAlign: 'center' }}>
-          <Empty description={documents.length === 0 ? '暂无文档，开始创建或上传吧' : '该筛选条件下暂无文档'} />
+          <Empty
+            description={documents.length === 0 ? '暂无文档，开始创建或上传吧' : '该筛选条件下暂无文档'}
+          >
+            {documents.length === 0 && (
+              <Space style={{ marginTop: 16 }}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/knowledge/create')}>
+                  创建文档
+                </Button>
+                <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
+                  快速导入文件
+                </Button>
+              </Space>
+            )}
+          </Empty>
         </div>
       ) : viewMode === 'card' ? (
         <Row gutter={[16, 16]}>

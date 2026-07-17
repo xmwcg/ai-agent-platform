@@ -30,7 +30,7 @@ const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
 
 // ─── 常量化菜单配置 ───
-const MENU_GROUPS = [
+const MENU_GROUPS = (role?: string) => [
   {
     key: 'core', label: '核心功能', defaultOpen: true,
     children: [
@@ -75,6 +75,7 @@ const MENU_GROUPS = [
       { key: '/team', icon: <TeamOutlined />, label: '团队权限' },
       { key: '/diagnostics', icon: <DashboardOutlined />, label: '部署自检' },
       { key: '/ops-dashboard', icon: <BarChartOutlined />, label: '运营看板' },
+      ...(role === 'admin' ? [{ key: '/admin/users', icon: <SecurityScanOutlined />, label: '用户管理' }] : []),
       { key: '/pricing', icon: <CrownOutlined />, label: '会员升级' },
       { key: '/points-center', icon: <GiftOutlined />, label: '积分中心' },
       { key: '/distribution', icon: <ShareAltOutlined />, label: '分销中心' },
@@ -85,7 +86,7 @@ const MENU_GROUPS = [
 
 // 从所有菜单中提取扁平的 key→label 映射，用于面包屑
 const ALL_MENU_FLAT: Record<string, string> = {};
-MENU_GROUPS.forEach((g) =>
+MENU_GROUPS('admin').forEach((g) =>
   g.children.forEach((c) => {
     ALL_MENU_FLAT[c.key] = c.label;
   })
@@ -199,6 +200,9 @@ function App() {
 
   const breadcrumbs = useBreadcrumbs();
 
+  // 菜单按当前用户角色动态生成（管理员可见「用户管理」）
+  const menuGroups = useMemo(() => MENU_GROUPS(user?.role), [user?.role]);
+
   // ─── 初始化 ───
   useEffect(() => {
     if (status === 'idle') fetchProfile();
@@ -229,11 +233,11 @@ function App() {
 
   // 默认展开的菜单组
   const defaultOpenKeys = useMemo(() => {
-    for (const group of MENU_GROUPS) {
+    for (const group of menuGroups) {
       if (group.children.some((c) => selectedKeys.includes(c.key))) return [group.key];
     }
     return ['core'];
-  }, [selectedKeys]);
+  }, [selectedKeys, menuGroups]);
 
   const handleMenuClick = (key: string) => {
     navigate(key);
@@ -288,7 +292,7 @@ function App() {
         background: 'transparent', borderInlineEnd: 0,
         color: 'var(--text-secondary)', fontWeight: 500,
       }}
-      items={MENU_GROUPS.map((group) => ({
+      items={menuGroups.map((group) => ({
         type: 'group' as const,
         key: group.key,
         label: sidebarCollapsed ? undefined : (

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { User } from '../models/User';
 import { generateToken, requireAuth, AuthRequest } from '../middleware/auth';
+import { requireAdmin } from '../middleware/requireAdmin';
 import { authLimiter } from '../middleware/rate-limit';
 import { sendError } from '../lib/http-error';
 import { validate, ValidationSchema } from '../lib/validation';
@@ -85,6 +86,9 @@ router.post('/login', authLimiter, validate(loginSchema), async (req: AuthReques
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ error: '邮箱或密码错误' });
+    }
+    if (user.isBanned) {
+      return res.status(403).json({ error: '该账号已被封禁，请联系管理员' });
     }
 
     const isMatch = await user.comparePassword(password);
@@ -305,6 +309,78 @@ router.get('/wechat/callback', async (req: Request, res: Response) => {
     </script>登录成功，正在返回…</body></html>`);
   } catch (err) {
     sendError(res, err);
+  }
+});
+
+// ===================== 管理员：用户权限管理 =====================
+// 用户列表（支持邮箱/名称搜索 + 分页），仅管理员可访问
+router.get('/admin/users', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || '20', 10)));
+    const search = ((req.query.search as string) || '').trim();
+    const filter: any = {};
+    if (search) {
+      filter.$or = [
+        { email: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+      ];
+    }
+    const total = await User.countDocuments(filter);
+    const users = await User.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize);
+    res.json({
+      success: true,
+      users: users.map((u) => u.toJSON()),
+      pagination: { page, limit: pageSize, total },
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+// 修改用户角色（user / admin）
+router.put('/admin/users/:id/role', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { role } = req.body;
+    if (!['user', 'admin'].includes(role)) {
+      return res.status(400).json({ error: '角色必须是 user 或 admin' });
+    }
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ error: '用户不存在' });
+    // 防止把唯一管理员降级导致系统锁死
+    if (target.role === 'admin' && role !== 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) return res.status(400).json({ error: '至少保留一名管理员' });
+    }
+    target.role = role;
+    await target.save();
+    res.json({ success: true, user: target.toJSON() });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+// 封禁 / 解封账号
+router.put('/admin/users/:id/ban', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { banned } = req.body;
+    if (typeof banned !== 'boolean') {
+      return res.status(400).json({ error: 'banned 必须为布尔值' });
+    }
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ error: '用户不存在' });
+    // 不允许封禁当前登录账号
+    if (target._id.toString() === req.user!.id) {
+      return res.status(400).json({ error: '不能封禁当前登录账号' });
+    }
+    target.isBanned = banned;
+    await target.save();
+    res.json({ success: true, user: target.toJSON() });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
