@@ -40,3 +40,15 @@
 - [x] **支付 Webhook 真实凭证（配置就绪）**：`.env.example` 已含 `STRIPE_WEBHOOK_SECRET` 与 `WECHAT_PLATFORM_CERT` 占位，billing 代码已消费；填入真实密钥即投产（第十五轮已就绪）。
 - [x] **核查即标记完成（Round 15 代码已含，未重复实现）**：媒体真实厂商轮询（可灵/即梦 `queryTask`）、团队资源级授权（`canAccessResource` 已接入 knowledge/customer-service/quickstart/knowledge-graph 路由）、API 市场计费（原子积分扣减 + CreditsTransaction 审计 + CSV/JSON 用量账单导出）。
 - [x] **验证**：后端 tsc ✅ / jest **288 用例 · 39 suite 全过** / 前端 tsc ✅ / 前端 eslint **0 error**。注：上一轮随知识图谱交付的 2 例单测断言因无向边 source/target 顺序假设而失败（从未运行），本轮修复为顺序无关断言后全绿。
+
+## ✅ 第十七轮（平台管理后台 + 限流可靠性加固）✅ 已落地，tsc 干净 + 全量 503 测试通过
+- **A. 用户管理后台（运营能力）**
+  - `User` 模型：新增 `role`(user/admin) 与 `isBanned` 字段（`isBanned` 建索引）。
+  - `routes/auth.ts`：新增管理员接口（均 `requireAuth + requireAdmin` 守卫）：`GET /admin/users`（邮箱/名称搜索 + 分页）、`PUT /admin/users/:id/role`（枚举校验 + 至少保留一名管理员保护）、`PUT /admin/users/:id/ban`（封禁/解封，禁止封禁当前账号）。
+  - 登录拦截：被封账号返回 403「该账号已被封禁」，封禁即时生效。
+  - 前端 `UserAdminPage.tsx`：用户表格（搜索/分页/角色切换/封禁开关）+ `adminAPI`（api.ts）+ 路由与菜单按 `user.role==='admin'` 动态显隐「用户管理」。
+  - 修复 `App.tsx`：`MENU_GROUPS` 由模块级常量改为接收 `role` 的函数，消除引用未定义 `user` 的编译错误，菜单随登录态刷新。
+- **B. 限流中间件可靠性加固（L5 升级）**
+  - `middleware/rate-limit.ts`：实现 Redis 优先 + 内存自动降级的限流存储（express-rate-limit v7 Store 接口）。
+  - 新增 Redis 健康检查探针（启动延迟首探 + 15s 周期；内存替身直接标记不可用），半开/断连时降级为进程内存，避免全站 500 或误 429；恢复后自动切回。
+- 验证：server `tsc --noEmit` 干净；server `jest` **503 用例全过**；client `tsc --noEmit` 干净；client `eslint` **0 error / 97 warning（均为既有）**。
