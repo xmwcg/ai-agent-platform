@@ -19,16 +19,16 @@ const CODE_NODE_ENABLED = process.env.WORKFLOW_CODE_NODE_ENABLED === 'true';
 
 const FORBIDDEN_TOKENS = /\b(constructor|__proto__|prototype|process|require|module|exports|global|globalThis|eval|Function|import|export|while|for|switch|case|break|continue|class|extends|new|delete|instanceof|typeof|void|with|this|window|document|fetch|XMLHttpRequest|http|https|fs|child_process|spawn|exec)\b/;
 
-function createSandbox(input: any): vm.Context {
-  const sandbox: Record<string, any> = { input };
+function createSandbox(input: unknown): vm.Context {
+  const sandbox: Record<string, unknown> = { input };
   return vm.createContext(sandbox);
 }
 
 function safeEvaluateExpression(
   expression: string,
-  input: any,
+  input: unknown,
   timeoutMs = 100
-): { ok: boolean; value?: any; error?: string } {
+): { ok: boolean; value?: unknown; error?: string } {
   if (typeof expression !== 'string' || expression.trim() === '') {
     return { ok: false, error: '空表达式' };
   }
@@ -43,16 +43,16 @@ function safeEvaluateExpression(
       { timeout: timeoutMs }
     );
     return { ok: true, value: result };
-  } catch (e: any) {
-    return { ok: false, error: e.message };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 function safeExecuteCode(
   code: string,
-  input: any,
+  input: unknown,
   timeoutMs = 1000
-): { ok: boolean; value?: any; error?: string; disabled?: boolean } {
+): { ok: boolean; value?: unknown; error?: string; disabled?: boolean } {
   if (!CODE_NODE_ENABLED) {
     return { ok: false, disabled: true, error: '代码执行节点已按安全策略禁用' };
   }
@@ -70,18 +70,18 @@ function safeExecuteCode(
       { timeout: timeoutMs }
     );
     return { ok: true, value: result };
-  } catch (e: any) {
-    return { ok: false, error: e.message };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 // ── 执行上下文 ───────────────────────────────────────
 
 interface ExecutionContext {
-  input: Record<string, any>;
-  nodeOutputs: Map<string, any>; // nodeId → 该节点的输出
-  sessionId?: string;            // AI 对话会话 ID
-  userId?: string;               // 执行用户
+  input: Record<string, unknown>;
+  nodeOutputs: Map<string, unknown>; // nodeId → 该节点的输出
+  sessionId?: string;                 // AI 对话会话 ID
+  userId?: string;                    // 执行用户
 }
 
 // ── 拓步排序 ─────────────────────────────────────────
@@ -131,7 +131,7 @@ function topologicalSort(nodes: IWorkflowNode[], edges: IWorkflowEdge[]): string
 
 // ── 获取节点输入 ─────────────────────────────────────
 
-function getNodeInput(nodeId: string, edges: IWorkflowEdge[], ctx: ExecutionContext): any {
+function getNodeInput(nodeId: string, edges: IWorkflowEdge[], ctx: ExecutionContext): unknown {
   const incomingEdges = edges.filter(e => e.target === nodeId);
   if (incomingEdges.length === 0) {
     return ctx.input.userInput || '';
@@ -140,7 +140,7 @@ function getNodeInput(nodeId: string, edges: IWorkflowEdge[], ctx: ExecutionCont
     return ctx.nodeOutputs.get(incomingEdges[0].source) || '';
   }
   // 多输入：合并
-  const inputs: Record<string, any> = {};
+  const inputs: Record<string, unknown> = {};
   for (const edge of incomingEdges) {
     inputs[edge.source] = ctx.nodeOutputs.get(edge.source);
   }
@@ -155,9 +155,9 @@ class WorkflowEngine {
    */
   async execute(
     workflowIdOrObj: string | IWorkflow,
-    input: Record<string, any>,
+    input: Record<string, unknown>,
     userId?: string
-  ): Promise<{ runId: string; output: any; nodeExecutions: INodeExecution[] }> {
+  ): Promise<{ runId: string; output: unknown; nodeExecutions: INodeExecution[] }> {
     // 获取工作流
     const workflow = typeof workflowIdOrObj === 'string'
       ? await Workflow.findById(workflowIdOrObj)
@@ -182,20 +182,20 @@ class WorkflowEngine {
     };
 
     // 拓扑排序
-    const levels = topologicalSort(workflow.nodes as any[], workflow.edges as any[]);
+    const levels = topologicalSort(workflow.nodes, workflow.edges);
     logger.info('workflow-engine', `Executing ${workflow.name} (${levels.length} levels, ${workflow.nodes.length} nodes)`);
 
     const allExecutions: INodeExecution[] = [];
-    let finalOutput: any = null;
+    let finalOutput: unknown = null;
 
     // 逐层执行
     for (const level of levels) {
       // 同层并行执行
       const levelPromises = level.map(async (nodeId) => {
-        const node = workflow.nodes.find((n: any) => n.id === nodeId);
+        const node = workflow.nodes.find((n) => n.id === nodeId);
         if (!node) return null;
 
-        const nodeInput = getNodeInput(nodeId, workflow.edges as any[], ctx);
+        const nodeInput = getNodeInput(nodeId, workflow.edges, ctx);
         const execution = await this.executeNode(node, nodeInput, ctx, String(run._id));
         return execution;
       });
@@ -213,7 +213,7 @@ class WorkflowEngine {
     }
 
     // 找输出节点
-    const outputNode = workflow.nodes.find((n: any) => n.data.type === 'output');
+    const outputNode = workflow.nodes.find((n) => n.data.type === 'output');
     if (outputNode) {
       finalOutput = ctx.nodeOutputs.get(outputNode.id);
     } else {
@@ -224,7 +224,7 @@ class WorkflowEngine {
 
     // 更新执行记录
     run.status = allExecutions.some(e => e.status === 'error') ? 'failed' : 'completed';
-    run.nodeExecutions = allExecutions as any;
+    run.nodeExecutions = allExecutions;
     run.output = finalOutput;
     run.totalDuration = allExecutions.reduce((sum, e) => sum + (e.duration || 0), 0);
     await run.save();
@@ -242,7 +242,7 @@ class WorkflowEngine {
    */
   private async executeNode(
     node: IWorkflowNode,
-    input: any,
+    input: unknown,
     ctx: ExecutionContext,
     runId: string
   ): Promise<INodeExecution> {
@@ -282,7 +282,7 @@ class WorkflowEngine {
             );
             execution.output = result.reply;
             execution.status = 'success';
-          } catch (e) {
+          } catch (e: unknown) {
             execution.status = 'error';
             execution.error = e instanceof Error ? e.message : '人工智能对话执行失败';
           }
@@ -291,7 +291,8 @@ class WorkflowEngine {
 
         case 'rag_search': {
           const config = node.data.config || {};
-          const query = typeof input === 'string' ? input : input.query || JSON.stringify(input);
+          const inputObj = input as Record<string, unknown>;
+          const query: string = typeof input === 'string' ? input : (typeof inputObj.query === 'string' ? inputObj.query : JSON.stringify(input));
           try {
             const results = await embeddingService.searchSimilarDocuments(query, {
               limit: config.maxDocuments || 5,
@@ -303,7 +304,7 @@ class WorkflowEngine {
               similarity: r.similarity,
             }));
             execution.status = 'success';
-          } catch (e) {
+          } catch (e: unknown) {
             execution.status = 'error';
             execution.error = e instanceof Error ? e.message : '知识检索执行失败';
           }
@@ -321,7 +322,7 @@ class WorkflowEngine {
             const result = await aiAgentService.sendMessage(ctx.sessionId, prompt);
             execution.output = result.reply;
             execution.status = 'success';
-          } catch (e) {
+          } catch (e: unknown) {
             execution.status = 'error';
             execution.error = e instanceof Error ? e.message : '翻译执行失败';
           }
@@ -375,9 +376,9 @@ class WorkflowEngine {
           execution.output = input; // 透传
           execution.status = 'success';
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       execution.status = 'error';
-      execution.error = error.message || 'Unknown error';
+      execution.error = error instanceof Error ? error.message : 'Unknown error';
       execution.output = null;
     }
 
@@ -387,7 +388,7 @@ class WorkflowEngine {
     // 实时更新到数据库
     try {
       await WorkflowRun.findByIdAndUpdate(runId, {
-        $push: { nodeExecutions: execution as any },
+        $push: { nodeExecutions: execution },
       });
     } catch { /* 不阻塞执行 */ }
 

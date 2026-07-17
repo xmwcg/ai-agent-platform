@@ -323,3 +323,15 @@ AI Key 可选（缺省走 Mock）。支付：`DEFAULT_PAY_PROVIDER`(mock/wechat/
 - **F. 核查即标记完成（Round 15 代码已含）**：媒体真实厂商轮询（`media-gen.service.ts` 可灵/即梦 `queryTask`）、团队资源级授权（`middleware/resourceAccess.ts` 的 `canAccessResource` 已接入 knowledge/customer-service/quickstart/knowledge-graph 路由）、API 市场计费（`marketplace.ts` 原子积分扣减 + `CreditsTransaction` 审计 + CSV/JSON 用量账单导出）。均免重复实现。
 - **G. 缺陷修复（知识图谱单测）**：上一轮随知识图谱交付的 2 例断言因无向边 `source/target` 顺序假设（实际由 `min(id)` 归一化）而失败，且从未真正运行；本轮修正为顺序无关断言后全绿——印证「每步必须真实跑通测试」的纪律价值。
 - 验证：server `tsc --noEmit` 干净；server `jest` **288 用例 / 39 suite 全过**（原 236 + 新增 52：知识图谱 7 + 沙盒 20 + 向量库 12 + trace 9 + 其余）；client `tsc --noEmit` 干净；client `eslint` **0 error / 70 warning（均为既有）**。
+
+### 第十七轮（阶段0+1 · P0 安全止血：workflow-engine/mcp/sandbox 三高危模块）✅ 已落地，验证于 2026-07-15：tsc 干净 + 三模块 43 测试全过
+- 报告由用户以完成态提交；agent 于 2026-07-15 实测复核（非仅文件存在）：
+  - `node node_modules/jest/bin/jest.js workflow-engine.service mcp.service sandbox.service` → **43 passed / 3 suites / JEST_EXIT=0**；
+  - `node node_modules/typescript/bin/tsc --noEmit` → **TSC_EXIT=0**。
+- **1a workflow-engine.service.ts（RCE 级）**：`condition`/`code` 节点原 `new Function('input',...)` 任意 JS 执行 → 改为 `vm` 受限沙盒（仅暴露 input，不暴露 process/require）+ 危险标识符黑名单（constructor/process/require/Function/eval/new）；code 节点默认禁用（`WORKFLOW_CODE_NODE_ENABLED` 默认 false），开启后仍受黑名单约束；`condition` 移除 `{{input}}` 字符串插值（消除注入点）。
+- **1b mcp.service.ts（服务端命令执行）**：`connectStdio` 原把 DB 的 `config.command/args` 原样透传 `StdioClientTransport`（可跑 `bash -c 'rm -rf /'`）→ 新增 `isAllowedStdioCommand`（按 basename 校验防绝对路径绕过）+ 白名单 `MCP_ALLOWED_STDIO_COMMANDS`（默认 node,npx），非白名单直接拒绝、状态置 error，绝不 spawn。
+- **1c sandbox.service.ts（本机无隔离执行）**：原 `SANDBOX_MODE=local` 即在宿主机无容器执行 → 新增 `SANDBOX_LOCAL_ENABLED` 开关（默认 false），`selectSandboxMode` 对 local 默认降级 mock，需 `SANDBOX_MODE=local` 且 `SANDBOX_LOCAL_ENABLED=true` 双重确认才真正本机执行；`detectDangerousPatterns` 静态拦截全模式持续生效。
+- **测试安全网**：新增/改写 `workflow-engine.service.test.ts`(12) / `mcp.service.test.ts`(7) / `sandbox.service.test.ts`(24) 共 43 例，覆盖默认安全态与启用后受限行为。
+- **新增环境变量（均可选、默认即安全态）**：`WORKFLOW_CODE_NODE_ENABLED` / `MCP_ALLOWED_STDIO_COMMANDS` / `SANDBOX_LOCAL_ENABLED`。
+- **与 Round 16 沙盒的关系**：Round 16 已建 `sandbox.service.ts` 多模式 Provider + `detectDangerousPatterns` + `selectSandboxMode`；本轮在其上叠加 local 默认禁用开关（1c），属增量加固。
+- **下一步（阶段2 质量治理）**：巨型文件拆分 / any 收敛 / 清理未用依赖 / 补关键模块测试（待用户确认起序）。
