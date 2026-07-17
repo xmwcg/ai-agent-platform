@@ -78,6 +78,25 @@ test('CNB long-running dependency installs and image builds keep the runner aliv
   assert.match(imageBuildStage, /run_with_heartbeat "docker-build-\$context" docker build --progress=plain --pull/);
 });
 
+test('CNB Docker-only stages use an available CLI image while Git stages retain Git tooling', async () => {
+  const pipeline = await readFile(cnbPath, 'utf8');
+  const imageBuildIndex = pipeline.indexOf('- name: build-and-push-immutable-images');
+  const imageScanIndex = pipeline.indexOf('- name: image-security-scan', imageBuildIndex);
+  const mirrorIndex = pipeline.indexOf('- name: mirror-github-safely', imageScanIndex);
+  const promoteIndex = pipeline.indexOf('- name: promote-production-ref', mirrorIndex);
+  const verifyIndex = pipeline.indexOf('- name: verify-production-release', promoteIndex);
+  const imageBuildStage = pipeline.slice(imageBuildIndex, imageScanIndex);
+  const imageScanStage = pipeline.slice(imageScanIndex, mirrorIndex);
+  const mirrorStage = pipeline.slice(mirrorIndex, promoteIndex);
+  const promoteStage = pipeline.slice(promoteIndex, verifyIndex);
+
+  assert.match(imageBuildStage, /image: docker:27-cli/);
+  assert.match(imageScanStage, /image: docker:27-cli/);
+  assert.doesNotMatch(imageBuildStage, /docker:27-git/);
+  assert.doesNotMatch(imageScanStage, /docker:27-git/);
+  assert.match(mirrorStage, /image: docker:27-git/);
+  assert.match(promoteStage, /image: docker:27-git/);
+});
 test('production deployment stays outbound-pull only and embeds no deploy webhook secret', async () => {
   const pipeline = await readFile(cnbPath, 'utf8');
 

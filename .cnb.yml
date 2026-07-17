@@ -90,7 +90,7 @@ main:
             npm_config_registry=https://registry.npmjs.org npm audit --audit-level=high
 
         - name: build-and-push-immutable-images
-          image: docker:27-git
+          image: docker:27-cli
           script: |
             set -eu
             test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
@@ -128,7 +128,7 @@ main:
               return "$command_status"
             }
 
-            # 全局返回值，保持脚本兼容 docker:27-git 的 POSIX /bin/sh。
+            # 全局返回值，保持脚本兼容 docker:27-cli 的 POSIX /bin/sh。
             RESOLVED_IMAGE=''
             resolve_existing_image() {
               tag=$1
@@ -222,7 +222,7 @@ main:
             cat .release/image-metadata.env
 
         - name: image-security-scan
-          image: docker:27-git
+          image: docker:27-cli
           script: |
             set -eu
             . .release/image-metadata.env
