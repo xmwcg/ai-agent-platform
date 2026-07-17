@@ -7,6 +7,7 @@ import {
   awardTaskPoints,
   TASK_POINTS,
 } from '../services/points.service';
+import { sendError } from '../lib/http-error';
 
 const router = Router();
 
@@ -24,8 +25,8 @@ router.post('/checkin', async (req: Request, res: Response) => {
       return res.status(400).json({ error: result.message, data: result });
     }
     res.json({ success: true, data: result });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || '签到失败' });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -37,8 +38,8 @@ router.get('/checkin/status', async (req: Request, res: Response) => {
   try {
     const status = await getCheckInStatus((req as any).user._id);
     res.json({ success: true, data: status });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || '获取签到状态失败' });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -52,8 +53,8 @@ router.get('/checkin/history', async (req: Request, res: Response) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 30));
     const data = await getCheckInHistory((req as any).user._id, page, pageSize);
     res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || '获取签到历史失败' });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
@@ -76,8 +77,8 @@ router.post('/task', async (req: Request, res: Response) => {
 
     await awardTaskPoints((req as any).user._id, amount, taskType);
     res.json({ success: true, data: { amount, taskType } });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || '任务积分发放失败' });
+  } catch (error) {
+    sendError(res, error);
   }
 });
 
