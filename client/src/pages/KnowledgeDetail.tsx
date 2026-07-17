@@ -2,22 +2,23 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 import {
-  Card, Typography, Button, message, Spin, Tag, Space, Divider, Anchor, Tooltip, Dropdown, Skeleton, Alert,
+  Card, Typography, Button, message, Tag, Space, Divider, Anchor, Tooltip, Skeleton, Alert,
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, DownloadOutlined, SwapOutlined,
   RobotOutlined, ClockCircleOutlined, UserOutlined, EyeOutlined,
   HeartOutlined, ShareAltOutlined, CrownOutlined, LockOutlined,
 } from '@ant-design/icons';
-import apiClient, { extractApiError, knowledgeAPI } from '@/services/api';
+import apiClient, { extractApiError } from '@/services/api';
 import FileConverter from '@/components/FileConverter';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 interface KnowledgeDocument {
   _id: string;
   title: string;
   content?: string;
+  htmlContent?: string;
   previewContent?: string;
   access?: string;
   requiredPlan?: string;
@@ -35,69 +36,192 @@ interface KnowledgeDocument {
   author: { username: string };
 }
 
-// 标题 slug：Markdown 与 HTML 两种提取方式共用，确保 TOC 锚点 id 一致
-function slugifyHeading(text: string): string {
-  return `heading-${text.toLowerCase().replace(/[^a-z0-9一-龥]+/g, '-')}`;
+type KnowledgeHeading = { level: number; text: string; id: string };
+type RenderedKnowledgeContent = { html: string; headings: KnowledgeHeading[] };
+
+const HTML_CONTENT_PATTERN = /^\s*<\/?(?:h[1-6]|p|ul|ol|blockquote|pre|div|hr|table|section|article|strong|em|a|br)\b/i;
+const ALLOWED_HTML_TAGS = new Set([
+  'A', 'ARTICLE', 'BLOCKQUOTE', 'BR', 'CODE', 'DEL', 'DIV', 'EM', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+  'HR', 'I', 'LI', 'OL', 'P', 'PRE', 'SECTION', 'S', 'STRONG', 'TABLE', 'TBODY', 'TD', 'TH', 'THEAD',
+  'TR', 'U', 'UL',
+]);
+const REMOVED_HTML_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'FORM', 'INPUT', 'BUTTON', 'SVG', 'MATH']);
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-// 从 Markdown 提取标题层次结构
-function extractHeadings(content: string): { level: number; text: string; id: string }[] {
-  const headingRegex = /^(#{2,4})\s+(.+)$/gm;
-  const headings: { level: number; text: string; id: string }[] = [];
-  let match;
-  while ((match = headingRegex.exec(content)) !== null) {
-    const level = match[1].length;
-    const text = match[2].trim();
-    headings.push({ level, text, id: slugifyHeading(text) });
-  }
-  return headings;
+function createHeadingId(text: string, usedIds: Map<string, number>): string {
+  const base = text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'section';
+  const count = usedIds.get(base) || 0;
+  usedIds.set(base, count + 1);
+  return count === 0 ? `heading-${base}` : `heading-${base}-${count + 1}`;
 }
 
-// 文档内容是否为富文本编辑器生成的 HTML（而非 Markdown）
-function isHtmlContent(content: string): boolean {
-  return /<([a-z][a-z0-9]*)\b[^>]*>/i.test(content);
+function stripMarkdownFormatting(text: string): string {
+  return text
+    .replace(/!\[([^]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[`*_~]/g, '')
+    .replace(/<[^>]+>/g, '')
+    .trim();
 }
 
-// 从 HTML 提取标题层次结构（供目录导航）
-function extractHeadingsFromHtml(html: string): { level: number; text: string; id: string }[] {
-  const headingRegex = /<h([2-4])[^>]*>([\s\S]*?)<\/h\1>/gi;
-  const headings: { level: number; text: string; id: string }[] = [];
-  let match;
-  while ((match = headingRegex.exec(html)) !== null) {
-    const level = parseInt(match[1], 10);
-    const text = match[2].replace(/<[^>]+>/g, '').trim();
-    if (text) headings.push({ level, text, id: slugifyHeading(text) });
-  }
-  return headings;
-}
-
-// 为 HTML 中的 h2~h4 注入与 TOC 一致的 id（便于锚点跳转）
-function addHeadingIds(html: string): string {
-  return html.replace(/<h([2-4])(\s[^>]*)?>([\s\S]*?)<\/h\1>/gi, (_m, level, attrs, inner) => {
-    const text = inner.replace(/<[^>]+>/g, '').trim();
-    const id = slugifyHeading(text);
-    return `<h${level}${attrs || ''} id="${id}">${inner}</h${level}>`;
-  });
-}
-
-// 简单的 Markdown to HTML 渲染（无依赖）
-function renderMarkdown(content: string): string {
-  if (!content) return '';
-    const html = content
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/^### (.+)$/gm, (_m, t) => `<h4 id="${slugifyHeading(t)}">${t}</h4>`)
-      .replace(/^## (.+)$/gm, (_m, t) => `<h3 id="${slugifyHeading(t)}">${t}</h3>`)
-      .replace(/^# (.+)$/gm, (_m, t) => `<h2 id="${slugifyHeading(t)}">${t}</h2>`)
+function renderInlineMarkdown(text: string): string {
+  return text
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code style="background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:13px">$1</code>')
-    .replace(/```(\w*)\n([\s\S]*?)```/g,
-      '<div style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;overflow:hidden;margin:12px 0"><div style="padding:4px 12px;font-size:11px;background:#181825;color:#6c7086">$1</div><pre style="margin:0;padding:12px;overflow-x:auto;font-size:13px"><code>$2</code></pre></div>')
-    .replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid #6366f1;padding:4px 12px;margin:8px 0;color:#64748b;background:#f8f9fb;border-radius:0 8px 8px 0">$1</blockquote>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, '<ul style="padding-left:24px;margin:8px 0">$&</ul>')
-    .replace(/^(?!<[a-z]).+$/gm, (line) => line.trim() ? `<p style="margin:8px 0;line-height:1.8">${line}</p>` : '<br/>');
-  return html;
+    .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^]]+)\]\((https?:\/\/|mailto:)([^)]+)\)/g, '<a href="$2$3" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function renderMarkdown(content: string): RenderedKnowledgeContent {
+  const usedIds = new Map<string, number>();
+  const headings: KnowledgeHeading[] = [];
+  const escaped = escapeHtml(content.replace(/\r\n?/g, '\n'));
+  const codeBlocks: string[] = [];
+  const withCodeTokens = escaped.replace(/```([\w+-]*)\n([\s\S]*?)```/g, (_match, language: string, code: string) => {
+    const index = codeBlocks.push(
+      `<div class="kd-code-block"><div class="kd-code-language">${language || 'code'}</div><pre><code>${code}</code></pre></div>`,
+    ) - 1;
+    return `__KDCODE_${index}__`;
+  });
+
+  const lines = withCodeTokens.split('\n');
+  const html: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+
+    const codeToken = line.match(/^__KDCODE_(\d+)__$/);
+    if (codeToken) {
+      html.push(codeBlocks[Number(codeToken[1])]);
+      index += 1;
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const rawText = headingMatch[2].trim();
+      const text = stripMarkdownFormatting(rawText);
+      const id = createHeadingId(text, usedIds);
+      headings.push({ level, text, id });
+      html.push(`<h${level} id="${id}">${renderInlineMarkdown(rawText)}</h${level}>`);
+      index += 1;
+      continue;
+    }
+
+    if (/^>\s?/.test(line)) {
+      const quoteLines: string[] = [];
+      while (index < lines.length && /^>\s?/.test(lines[index])) {
+        quoteLines.push(lines[index].replace(/^>\s?/, ''));
+        index += 1;
+      }
+      html.push(`<blockquote>${quoteLines.map(renderInlineMarkdown).join('<br>')}</blockquote>`);
+      continue;
+    }
+
+    if (/^[-*+]\s+/.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^[-*+]\s+/.test(lines[index])) {
+        items.push(`<li>${renderInlineMarkdown(lines[index].replace(/^[-*+]\s+/, ''))}</li>`);
+        index += 1;
+      }
+      html.push(`<ul>${items.join('')}</ul>`);
+      continue;
+    }
+
+    if (/^\d+[.)]\s+/.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^\d+[.)]\s+/.test(lines[index])) {
+        items.push(`<li>${renderInlineMarkdown(lines[index].replace(/^\d+[.)]\s+/, ''))}</li>`);
+        index += 1;
+      }
+      html.push(`<ol>${items.join('')}</ol>`);
+      continue;
+    }
+
+    html.push(`<p>${renderInlineMarkdown(line)}</p>`);
+    index += 1;
+  }
+
+  return { html: html.join(''), headings };
+}
+
+function sanitizeHtmlContent(content: string): RenderedKnowledgeContent {
+  if (typeof window === 'undefined' || typeof window.DOMParser === 'undefined') {
+    return { html: escapeHtml(content), headings: [] };
+  }
+
+  const safeContent = DOMPurify.sanitize(content, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: Array.from(REMOVED_HTML_TAGS).map((tag) => tag.toLowerCase()),
+    FORBID_ATTR: ['style'],
+  });
+  const parsed = new window.DOMParser().parseFromString(safeContent, 'text/html');
+  const container = parsed.createElement('div');
+  Array.from(parsed.body.childNodes).forEach((node) => container.appendChild(node.cloneNode(true)));
+  const usedIds = new Map<string, number>();
+  const headings: KnowledgeHeading[] = [];
+
+  const sanitizeNode = (node: Node) => {
+    Array.from(node.childNodes).forEach((child) => {
+      if (child.nodeType !== Node.ELEMENT_NODE) return;
+      const element = child as HTMLElement;
+      const tag = element.tagName.toUpperCase();
+      if (REMOVED_HTML_TAGS.has(tag)) {
+        element.remove();
+        return;
+      }
+      if (!ALLOWED_HTML_TAGS.has(tag)) {
+        const fragment = parsed.createDocumentFragment();
+        while (element.firstChild) fragment.appendChild(element.firstChild);
+        element.replaceWith(fragment);
+        sanitizeNode(fragment);
+        return;
+      }
+
+      const rawHref = tag === 'A' ? (element.getAttribute('href') || '').trim() : '';
+      Array.from(element.attributes).forEach((attribute) => element.removeAttribute(attribute.name));
+      if (tag === 'A') {
+        const href = /^(?:https?:|mailto:)/i.test(rawHref) ? rawHref : '';
+        if (href) {
+          element.setAttribute('href', href);
+          element.setAttribute('target', '_blank');
+          element.setAttribute('rel', 'noopener noreferrer');
+        }
+      }
+      if (/^H[1-6]$/.test(tag)) {
+        const text = (element.textContent || '').trim();
+        const id = createHeadingId(text, usedIds);
+        element.setAttribute('id', id);
+        headings.push({ level: Number(tag.slice(1)), text, id });
+      }
+      sanitizeNode(element);
+    });
+  };
+
+  sanitizeNode(container);
+  return { html: container.innerHTML, headings };
+}
+
+function renderKnowledgeContent(content: string): RenderedKnowledgeContent {
+  if (!content) return { html: '', headings: [] };
+  return HTML_CONTENT_PATTERN.test(content) ? sanitizeHtmlContent(content) : renderMarkdown(content);
 }
 
 export default function KnowledgeDetail() {
@@ -111,25 +235,30 @@ export default function KnowledgeDetail() {
   // 是否可阅读全文（免费 / 已解锁）
   const isFull = !document || document.access === 'full' || document.access === undefined;
   // 实际展示正文：全文优先，否则用试看内容
-  const shownContent = isFull ? (document?.content || '') : (document?.previewContent || '');
+  const shownContent = isFull
+    ? (document?.htmlContent || document?.content || '')
+    : (document?.previewContent || '');
 
-  const isHtml = useMemo(() => !!shownContent && isHtmlContent(shownContent), [shownContent]);
-  const headings = useMemo(
-    () => (shownContent ? (isHtml ? extractHeadingsFromHtml(shownContent) : extractHeadings(shownContent)) : []),
-    [shownContent, isHtml]
-  );
-  const htmlContent = useMemo(() => {
-    if (!shownContent) return '';
-    if (isHtml) {
-      // 富文本编辑器产出的是 HTML（外部内容不可信），净化后再渲染，防止 XSS
-      return DOMPurify.sanitize(addHeadingIds(shownContent), {
-        ADD_ATTR: ['target', 'rel'],
-        FORBID_TAGS: ['style', 'script'],
-      });
+  const renderedContent = useMemo(() => renderKnowledgeContent(shownContent), [shownContent]);
+  const { headings, html: htmlContent } = renderedContent;
+
+  // 处理直接打开带目录 hash 的链接：正文是异步加载的，内容落地后再定位一次。
+  useEffect(() => {
+    if (loading || !window.location.hash) return undefined;
+    let hashId = window.location.hash.slice(1);
+    try {
+      hashId = decodeURIComponent(hashId);
+    } catch {
+      return undefined;
     }
-    // Markdown 由本项目渲染器产出（可信），直接渲染
-    return renderMarkdown(shownContent);
-  }, [shownContent, isHtml]);
+    const frame = window.requestAnimationFrame(() => {
+      const element = window.document.getElementById(hashId);
+      if (!element) return;
+      const top = element.getBoundingClientRect().top + window.scrollY - 80;
+      window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, htmlContent]);
 
   // 解锁全文：重新拉取（服务端按积分扣减并记录，二次返回 full）
   const unlock = async () => {
@@ -194,7 +323,7 @@ export default function KnowledgeDetail() {
               items={headings.map((h) => ({
                 key: h.id,
                 href: `#${h.id}`,
-                title: <span style={{ fontSize: h.level === 2 ? 13 : 12, paddingLeft: (h.level - 2) * 12 }}>{h.text}</span>,
+                title: <span style={{ fontSize: h.level <= 2 ? 13 : 12, paddingLeft: Math.max(0, h.level - 2) * 12 }}>{h.text}</span>,
               }))}
             />
           </aside>
@@ -287,8 +416,8 @@ export default function KnowledgeDetail() {
           <Card size="small" style={{ marginBottom: 12 }}>
             <Text strong>文档信息</Text>
             <div style={{ marginTop: 8, fontSize: 13 }}>
-              <div>格式: Markdown</div>
-              <div>字数: ~{document.content?.length || 0}</div>
+              <div>格式: {document.htmlContent ? '富文本' : 'Markdown'}</div>
+              <div>字数: ~{shownContent.length || 0}</div>
               <div>标签: {document.tags?.length || 0} 个</div>
               <div>创建: {new Date(document.createdAt).toLocaleDateString('zh-CN')}</div>
               <div>更新: {new Date(document.updatedAt || document.createdAt).toLocaleDateString('zh-CN')}</div>
@@ -333,7 +462,27 @@ export default function KnowledgeDetail() {
         }
         .kd-content {
           font-size: 15px; line-height: 1.85; color: #334155;
+          overflow-wrap: anywhere;
         }
+        .kd-content h1, .kd-content h2, .kd-content h3, .kd-content h4, .kd-content h5, .kd-content h6 {
+          scroll-margin-top: 88px;
+        }
+        .kd-content h1 { font-size: 26px; margin-top: 32px; color: #1e293b; }
+        .kd-content h5 { font-size: 14px; margin-top: 14px; color: #475569; }
+        .kd-content h6 { font-size: 13px; margin-top: 12px; color: #475569; }
+        .kd-content ul, .kd-content ol { padding-left: 24px; }
+        .kd-content blockquote {
+          border-left: 3px solid #6366f1; padding: 4px 12px; margin: 12px 0;
+          color: #64748b; background: #f8f9fb; border-radius: 0 8px 8px 0;
+        }
+        .kd-content a { color: #2563eb; }
+        .kd-content .kd-code-block {
+          background: #1e1e2e; color: #cdd6f4; border-radius: 8px; overflow: hidden; margin: 12px 0;
+        }
+        .kd-content .kd-code-language {
+          padding: 4px 12px; font-size: 11px; background: #181825; color: #6c7086;
+        }
+        .kd-content .kd-code-block pre { margin: 0; padding: 12px; overflow-x: auto; font-size: 13px; }
         .kd-content h2 { font-size: 22px; margin-top: 28px; color: #1e293b; }
         .kd-content h3 { font-size: 18px; margin-top: 20px; color: #334155; }
         .kd-content h4 { font-size: 15px; margin-top: 16px; color: #475569; }
@@ -353,3 +502,4 @@ export default function KnowledgeDetail() {
     </div>
   );
 }
+
