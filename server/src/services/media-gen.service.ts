@@ -11,7 +11,6 @@ import { AgneProvider } from './media-providers/agne.provider';
 import { KelingProvider } from './media-providers/keling.provider';
 import { JimengProvider } from './media-providers/jimeng.provider';
 import { MoneyPrinterTurboProvider } from './media-providers/moneyprinterturbo.provider';
-import { AgneProvider } from './media-providers/agne.provider';
 import { AppError } from '../lib/http-error';
 import type {
   MediaTaskType,

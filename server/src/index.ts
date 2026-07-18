@@ -353,11 +353,21 @@ async function seedDefaultRelayChannels(): Promise<void> {
   ];
 
   let seeded = 0;
+  let refreshed = 0;
   for (const c of candidates) {
     const apiKey = process.env[c.envKey];
     if (!apiKey) continue; // 未配置该厂商 Key，跳过
     const exists = await RelayChannel.findOne({ name: c.name });
-    if (exists) continue; // 幂等：同名渠道已存在则不重复创建
+    if (exists) {
+      // 幂等：同名渠道已存在则不重复创建。
+      // 仅对 DeepSeek 在库内刷新 models 为真实的 v4 系列（用户要求），不覆盖运营人员其它配置
+      if (c.provider === 'deepseek') {
+        await RelayChannel.updateOne({ _id: exists._id }, { $set: { models: c.models } });
+        refreshed++;
+        logger.info('index', `已刷新中转站渠道 models（v4 系列）：${c.name}`);
+      }
+      continue;
+    }
     await RelayChannel.create({
       name: c.name,
       provider: c.provider,
@@ -371,10 +381,10 @@ async function seedDefaultRelayChannels(): Promise<void> {
     seeded++;
     logger.info('index', `已自动播种中转站渠道：${c.name}`);
   }
-  if (seeded === 0) {
+  if (seeded === 0 && refreshed === 0) {
     logger.warn('index', '未检测到任何上游厂商 API Key，跳过中转站渠道播种');
   } else {
-    logger.info('index', `中转站播种完成，共新增 ${seeded} 个上游渠道`);
+    logger.info('index', `中转站播种完成，新增 ${seeded} 个、刷新 ${refreshed} 个上游渠道`);
   }
 }
 
