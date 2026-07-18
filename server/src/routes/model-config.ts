@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 import { enforceQuota, quotaIncrement } from '../middleware/subscription';
 import { aiModelManager, AIBAK_FREE_MODELS } from '../config/ai-models';
 import { reloadCustomProviders } from '../gateway/ai-gateway.service';
+import { agnesProvider } from '../services/media-providers/agnes.provider';
 import { fetchCatalogProviderModels } from '../services/model-fetch.service';
 import { sendError } from '../lib/http-error';
 import { encryptSecret, decryptSecret } from '../lib/crypto';
@@ -29,6 +30,8 @@ async function syncGateway(): Promise<void> {
   } catch {
     /* 非致命：下次启动或手动刷新会重新加载 */
   }
+  // 同步刷新 Agnes 媒体配置（模型配置里的 Agnes 自定义模型同时供视频/文生图使用）
+  void agnesProvider.reload().catch(() => {});
 }
 
 /** 列表：当前用户配置的模型 */

@@ -113,7 +113,7 @@ router.get('/media/task/:provider/:taskId', optionalAuth, async (req: AuthReques
   try {
     const provider = req.params.provider as MediaProviderName;
     const { taskId } = req.params;
-    if (!['mock', 'hunyuan', 'keling', 'jimeng', 'moneyprinterturbo'].includes(provider)) {
+    if (!['mock', 'hunyuan', 'keling', 'jimeng', 'moneyprinterturbo', 'agnes'].includes(provider)) {
       return res.status(400).json({ success: false, error: '不支持的厂商' });
     }
     if (process.env.NODE_ENV === 'production' && provider === 'mock') {

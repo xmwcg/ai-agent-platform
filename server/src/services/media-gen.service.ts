@@ -10,6 +10,7 @@ import { TongyiProvider } from './media-providers/tongyi.provider';
 import { KelingProvider } from './media-providers/keling.provider';
 import { JimengProvider } from './media-providers/jimeng.provider';
 import { MoneyPrinterTurboProvider } from './media-providers/moneyprinterturbo.provider';
+import { agnesProvider } from './media-providers/agnes.provider';
 import { AppError } from '../lib/http-error';
 import type {
   MediaTaskType,
@@ -45,7 +46,11 @@ const PROVIDERS: Record<MediaProviderName, MediaProvider> = {
   moneyprinterturbo: new MoneyPrinterTurboProvider(),
   'cloudbase-free': new CloudbaseImageProvider(),
   tongyi: new TongyiProvider(),
+  agnes: agnesProvider,
 };
+
+// 启动/配置变更时预加载 Agnes 配置（与 AI 网关共用 ModelConfig），失败不致命
+void agnesProvider.reload().catch(() => {});
 
 function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
@@ -94,7 +99,7 @@ export function selectMediaProvider(
     }
     if (selected.isConfigured() || hasInjectedCredentials(preferred, credentials)) return selected;
   }
-  for (const name of ['hunyuan', 'keling', 'jimeng', 'moneyprinterturbo', 'tongyi'] as MediaProviderName[]) {
+  for (const name of ['hunyuan', 'keling', 'jimeng', 'moneyprinterturbo', 'tongyi', 'agnes'] as MediaProviderName[]) {
     const p = PROVIDERS[name];
     if (p.isConfigured() && p.supportedTypes.includes(requestedType)) return p;
   }

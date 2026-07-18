@@ -1,5 +1,5 @@
 import { route } from '../../gateway/ai-gateway.service';
-import { mediaGenService } from '../../services/media-gen.service';
+import { mediaGenService, listMediaProviders } from '../../services/media-gen.service';
 import type { Skill } from '../types';
 
 /**
@@ -10,20 +10,20 @@ export const videoPipelineSkill: Skill = {
   manifest: {
     id: 'video-pipeline',
     name: '视频生产流水线',
-    description: '从主题到成片的端到端视频生产：真实调研 → 脚本 → MoneyPrinterTurbo 合成。',
+    description: '从主题到成片的端到端视频生产：真实调研 → 脚本 → Agnes 视频模型合成（回退 MoneyPrinterTurbo）。',
     division: 'media',
     color: '#f5222d',
     coreMission: '把一句话主题自动化生产为带配音字幕的高清短视频。',
     criticalRules: [
       '调研与脚本阶段必须走统一 AI 网关',
       '生产环境只使用真实 Provider，任何阶段失败必须终止流水线',
-      '合成阶段使用已配置的 MoneyPrinterTurbo，并返回可追踪任务',
+      '成片优先使用已配置的 Agnes 视频模型（agnes-video-v2.0），未配置时回退 MoneyPrinterTurbo',
     ],
     successMetrics: ['调研与脚本均来自真实模型', '成片任务可追踪', '阶段失败不返回伪成功'],
     userStory: '作为创作者，我希望从一句话主题自动生产带配音字幕的高清短视频。',
     acceptanceCriteria: [
       '调研和脚本阶段走统一 AI 网关',
-      '合成阶段使用 MoneyPrinterTurbo',
+      '成片阶段优先使用 Agnes 视频模型，回退 MoneyPrinterTurbo',
       '任一阶段失败返回非成功结果',
     ],
     quotaResource: 'media_gen',
@@ -83,10 +83,14 @@ ${research}`,
 
       let composeResult: any = null;
       if (compose) {
+        // 成片优先使用 Agnes 视频模型（agnes-video-v2.0），未配置时回退 MoneyPrinterTurbo
+        const providers = listMediaProviders();
+        const agnesReady = !!providers.find((p) => p.name === 'agnes' && p.configured);
+        const videoProvider = agnesReady ? 'agnes' : 'moneyprinterturbo';
         composeResult = await mediaGenService.generate({
           type: 'text2video',
           prompt: script,
-          provider: 'moneyprinterturbo',
+          provider: videoProvider as any,
           ...(duration ? { duration } : {}),
           ...(style ? { style } : {}),
         } as any);
@@ -104,7 +108,7 @@ ${research}`,
             compose: composeResult,
           },
           next: compose
-            ? `轮询 /api/tools/media/task/moneyprinterturbo/${composeResult.taskId} 获取成片`
+            ? `轮询 /api/tools/media/task/${composeResult.provider}/${composeResult.taskId} 获取成片`
             : '已按请求跳过合成阶段',
         },
       };
