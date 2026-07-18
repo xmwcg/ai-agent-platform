@@ -29,7 +29,7 @@ interface ModelSelectorProps {
 
 // 后端不可用时的最小兜底（仅保证 UI 可用，不依赖外部 Key）
 const FALLBACK: GatewayModelGroup[] = [
-  { provider: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-coder'] },
+  { provider: 'deepseek', label: 'DeepSeek', models: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-coder'] },
   { provider: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini'] },
 ];
 
@@ -92,7 +92,7 @@ export default function ModelSelector(props: ModelSelectorProps) {
   }, [loading, groups]);
 
   const options = groups
-    .filter((g) => (g.models || []).length > 0)
+    .filter((g) => (g.models || []).length > 0 || g.custom)
     .map((g) => ({
       label: g.label + (g.custom ? '（自定义）' : ''),
       options: g.models.map((m) => ({

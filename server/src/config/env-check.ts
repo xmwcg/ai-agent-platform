@@ -48,6 +48,27 @@ function isHttpsUrl(value: string | undefined): boolean {
   }
 }
 
+/** 允许 HTTPS 或内部 HTTP（localhost、私有IP、Docker 网络）的 Sandbox URL */
+function isValidSandboxUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'https:') return true;
+    if (url.protocol === 'http:') {
+      const host = url.hostname;
+      if (host === 'localhost' || host === '127.0.0.1' ||
+          host.startsWith('172.') || host.startsWith('10.') ||
+          host.startsWith('192.168.') || host === 'sandbox-executor' ||
+          host.endsWith('.internal')) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /** 返回生产配置问题，便于启动校验、CI 静态门禁和单元测试复用。 */
 export function collectStartupEnvErrors(env: EnvLike = process.env): string[] {
   const errors: string[] = [];
@@ -69,8 +90,8 @@ export function collectStartupEnvErrors(env: EnvLike = process.env): string[] {
   if (env.SANDBOX_MODE !== 'remote') {
     errors.push('SANDBOX_MODE 必须为 remote');
   }
-  if (!isHttpsUrl(env.SANDBOX_REMOTE_URL)) {
-    errors.push('SANDBOX_REMOTE_URL 必须是有效的 HTTPS 地址');
+  if (!isValidSandboxUrl(env.SANDBOX_REMOTE_URL)) {
+    errors.push('SANDBOX_REMOTE_URL 必须是有效的 HTTPS 地址或内部 HTTP 地址');
   }
   if (!present(env, 'SANDBOX_REMOTE_TOKEN')) {
     errors.push('SANDBOX_REMOTE_TOKEN 未配置');
