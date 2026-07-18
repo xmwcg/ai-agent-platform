@@ -33,7 +33,7 @@ import {
   BranchesOutlined, CodeOutlined, PictureOutlined, ImportOutlined,
   ExportOutlined, ApiOutlined, NodeIndexOutlined, HistoryOutlined,
 } from '@ant-design/icons';
-import apiClient from '../services/api';
+import apiClient, { skillsAPI } from '../services/api';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -133,6 +133,7 @@ export default function WorkflowEditor() {
   const [executing, setExecuting] = useState(false);
   const [execResult, setExecResult] = useState<ExecutionResult | null>(null);
   const [nodeTypesList, setNodeTypesList] = useState<NodeTypeInfo[]>([]);
+  const [skillOptions, setSkillOptions] = useState<{ label: string; value: string }[]>([]);
   const [testInput, setTestInput] = useState('');
 
   // ── 加载节点类型 ─────────────────────────────────
@@ -151,6 +152,18 @@ export default function WorkflowEditor() {
           { type: 'code', label: '代码执行', category: '处理', icon: 'CodeOutlined', color: '#2f54eb', defaultConfig: {} },
         ]);
       });
+  }, []);
+
+  // ── 加载技能列表（供技能节点选择）──
+  useEffect(() => {
+    skillsAPI.list()
+      .then((res: any) => {
+        const list = res?.data?.skills || res?.skills || [];
+        setSkillOptions(
+          list.map((s: any) => ({ label: `${s.name}（${s.id}）`, value: s.id }))
+        );
+      })
+      .catch(() => { /* 失败时技能下拉为空，节点仍可手动填 skillId */ });
   }, []);
 
   // ── 加载已有工作流 ───────────────────────────────
@@ -605,6 +618,24 @@ export default function WorkflowEditor() {
                     />
                   </Form.Item>
                 )}
+
+                {selectedNode.data?.nodeType === 'skill' && (
+                  <Form.Item
+                    label="选择技能"
+                    extra="技能节点将真实调用所选技能（内置技能或你已安装的技能），未选择时执行会明确报错。"
+                  >
+                    <Select
+                      showSearch
+                      placeholder={skillOptions.length ? '选择要调用的技能' : '技能加载中或暂无可用技能'}
+                      value={selectedNode.data?.config?.skillId || selectedNode.data?.config?.skillName || undefined}
+                      onChange={(v) => updateNodeConfig('skillId', v)}
+                      options={skillOptions}
+                      style={{ width: '100%' }}
+                      notFoundContent="无可用技能"
+                    />
+                  </Form.Item>
+                )}
+
 
                 {/* 输出信息 */}
                 {selectedNode.data?.lastOutput !== undefined && (

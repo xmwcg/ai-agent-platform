@@ -323,7 +323,7 @@ describe('workflow-engine.service · 生产真实性门禁', () => {
     await expectLastRunFailed();
   });
 
-  it('尚未接入真实执行器的 skill 节点明确失败', async () => {
+  it('未配置技能的 skill 节点明确失败（不伪装成功）', async () => {
     const res = await engine.execute(
       wf('wf-skill-unavailable', [node('skill', 'skill')]),
       { userInput: 'hello' },
@@ -332,7 +332,7 @@ describe('workflow-engine.service · 生产真实性门禁', () => {
 
     expect(res.nodeExecutions[0]).toEqual(expect.objectContaining({
       status: 'error',
-      error: '技能节点尚未接入真实技能执行器',
+      error: expect.stringContaining('技能节点未配置技能'),
     }));
     expect(res.nodeExecutions[0].output).toBeUndefined();
     await expectLastRunFailed();

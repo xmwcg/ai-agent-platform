@@ -56,6 +56,10 @@ export default function ProfilePage() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [bindings, setBindings] = useState<any>(null);
   const [bindingsLoading, setBindingsLoading] = useState(false);
+  const [pwdCurrent, setPwdCurrent] = useState('');
+  const [pwdNew, setPwdNew] = useState('');
+  const [pwdConfirm, setPwdConfirm] = useState('');
+  const [savingPwd, setSavingPwd] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -133,6 +137,27 @@ export default function ProfilePage() {
       message.success('保存成功'); setByokModal(false); loadByokKeys();
     } catch (err) { message.error(extractApiError(err, '保存失败')); }
     setByokSaving(false);
+  };
+
+  // 真实修改密码：调用后端 PUT /auth/change-password，校验长度与一致性
+  const handleChangePassword = async () => {
+    if (!pwdCurrent || !pwdNew || !pwdConfirm) { message.warning('请填写完整密码信息'); return; }
+    if (pwdNew.length < 10) { message.warning('新密码至少 10 位'); return; }
+    if (pwdNew !== pwdConfirm) { message.warning('两次输入的新密码不一致'); return; }
+    setSavingPwd(true);
+    try {
+      await authAPI.changePassword({ currentPassword: pwdCurrent, newPassword: pwdNew });
+      message.success('密码已修改，其他设备已自动登出');
+      setPwdCurrent(''); setPwdNew(''); setPwdConfirm('');
+    } catch (err) {
+      const msg = extractApiError(err, '修改失败');
+      if (msg.includes('当前密码') || msg.includes('wrong') || msg.includes('incorrect')) {
+        message.error('当前密码错误，请重新输入');
+      } else {
+        message.error(msg);
+      }
+    }
+    setSavingPwd(false);
   };
   const handleDeleteByok = (provider: string) => {
     Modal.confirm({ title: '确认删除', content: `删除 ${provider} 后生成将回落至平台垫付。`, okText: '确认删除', okType: 'danger', cancelText: '取消',
@@ -259,7 +284,14 @@ export default function ProfilePage() {
         <Form.Item label="手机号"><Input prefix={<MobileOutlined />} value={authUser?.phone || ''} placeholder="绑定手机号（备案后开放）" disabled /></Form.Item>
         <Form.Item label="微信号"><Input prefix={<WechatOutlined />} value={authUser?.wechatOpenid ? '已绑定' : ''} placeholder="绑定微信（备案后开放）" disabled /></Form.Item>
         <Form.Item label="邮箱"><Input prefix={<MailOutlined />} value={authUser?.email || ''} disabled /><Text type="secondary" style={{ fontSize: 12 }}>作为登录账号暂不可修改</Text></Form.Item>
-        <Form.Item label="新密码"><Input.Password placeholder="修改密码功能即将上线" disabled /></Form.Item>
+        <Form.Item label="修改密码" extra="新密码至少 10 位；修改后其他已登录设备将自动登出。">
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Input.Password prefix={<LockOutlined />} placeholder="当前密码" value={pwdCurrent} onChange={(e) => setPwdCurrent(e.target.value)} autoComplete="current-password" />
+            <Input.Password prefix={<LockOutlined />} placeholder="新密码（至少 10 位）" value={pwdNew} onChange={(e) => setPwdNew(e.target.value)} autoComplete="new-password" />
+            <Input.Password prefix={<LockOutlined />} placeholder="确认新密码" value={pwdConfirm} onChange={(e) => setPwdConfirm(e.target.value)} autoComplete="new-password" />
+            <Button type="primary" loading={savingPwd} onClick={handleChangePassword}>更新密码</Button>
+          </Space>
+        </Form.Item>
         <Button type="primary" loading={savingProfile} onClick={handleSaveProfile}>保存资料</Button>
       </Form>
     </Card>

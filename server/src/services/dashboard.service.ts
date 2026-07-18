@@ -20,6 +20,7 @@ import { CreditLot } from "../models/CreditLot";
 import { ReconciliationRecord } from "../models/ReconciliationRecord";
 import { AuthSession } from "../models/AuthSession";
 import { logger } from "../lib/logger";
+import { getToday5xxCount, getLatencyPercentiles, getSuccessRatePercent } from "../middleware/apm";
 
 export interface DashboardMetrics {
   timestamp: string;
@@ -127,10 +128,10 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       sandbox: sandboxStatus as { status: "available" | "unavailable" },
     },
     api: {
-      today5xx: 0, // TODO: 从 APM 中间件读取
-      p95Ms: 0,
-      p99Ms: 0,
-      uptimePercent: 99.99,
+      today5xx: getToday5xxCount(),
+      p95Ms: getLatencyPercentiles().p95,
+      p99Ms: getLatencyPercentiles().p99,
+      uptimePercent: getSuccessRatePercent(),
     },
     orders: {
       totalToday: ordersToday,

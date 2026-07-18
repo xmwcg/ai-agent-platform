@@ -7,8 +7,10 @@ import { canAccessResource } from '../middleware/resourceAccess';
 import { resolveKbAccess, applyKbAccess } from '../middleware/kb-access';
 import { KNOWLEDGE_CATEGORY_TREE } from '../config/knowledge-categories';
 import { sendError } from '../lib/http-error';
+import { logger } from '../lib/logger';
 import { TeamRole } from '../models/Team';
 import { fixDocEncoding } from '../utils/encoding';
+import { ragService } from '../services/rag';
 
 const router = Router();
 
@@ -61,6 +63,12 @@ router.post('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     });
 
     await doc.save();
+
+    // 新增文档后异步增量嵌入（不阻塞响应；失败仅告警，不影响创建结果）
+    const docId = String(doc._id);
+    ragService.embedNewDocuments().catch((e) =>
+      logger.warn('rag', `新建文档 ${docId} 后自动增量嵌入失败：${e instanceof Error ? e.message : e}`)
+    );
 
     res.status(201).json({
       success: true,

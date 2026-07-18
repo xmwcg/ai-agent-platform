@@ -203,10 +203,28 @@ class RAGService {
     }
   }
 
-  // 增量嵌入新文档
-  async embedNewDocuments(): Promise<void> {
-    // TODO: 监听文档创建事件，自动生成嵌入
-    logger.debug('rag', 'Incremental embedding not implemented yet');
+  // 增量嵌入新文档：嵌入所有「尚未生成向量」的文档（自然即新增/历史漏嵌文档）。
+  // 当传入 sinceMs 时，仅处理该时间点之后创建的文档，实现真正的增量；
+  // 否则兜底处理全部缺失向量的文档，保证知识库问答始终可用。
+  async embedNewDocuments(sinceMs?: number): Promise<{ processed: number; success: number; failed: number }> {
+    try {
+      const filter: Record<string, any> = { embedding: { $exists: false } };
+      if (sinceMs && sinceMs > 0) {
+        filter.createdAt = { $gte: new Date(sinceMs) };
+      }
+      const documents = await KnowledgeDocument.find(filter);
+      if (documents.length === 0) {
+        logger.info('rag', '增量嵌入：当前没有需要生成向量的新文档');
+        return { processed: 0, success: 0, failed: 0 };
+      }
+      logger.info('rag', `增量嵌入：发现 ${documents.length} 篇待嵌入文档`);
+      const result = await embeddingService.embedDocuments(documents.map((d) => d._id.toString()));
+      logger.info('rag', `增量嵌入完成：成功 ${result.success}，失败 ${result.failed}`);
+      return { processed: documents.length, success: result.success, failed: result.failed };
+    } catch (error) {
+      logger.error('rag', '增量嵌入失败', error instanceof Error ? error.message : error);
+      throw error;
+    }
   }
 }
 

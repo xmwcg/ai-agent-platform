@@ -247,6 +247,9 @@ export const authAPI = {
   unbindWechat: () => apiClient.post('/auth/unbind/wechat', {}),
   // 解绑抖音
   unbindDouyin: () => apiClient.post('/auth/unbind/douyin', {}),
+  // 登录后修改密码（后端强制撤销其他设备会话）
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    apiClient.put('/auth/change-password', data),
 };
 
 // 大模型配置中心 API

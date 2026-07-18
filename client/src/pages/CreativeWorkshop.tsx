@@ -55,18 +55,19 @@ const TOOLS: ToolCard[] = [
   {
     id: 'video-workflow',
     title: '短视频工作流',
-    description: '脚本 → AI 配音 → 字幕 → 合成，一站式短视频生产（规划中）。',
+    description: '输入主题，AI 自动完成调研 → 口播脚本 → 分镜 → 字幕，并导出可交付的短视频方案。',
     icon: <VideoCameraOutlined />,
     color: '#eb2f96',
     bgGradient: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-    status: 'coming',
+    status: 'ready',
+    route: '/video-workflow',
   },
 ];
 
 export default function CreativeWorkshop() {
   const navigate = useNavigate();
   const [enabled, setEnabled] = useState<Record<string, boolean>>({
-    text2img: true, 'code-gen': true, docgen: true, 'video-workflow': false,
+    text2img: true, 'code-gen': true, docgen: true, 'video-workflow': true,
   });
 
   const enabledCount = Object.values(enabled).filter(Boolean).length;

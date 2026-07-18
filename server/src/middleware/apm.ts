@@ -72,6 +72,11 @@ const metrics = {
   totalRequests: 0,
   activeRequests: 0,
   totalErrors: 0,
+  total5xx: 0,
+  /** 5xx 响应时间戳（毫秒），用于按自然日统计 today5xx */
+  errors5xxTimestamps: [] as number[],
+  /** 最近请求耗时样本（用于精确 p95/p99 计算，封顶防止内存膨胀） */
+  recentDurations: [] as number[],
   routes: new Map<string, MetricsBucket>(),
   slowLogs: [] as SlowLog[],
 };
@@ -146,6 +151,17 @@ export function apmMiddleware(req: Request, res: Response, next: NextFunction): 
       bucket.errors++;
       metrics.totalErrors++;
     }
+
+    // 5xx 服务端错误：单独记录时间戳，供仪表盘按自然日统计
+    if (res.statusCode >= 500) {
+      metrics.total5xx++;
+      metrics.errors5xxTimestamps.push(Date.now());
+      if (metrics.errors5xxTimestamps.length > 2000) metrics.errors5xxTimestamps.shift();
+    }
+
+    // 耗时样本（封顶保留最近 5000 条，用于精确分位数）
+    metrics.recentDurations.push(durationMs);
+    if (metrics.recentDurations.length > 5000) metrics.recentDurations.shift();
 
     // 慢请求记录
     if (durationMs > SLOW_THRESHOLD_MS) {
@@ -254,9 +270,39 @@ export function vitalsHandler(_req: Request, res: Response): void {
 export function resetApmMetrics(): void {
   metrics.totalRequests = 0;
   metrics.totalErrors = 0;
+  metrics.total5xx = 0;
+  metrics.errors5xxTimestamps = [];
+  metrics.recentDurations = [];
   metrics.routes.clear();
   metrics.slowLogs = [];
   lastAlertAt.clear();
+}
+
+/** 当日（自然日 00:00 起）5xx 错误数，供运营仪表盘展示真实数据 */
+export function getToday5xxCount(): number {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const t = start.getTime();
+  let n = 0;
+  for (const ts of metrics.errors5xxTimestamps) {
+    if (ts >= t) n++;
+    else break; // 时间戳递增，遇到更早的可提前结束
+  }
+  return n;
+}
+
+/** 基于最近样本计算 P95 / P99 延迟（毫秒） */
+export function getLatencyPercentiles(): { p95: number; p99: number } {
+  return {
+    p95: computePercentile(metrics.recentDurations, 95),
+    p99: computePercentile(metrics.recentDurations, 99),
+  };
+}
+
+/** 请求成功率（%）：(总请求 - 错误) / 总请求，真实反映可用性 */
+export function getSuccessRatePercent(): number {
+  if (metrics.totalRequests === 0) return 100;
+  return Math.round(((metrics.totalRequests - metrics.totalErrors) / metrics.totalRequests) * 10000) / 100;
 }
 
 // ─── APM 持久化绑定（在 index.ts 中调用 startApmPersistence()）

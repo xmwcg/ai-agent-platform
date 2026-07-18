@@ -34,6 +34,7 @@ import WorkflowEditor from "@/pages/WorkflowEditor";
 import KnowledgeGraphPage from "@/pages/KnowledgeGraphPage";
 import SandboxPage from "@/pages/SandboxPage";
 import XiaohongshuGenerator from "@/pages/XiaohongshuGenerator";
+import VideoWorkflow from "@/pages/VideoWorkflow";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import RefundPolicyPage from "@/pages/RefundPolicyPage";
@@ -76,6 +77,7 @@ const router = createBrowserRouter([
       { path: "plugins", element: <PluginManager /> },
       { path: "pricing", element: <PricingPage /> },
       { path: "creative", element: <CreativeWorkshop /> },
+      { path: "video-workflow", element: <VideoWorkflow /> },
       { path: "text2img", element: <Text2ImgPage /> },
       { path: "code", element: <CodeExplanation /> },
       { path: "profile", element: <ProfilePage /> },

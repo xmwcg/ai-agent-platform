@@ -75,6 +75,68 @@ function safeExecuteCode(
   }
 }
 
+// ── 工作流内调用用户技能（prompt / mcp / workflow 三类）──
+// 使用动态 import 避免与 skills 路由形成循环依赖（skills 路由反向依赖本引擎）。
+
+/** 把 {{var}} 占位符用调用入参替换；无模板时退化为取常见字段 */
+function renderSkillTemplate(tpl: string | undefined, input: Record<string, any>): string {
+  if (!tpl) {
+    const v = input?.text ?? input?.input ?? input?.query ?? input?.message;
+    if (v !== undefined) return String(v);
+    return typeof input === 'object' ? JSON.stringify(input) : String(input ?? '');
+  }
+  return tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => {
+    const v = input?.[key];
+    return v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v);
+  });
+}
+
+/** 渲染 MCP 工具入参模板（仅对字符串值做占位符替换） */
+function renderSkillArgs(tpl: Record<string, any> | undefined, input: Record<string, any>): Record<string, any> {
+  if (!tpl) return { ...input };
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(tpl)) {
+    out[k] = typeof v === 'string' ? renderSkillTemplate(v, input) : v;
+  }
+  return out;
+}
+
+async function runUserSkillInWorkflow(
+  us: any,
+  userId: string | undefined,
+  input: Record<string, any>
+): Promise<{ ok: boolean; data?: any; error?: string; status?: number; code?: string }> {
+  if (us.kind === 'prompt') {
+    const userMsg = renderSkillTemplate(us.prompt?.userTemplate, input);
+    const { route } = await import('../gateway/ai-gateway.service');
+    const r = await route({
+      messages: [
+        { role: 'system', content: us.prompt?.system || '' },
+        { role: 'user', content: userMsg },
+      ],
+      maxTokens: us.prompt?.maxTokens ?? 800,
+      temperature: us.prompt?.temperature ?? 0.5,
+    });
+    return { ok: true, data: { reply: r.reply } };
+  }
+  if (us.kind === 'mcp') {
+    const { mcpService } = await import('../services/mcp.service');
+    const srv = mcpService.getServer(us.mcp.serverId);
+    if (!srv) return { ok: false, error: `引用的 MCP 服务器不存在：${us.mcp.serverId}` };
+    if (srv.status !== 'connected') {
+      try { await mcpService.connect(us.mcp.serverId); } catch (e: any) { return { ok: false, error: `MCP 连接失败：${e.message}` }; }
+    }
+    const args = renderSkillArgs(us.mcp.argsTemplate, input);
+    const res = await mcpService.callTool(us.mcp.serverId, us.mcp.tool, args);
+    return { ok: true, data: res };
+  }
+  if (us.kind === 'workflow') {
+    const result = await workflowEngine.execute(us.workflow.workflowId, input, userId);
+    return { ok: true, data: result };
+  }
+  return { ok: false, error: '未知技能类型', status: 400, code: 'SKILL_UNKNOWN_KIND' };
+}
+
 // ── 执行上下文 ───────────────────────────────────────
 
 interface ExecutionContext {
@@ -366,9 +428,47 @@ class WorkflowEngine {
         }
 
         case 'skill': {
-          // 统一工作流技能节点尚未接入技能注册表，不得将空壳节点标记为成功。
-          execution.status = 'error';
-          execution.error = '技能节点尚未接入真实技能执行器';
+          const config = node.data.config || {};
+          const skillId: string | undefined = config.skillId || config.skillName;
+          if (!skillId) {
+            // 未配置技能：明确错误，绝不假装成功
+            execution.status = 'error';
+            execution.error = '技能节点未配置技能：请在节点配置中选择要调用的技能（skillId）';
+            break;
+          }
+          try {
+            const nodeInputObj: Record<string, any> =
+              typeof input === 'object' && input !== null ? (input as Record<string, any>) : { text: String(input ?? '') };
+
+            const { getSkill } = await import('../skills/registry');
+            const builtin = getSkill(skillId);
+            let result: { ok: boolean; data?: any; error?: string; status?: number; code?: string };
+
+            if (builtin) {
+              result = await builtin.invoke({ userId: ctx.userId, input: nodeInputObj });
+            } else {
+              const { UserSkill } = await import('../models/UserSkill');
+              const us = await UserSkill.findOne({ skillId });
+              if (!us) {
+                execution.status = 'error';
+                execution.error = `未找到技能：${skillId}（内置技能或用户已安装技能中均不存在）`;
+                break;
+              }
+              result = await runUserSkillInWorkflow(us, ctx.userId, nodeInputObj);
+            }
+
+            if (!result.ok) {
+              execution.status = 'error';
+              execution.error = result.error || '技能执行失败';
+              execution.output = { code: result.code, status: result.status };
+            } else {
+              execution.output = result.data;
+              execution.status = 'success';
+            }
+          } catch (e: unknown) {
+            execution.status = 'error';
+            execution.error = e instanceof Error ? e.message : '技能节点执行异常';
+          }
           break;
         }
 
