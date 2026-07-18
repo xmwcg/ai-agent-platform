@@ -4,7 +4,7 @@ import axios from 'axios';
 import { User } from '../models/User';
 import { PlatformAuditLog } from '../models/PlatformAuditLog';
 import { logPlatformAudit } from '../services/platform-audit.service';
-import { generateToken, requireAuth, AuthRequest } from '../middleware/auth';
+import { generateAccessToken, generateRefreshToken, hashRefreshToken, setRefreshTokenCookie, clearRefreshTokenCookie, generateDeviceFingerprint, requireAuth, AuthRequest } from '../middleware/auth';
 import { requireAdmin } from '../middleware/requireAdmin';
 import { authLimiter } from '../middleware/rate-limit';
 import { sendError } from '../lib/http-error';
@@ -14,6 +14,8 @@ import { logger } from '../lib/logger';
 import { processReferralOnRegister } from '../services/referral.service';
 import { phoneHash, normalizePhone, maskPhone, encryptField } from '../lib/field-crypto';
 import { OAUTH_CONFIG } from '../config/oauth';
+import { AuthSession } from '../models/AuthSession';
+import { writeAuditLogAsync, writeAuditLog } from '../services/security-audit.service';
 
 const router = Router();
 
@@ -25,7 +27,7 @@ function isCnPhone(s: string): boolean {
 // 注册输入校验（email 格式 + 密码长度 + 用户名长度）
 const registerSchema: ValidationSchema = {
   email: { required: true, type: 'string', isEmail: true, maxLength: 254 },
-  password: { required: true, type: 'string', minLength: 6, maxLength: 64 },
+  password: { required: true, type: 'string', minLength: 10, maxLength: 64 },
   name: { required: true, type: 'string', minLength: 1, maxLength: 50 },
 };
 
@@ -61,7 +63,28 @@ router.post('/register', authLimiter, validate(registerSchema), async (req: Auth
       ...(referredBy ? { referredBy: referredBy } : {}),
     });
 
-    const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
+    const jti = require('crypto').randomUUID();
+    const refreshToken = generateRefreshToken();
+    const tokenHash = hashRefreshToken(refreshToken);
+    const deviceFingerprint = generateDeviceFingerprint(req);
+
+    // 创建 AuthSession
+    await AuthSession.create({
+      userId: user._id,
+      refreshToken,
+      refreshTokenHash: tokenHash,
+      accessTokenJti: jti,
+      deviceFingerprint,
+      userAgent: req.headers['user-agent'] || '',
+      ipAddress: req.ip || req.socket.remoteAddress || '',
+      status: 'active',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    // 设置刷新令牌 Cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    const token = generateAccessToken({ id: user._id.toString(), email: user.email, role: user.role, jti });
 
     // 异步处理推荐关系（不阻塞注册响应）
     if (referralCode) {
@@ -99,7 +122,28 @@ router.post('/login', authLimiter, validate(loginSchema), async (req: AuthReques
       return res.status(401).json({ error: '邮箱或密码错误' });
     }
 
-    const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
+    const jti = require('crypto').randomUUID();
+    const refreshToken = generateRefreshToken();
+    const tokenHash = hashRefreshToken(refreshToken);
+    const deviceFingerprint = generateDeviceFingerprint(req);
+
+    // 创建 AuthSession
+    await AuthSession.create({
+      userId: user._id,
+      refreshToken,
+      refreshTokenHash: tokenHash,
+      accessTokenJti: jti,
+      deviceFingerprint,
+      userAgent: req.headers['user-agent'] || '',
+      ipAddress: req.ip || req.socket.remoteAddress || '',
+      status: 'active',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    // 设置刷新令牌 Cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    const token = generateAccessToken({ id: user._id.toString(), email: user.email, role: user.role, jti });
 
     res.json({
       success: true,
@@ -214,7 +258,28 @@ router.post('/sms/login', authLimiter, validate(smsLoginSchema), async (req: Aut
         email: `phone_${Date.now()}@phone.local`,
       });
     }
-    const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
+    const jti = require('crypto').randomUUID();
+    const refreshToken = generateRefreshToken();
+    const tokenHash = hashRefreshToken(refreshToken);
+    const deviceFingerprint = generateDeviceFingerprint(req);
+
+    // 创建 AuthSession
+    await AuthSession.create({
+      userId: user._id,
+      refreshToken,
+      refreshTokenHash: tokenHash,
+      accessTokenJti: jti,
+      deviceFingerprint,
+      userAgent: req.headers['user-agent'] || '',
+      ipAddress: req.ip || req.socket.remoteAddress || '',
+      status: 'active',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    // 设置刷新令牌 Cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    const token = generateAccessToken({ id: user._id.toString(), email: user.email, role: user.role, jti });
     res.json({ success: true, token, user: user.toJSON() });
   } catch (err) {
     sendError(res, err);
@@ -308,7 +373,28 @@ router.get('/wechat/callback', async (req: Request, res: Response) => {
         email: `${openid}@wechat.local`,
       });
     }
-    const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
+    const jti = require('crypto').randomUUID();
+    const refreshToken = generateRefreshToken();
+    const tokenHash = hashRefreshToken(refreshToken);
+    const deviceFingerprint = generateDeviceFingerprint(req);
+
+    // 创建 AuthSession
+    await AuthSession.create({
+      userId: user._id,
+      refreshToken,
+      refreshTokenHash: tokenHash,
+      accessTokenJti: jti,
+      deviceFingerprint,
+      userAgent: req.headers['user-agent'] || '',
+      ipAddress: req.ip || req.socket.remoteAddress || '',
+      status: 'active',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    // 设置刷新令牌 Cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    const token = generateAccessToken({ id: user._id.toString(), email: user.email, role: user.role, jti });
 
     if (format === 'json') {
       return res.json({ success: true, token, user: user.toJSON() });
@@ -554,7 +640,28 @@ router.get('/douyin/callback', async (req: Request, res: Response) => {
         email: `douyin_${openid.slice(-12)}@douyin.local`,
       });
     }
-    const token = generateToken({ id: user._id.toString(), email: user.email, role: user.role });
+    const jti = require('crypto').randomUUID();
+    const refreshToken = generateRefreshToken();
+    const tokenHash = hashRefreshToken(refreshToken);
+    const deviceFingerprint = generateDeviceFingerprint(req);
+
+    // 创建 AuthSession
+    await AuthSession.create({
+      userId: user._id,
+      refreshToken,
+      refreshTokenHash: tokenHash,
+      accessTokenJti: jti,
+      deviceFingerprint,
+      userAgent: req.headers['user-agent'] || '',
+      ipAddress: req.ip || req.socket.remoteAddress || '',
+      status: 'active',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    // 设置刷新令牌 Cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    const token = generateAccessToken({ id: user._id.toString(), email: user.email, role: user.role, jti });
 
     if (format === 'json') {
       return res.json({ success: true, token, user: user.toJSON() });

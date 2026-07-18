@@ -22,6 +22,8 @@ import ragPipelineRoutes from './routes/rag-pipeline';
 import courseRoutes from './routes/courses';
 import codeExplanationRoutes from './routes/code-explanation';
 import authRoutes from './routes/auth';
+import authSessionRoutes from './routes/auth-session';
+import adminSecurityRoutes from './routes/admin-security';
 import mcpRoutes from './routes/mcp';
 import compareRoutes from './routes/compare';
 import text2imgRoutes from './routes/text2img';
@@ -134,6 +136,8 @@ app.use('/api/', apiLimiter);
 
 // 注册路由
 app.use('/api/auth', authRoutes);
+app.use('/api/auth', authSessionRoutes);
+app.use('/api', adminSecurityRoutes);
 app.use('/api/compare', compareRoutes);
 app.use('/api/ai', aiLimiter(), aiRoutes);           // AI 端点：按用户级别限流
 app.use('/api/aibak', aiLimiter(), aibakChatRoutes);  // CloudBase 免费 AI：同样限流
