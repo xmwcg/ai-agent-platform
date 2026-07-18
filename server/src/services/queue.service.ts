@@ -12,7 +12,11 @@
  *
  * 生产级考虑：单 Worker 适合中小流量（< 1000 QPS 异步任务），大流量可水平扩展更多 Worker 实例。
  */
-import { redisClient } from '../config/database';
+import { getQueueRedis } from '../config/database';
+
+// 队列使用独立 Redis 连接，避免 /api/health 自愈逻辑对主连接执行
+// disconnect() 时正在阻塞 BRPOP 的 Worker 被踢出（"Connection is closed"）。
+const redisClient = getQueueRedis();
 import { logger } from '../lib/logger';
 import { EventEmitter } from 'events';
 

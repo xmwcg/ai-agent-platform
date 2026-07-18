@@ -277,6 +277,29 @@ const redisClient: any = new Proxy({}, {
 
 export { redisClient, realRedis };
 
+// 队列专用独立 Redis 连接：避免 /api/health 自愈逻辑对 realRedis 执行
+// disconnect()/reconnect() 时，正在阻塞 BRPOP 的 Worker 被踢出而每秒报错
+// （"Connection is closed"）。队列使用独立实例，自愈的断开/重连互不干扰。
+let queueRedisInstance: any = null;
+export function getQueueRedis(): any {
+  // 非生产且使用内存 Redis：直接复用（无网络抖动问题）
+  if (!isProduction()) return useMemoryRedis ? memoryRedis : realRedis;
+  if (!queueRedisInstance) {
+    queueRedisInstance = new Redis(redisUrl(), {
+      lazyConnect: true,
+      connectTimeout: 5000,
+      maxRetriesPerRequest: 3,
+      retryStrategy: (times: number) => Math.min(times * 200, 3000),
+      keepAlive: 30,
+      enableReadyCheck: true,
+      noDelay: true,
+    });
+    queueRedisInstance.on('error', (err: any) => logger.warn('redis', `queue redis 错误: ${err?.message || err}`));
+    (queueRedisInstance as any).connect?.().catch(() => {});
+  }
+  return queueRedisInstance;
+}
+
 // 健康检查
 /**
  * 给可能挂起的 Promise 加超时：避免底层连接僵死（如 Redis 半开 socket、
