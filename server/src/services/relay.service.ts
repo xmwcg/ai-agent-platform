@@ -85,7 +85,7 @@ export async function proxyChatCompletions(token: string, body: any): Promise<an
   await RelayUsage.create({
     tokenId: String(rt._id),
     licenseId: rt.licenseId,
-    model: model || '',
+    modelName: model || '',
     used,
   });
   return resp.data;

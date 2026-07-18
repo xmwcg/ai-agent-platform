@@ -34,7 +34,7 @@ export const RelayToken = mongoose.model<IRelayToken>('RelayToken', RelayTokenSc
 export interface IRelayUsage extends Document {
   tokenId: string;
   licenseId: string;
-  model: string;
+  modelName: string;
   used: number;
   createdAt: Date;
 }
@@ -43,7 +43,7 @@ const RelayUsageSchema = new Schema<IRelayUsage>(
   {
     tokenId: { type: String, required: true, index: true },
     licenseId: { type: String, required: true, index: true },
-    model: { type: String },
+    modelName: { type: String },
     used: { type: Number, default: 0 },
   },
   { timestamps: true }
