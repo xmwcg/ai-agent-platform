@@ -44,7 +44,9 @@ install -m 0644 "$PROJECT_ROOT/deploy/systemd/cnb-watcher.timer" "$SYSTEMD_DIR/c
 if [ ! -f "$DEFAULT_FILE" ]; then
   cat >"$DEFAULT_FILE" <<'EOF'
 PUBLIC_BASE_URL=https://aibak.site
-RELEASE_BRANCH=deploy/production
+# 监听 main：任何 push 到 main 都会在下一轮 watcher 轮询（每 60s）自动构建部署，
+# 保持服务器项目始终为最新。如需「审批后发布」模型，可改回 deploy/production 并手动推送该分支。
+RELEASE_BRANCH=main
 REGISTRY=docker.cnb.cool
 IMAGE_REPOSITORY=docker.cnb.cool/aibak.site/ai-agent-platform
 PRODUCTION_ENV_FILE=/etc/aibak/server.env
