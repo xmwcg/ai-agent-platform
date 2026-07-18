@@ -10,6 +10,18 @@ import { optionalAuth } from '../middleware/auth';
 
 const router = Router();
 
+router.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: "chat", label: "AI对话", path: "/api/gateway/chat", method: "POST", desc: "调用已配置的AI模型进行对话" },
+        { type: "models", label: "模型列表", path: "/api/gateway/models", desc: "获取所有可用模型" },
+        { type: "providers", label: "厂商列表", path: "/api/gateway/providers", desc: "获取已配置的AI厂商" },
+      ],
+    },
+  });
+});
 router.get('/providers', (req, res) => {
   res.json({ ok: true, providers: listGatewayProviders() });
 });

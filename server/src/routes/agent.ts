@@ -15,6 +15,19 @@ const router = Router();
  * POST /api/agent/goal
  * 提交高层目标，Agent 自主完成
  */
+
+// ─── 根路由：返回Agent能力入口 ───
+router.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: "goal", label: "设置目标", path: "/api/agent/goal", method: "POST", desc: "为Agent设置执行目标" },
+        { type: "memory", label: "Agent记忆", path: "/api/agent/memory", desc: "查看Agent的对话记忆" },
+      ],
+    },
+  });
+});
 router.post('/goal', requireAuth, enforceQuota('ai_chat'), async (req: AuthRequest, res: Response) => {
   try {
     const { goal, context, constraints, maxSteps, maxRetries } = req.body;

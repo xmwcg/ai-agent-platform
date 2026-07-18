@@ -15,6 +15,19 @@ const batchEmbedSchema: ValidationSchema = {
 };
 
 // RAG 对话接口
+
+router.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: "chat", label: "知识对话", path: "/api/rag/chat", method: "POST", desc: "基于知识库进行RAG对话" },
+        { type: "search", label: "知识搜索", path: "/api/rag/search", method: "POST", desc: "向量搜索知识内容" },
+        { type: "status", label: "索引状态", path: "/api/rag/status", desc: "查看RAG系统状态" },
+      ],
+    },
+  });
+});
 router.post('/chat', optionalAuth, enforceQuota('rag_query'), async (req: AuthRequest, res: Response) => {
   try {
     const { question, sessionId, userId = 'default-user' } = req.body;

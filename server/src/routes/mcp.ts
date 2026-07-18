@@ -7,6 +7,17 @@ import { sendError } from '../lib/http-error';
 const router = Router();
 
 // 获取所有 MCP 服务器
+router.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: "servers", label: "MCP服务器列表", path: "/api/mcp/servers", desc: "查看已注册的MCP服务器" },
+        { type: "tools", label: "可用工具", path: "/api/mcp/tools", desc: "查看所有MCP提供的工具" },
+      ],
+    },
+  });
+});
 router.get('/servers', (req: Request, res: Response) => {
   const servers = mcpService.getServers();
   res.json({ success: true, data: servers });

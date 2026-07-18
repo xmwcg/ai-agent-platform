@@ -9,6 +9,21 @@ import { sendError } from '../lib/http-error';
 
 const router = Router();
 
+// ─── 根路由：返回工具箱能力和入口 ───
+router.get('/', (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: 'translate', label: '翻译', path: '/api/tools/translate', desc: '支持多语言翻译与语言检测' },
+        { type: 'plan', label: '方案生成', path: '/api/tools/plan', desc: '根据主题和需求生成专业方案' },
+        { type: 'convert', label: '文件转换', path: '/api/tools/convert', desc: '多格式文件转换（文本/代码/表格）' },
+        { type: 'media', label: '媒体生成', path: '/api/tools/media', desc: '文生图、图生图、文生视频、图生视频' },
+      ],
+    },
+  });
+});
+
 // ============ 翻译 ============
 router.get('/translate/languages', (req: Request, res: Response) => {
   res.json({ success: true, data: translationService.getSupportedLanguages() });

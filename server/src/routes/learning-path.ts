@@ -128,6 +128,20 @@ const TEMPLATES: Record<Level, LearningPath> = {
 };
 
 // 预置模板（无需 AI）
+
+// ─── 根路由：返回学习路径能力入口 ───
+router.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: "list", label: "学习路径列表", path: "/api/learning-path", desc: "查看所有学习路径" },
+        { type: "templates", label: "路径模板", path: "/api/learning-path/templates", desc: "查看预设学习路径模板" },
+        { type: "create", label: "创建路径", path: "/api/learning-path", desc: "创建自定义学习路径", method: "POST" },
+      ],
+    },
+  });
+});
 router.get('/templates', (req: Request, res: Response) => {
   const level = (req.query.level as Level) || 'beginner';
   const tpl = TEMPLATES[level] || TEMPLATES.beginner;

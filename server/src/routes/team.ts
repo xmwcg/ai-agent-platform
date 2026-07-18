@@ -33,6 +33,20 @@ const changeRoleSchema: ValidationSchema = {
 const router = Router();
 
 /** 创建团队（创建者自动为 owner） */
+// ─── 根路由：返回团队能力入口 ───
+router.get('/', (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: 'create', label: '创建团队', path: '/api/team', method: 'POST' },
+        { type: 'my_teams', label: '我的团队', path: '/api/team/mine', method: 'GET' },
+        { type: 'join', label: '加入团队', path: '/api/team/join/:inviteCode', method: 'POST' },
+      ],
+    },
+  });
+});
+
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { name, plan } = req.body;

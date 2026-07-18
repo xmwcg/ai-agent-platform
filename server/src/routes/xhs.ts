@@ -8,6 +8,18 @@ const VALID_ROLES: XhsRole[] = ['copywriter', 'architect', 'frontend', 'devops']
 const router = Router();
 
 // 列出可用的专家角色（前端选择器数据源）
+
+router.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: "generate", label: "生成小红书文案", path: "/api/xhs/generate", method: "POST", desc: "AI生成小红书文案" },
+        { type: "agents", label: "风格代理", path: "/api/xhs/agents", desc: "查看可用写作风格" },
+      ],
+    },
+  });
+});
 router.get('/agents', (_req: Request, res: Response) => {
   res.json({ success: true, data: listXhsAgents() });
 });

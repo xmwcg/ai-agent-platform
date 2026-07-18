@@ -79,6 +79,18 @@ async function resolveByok(req: Request, _res: Response, next: NextFunction): Pr
  * 提交请求 → 交由 media-gen 多厂商框架（混元 TC3 / Mock 兜底）→ 返回 taskId（异步任务）
  * 前端轮询 GET /query/:taskId 获取结果；结果图片落对象存储（OSS）后返回稳定 URL。
  */
+router.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      capabilities: [
+        { type: "generate", label: "文生图", path: "/api/text2img", desc: "根据文本描述生成图像", method: "POST" },
+        { type: "history", label: "生成历史", path: "/api/text2img/history", desc: "查看生成历史" },
+        { type: "providers", label: "可用厂商", path: "/api/text2img/providers", desc: "查看支持的图像生成厂商" },
+      ],
+    },
+  });
+});
 router.post(
   '/generate',
   text2imgLimiter, // 防刷第三层：生成调用频率闸门（与匿名限次、登录配额互补）
