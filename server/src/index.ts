@@ -101,6 +101,12 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
+// 强制所有 JSON 响应使用 UTF-8 编码，解决中文乱码问题
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
+});
+
 // 请求关联 ID（可观测性：跨日志串联一次请求），须在 apm 之前注册
 app.use(requestIdMiddleware);
 

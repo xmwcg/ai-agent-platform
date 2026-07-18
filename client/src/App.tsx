@@ -156,18 +156,14 @@ function RouteScrollRestoration() {
     };
   }, []);
 
-  // 多次重试确保滚动到顶部，覆盖三种场景：
-  //  1) 同步立即滚动（防止浏览器在 paint 前以旧 scrollY 渲染新页）；
-  //  2) rAF 重试覆盖 Outlet 异步内容渲染（数据拉取后页面变高）；
-  //  3) rAF 重试覆盖 pageKey 触发的 Content 重挂载（重挂后子页面 useEffect 可能再次改变滚动位置）。
+  // 只响应 pathname 变更（页面导航），不响应纯 hash 变更（页内锚点）。
+  // 避免 hash 锚点定位与强制回到顶部并行执行，导致页面弹到下方。
   useLayoutEffect(() => {
     let frame = 0;
-    let hashFrame = 0;
-    let attempts = 0;
     let hashAttempts = 0;
 
     // 立即同步滚动一次：useLayoutEffect 在 paint 前同步执行，
-    // 此时调用 scrollTo 可保证浏览器以 scrollY=0 渲染新页面，避免"先看到旧位置再跳"的闪烁。
+    // 保证浏览器以 scrollY=0 渲染新页面，避免"先看到旧位置再跳"的闪烁。
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 
     const scrollToLocation = () => {
@@ -176,7 +172,7 @@ function RouteScrollRestoration() {
         try {
           id = decodeURIComponent(id);
         } catch {
-          // 非法 hash 不应阻塞页面回到顶部。
+          // 非法 hash 不应阻塞。
         }
         const element = window.document.getElementById(id);
         if (element) {
@@ -187,46 +183,45 @@ function RouteScrollRestoration() {
         // 详情正文可能在异步请求后才生成，短暂重试避免深链接落在旧页面位置。
         if (hashAttempts < 8) {
           hashAttempts += 1;
-          hashFrame = window.requestAnimationFrame(scrollToLocation);
+          frame = window.requestAnimationFrame(scrollToLocation);
           return;
         }
       }
-      // 无 hash 或 hash 重试耗尽：强制滚到顶部。
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      // 无 hash 或 hash 重试耗尽：保持在顶部（已在同步步骤中完成）。
     };
 
-    // rAF 重试机制：连续 5 帧滚动到顶部。
-    // 即使子页面 useEffect 在挂载后调用 scrollIntoView（如对话页滚动到底部消息），
-    // 后续 rAF 帧也会把页面拉回顶部，确保用户始终看到的是新页面顶部。
-    const MAX_TOP_RETRIES = 5;
-    const scrollToTopWithRetries = () => {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      if (attempts < MAX_TOP_RETRIES) {
-        attempts += 1;
-        frame = window.requestAnimationFrame(scrollToTopWithRetries);
-      }
-    };
-
-    // 启动两个并行机制：
-    //  - hash 定位（如 /knowledge/:id#section）走原有逻辑；
-    //  - 顶部重试覆盖普通路由切换。
-    hashFrame = window.requestAnimationFrame(scrollToLocation);
-    frame = window.requestAnimationFrame(scrollToTopWithRetries);
-
-    // 最后兜底：在所有 useEffect/rAF 都跑完后（约一帧后）再校正一次。
-    // 防止某些页面在 useEffect 中显式调用 element.scrollIntoView() 或 focus() 改变滚动位置。
-    const timeoutId = window.setTimeout(() => {
-      if (!location.hash) {
+    if (location.hash) {
+      // 带 hash 的页面导航：只做 hash 定位，不并行强制回到顶部。
+      frame = window.requestAnimationFrame(scrollToLocation);
+    } else {
+      // 无 hash 的普通导航：连续 5 帧保持在顶部，
+      // 覆盖异步内容渲染（数据拉取后页面变高）和子页面 useEffect 中的 scrollIntoView。
+      let attempts = 0;
+      const MAX_TOP_RETRIES = 5;
+      const scrollToTopWithRetries = () => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      }
-    }, 60);
+        if (attempts < MAX_TOP_RETRIES) {
+          attempts += 1;
+          frame = window.requestAnimationFrame(scrollToTopWithRetries);
+        }
+      };
+      frame = window.requestAnimationFrame(scrollToTopWithRetries);
+
+      // 兜底：最后一帧后再校正一次
+      const timeoutId = window.setTimeout(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }, 60);
+
+      return () => {
+        window.cancelAnimationFrame(frame);
+        window.clearTimeout(timeoutId);
+      };
+    }
 
     return () => {
       window.cancelAnimationFrame(frame);
-      window.cancelAnimationFrame(hashFrame);
-      window.clearTimeout(timeoutId);
     };
-  }, [location.pathname, location.search, location.hash, location.key]);
+  }, [location.pathname]);
 
   return null;
 }
