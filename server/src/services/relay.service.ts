@@ -1,7 +1,8 @@
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import axios from 'axios';
 import { RelayChannel } from '../models/RelayChannel';
 import { RelayToken, RelayUsage } from '../models/RelayToken';
+import { RelayConfig } from '../models/RelayConfig';
 import { decryptSecret } from '../lib/crypto';
 
 /** 中转站统一错误 */
@@ -99,4 +100,46 @@ export async function listModels(token: string): Promise<string[]> {
   const ids = new Set<string>();
   for (const c of channels) (c.models || []).forEach((m: string) => ids.add(m));
   return Array.from(ids);
+}
+
+// ───────────── 中转站独立管理员密码（存数据库，首次登录即初始化） ─────────────
+const RELAY_AUTH_PEPPER = process.env.RELAY_AUTH_PEPPER || 'aibak-relay-admin-pepper-v1';
+
+function hashAdminPassword(pwd: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const derived = scryptSync(pwd, salt + RELAY_AUTH_PEPPER, 64).toString('hex');
+  return `${salt}:${derived}`;
+}
+
+function verifyAdminPassword(pwd: string, stored: string): boolean {
+  const [salt, derived] = stored.split(':');
+  if (!salt || !derived) return false;
+  const check = scryptSync(pwd, salt + RELAY_AUTH_PEPPER, 64).toString('hex');
+  const a = Buffer.from(derived, 'hex');
+  const b = Buffer.from(check, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export async function getAdminPasswordHash(): Promise<string | null> {
+  const doc = await RelayConfig.findOne({ key: 'adminPasswordHash' }).lean();
+  return doc ? (doc as any).value : null;
+}
+
+export async function setAdminPassword(pwd: string): Promise<void> {
+  const value = hashAdminPassword(pwd);
+  await RelayConfig.findOneAndUpdate(
+    { key: 'adminPasswordHash' },
+    { key: 'adminPasswordHash', value },
+    { upsert: true }
+  );
+}
+
+/** 校验中转站管理员密码；若从未设置，则把本次密码作为初始密码并返回 true */
+export async function verifyAdminLogin(pwd: string): Promise<boolean> {
+  const stored = await getAdminPasswordHash();
+  if (!stored) {
+    await setAdminPassword(pwd);
+    return true;
+  }
+  return verifyAdminPassword(pwd, stored);
 }

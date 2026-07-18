@@ -1,13 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { RelayChannel } from '../models/RelayChannel';
 import { RelayToken, RelayUsage } from '../models/RelayToken';
-import { requireAdmin } from '../middleware/auth';
+import { requireAdmin, generateAccessToken } from '../middleware/auth';
 import { encryptSecret } from '../lib/crypto';
 import {
   generateToken,
   hashToken,
   proxyChatCompletions,
   listModels,
+  verifyAdminLogin,
   RelayError,
 } from '../services/relay.service';
 
@@ -45,6 +46,26 @@ router.get('/v1/models', async (req: Request, res: Response) => {
 router.get('/admin', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(ADMIN_HTML);
+});
+
+// 中转站独立管理员登录（公开）：首次使用任意密码即初始化为管理员密码
+router.post('/admin/login', async (req: Request, res: Response) => {
+  const pwd = (req.body || {}).password;
+  if (!pwd || typeof pwd !== 'string' || pwd.length < 6) {
+    return res.status(400).json({ error: '密码至少 6 位' });
+  }
+  try {
+    const ok = await verifyAdminLogin(pwd);
+    if (!ok) return res.status(403).json({ error: '密码错误' });
+    const token = generateAccessToken({
+      id: 'relay-admin',
+      email: 'relay@aibak.local',
+      role: 'admin',
+    });
+    res.json({ success: true, token });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || '登录失败' });
+  }
 });
 
 router.get('/admin/channels', requireAdmin, async (_req: Request, res: Response) => {
@@ -136,9 +157,9 @@ const ADMIN_HTML = `<!doctype html>
 <body>
 <h1>中转站管理后台</h1>
 <div style="border:1px solid #334155;padding:12px;margin-bottom:16px;border-radius:8px">
-  <b>管理员登录</b>（使用平台管理员账号）
-  <div class="row"><input id="email" placeholder="管理员邮箱"><input id="pwd" type="password" placeholder="密码"></div>
-  <button onclick="login()">登录并获取 JWT</button>
+  <b>中转站管理员密码</b>（首次输入即设置为管理员密码）
+  <div class="row"><input id="pwd" type="password" placeholder="管理员密码（至少6位）"></div>
+  <button onclick="login()">登录</button>
   <div id="login_msg" style="margin-top:6px"></div>
 </div>
 <div><label>管理员 JWT（登录后自动填入，也可手动粘贴）：</label><input id="tk" placeholder="Bearer 之后的 JWT"></div>
@@ -167,7 +188,9 @@ const ADMIN_HTML = `<!doctype html>
 <script>
 const API='/api/relay';
 async function login(){
-  var r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('pwd').value})});
+  var pwd=document.getElementById('pwd').value;
+  if(!pwd){document.getElementById('login_msg').textContent='请输入密码';return;}
+  var r=await fetch(API+'/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
   var j=await r.json();
   if(j.success){document.getElementById('tk').value=j.token;document.getElementById('login_msg').textContent='登录成功，JWT 已自动填入';}
   else{document.getElementById('login_msg').textContent='登录失败：'+(j.error||'未知错误');}
