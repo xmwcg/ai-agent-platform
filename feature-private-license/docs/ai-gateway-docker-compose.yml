@@ -1,0 +1,29 @@
+# New API 网关部署配置
+# 服务器: 159.75.124.59 (aibak.site)
+# 部署目录: /opt/ai-gateway
+# 端口: 3005 (容器) -> nginx 子路径 /ai-gateway/
+# 说明: 沿用金网通 /jinwangtong/ 同款 nginx 子路径反代模式
+
+services:
+  ai-gateway:
+    image: calhoun/one-api:latest
+    # 注意: New API 官方镜像为 calciumion/new-api，calhoun/one-api 为兼容镜像
+    # 生产请固定版本，例如 calciumion/new-api:v0.6.7
+    container_name: ai-gateway
+    restart: always
+    ports:
+      - "3005:3000"
+    environment:
+      - TZ=Asia/Shanghai
+      - SESSION_SECRET=change-me-to-random-string
+      - SQL_DSN=/data/oneapi.db
+      - # 如需 redis 缓存(复用服务器已验证配置)，取消下一行注释并指向服务器 redis
+      - # REDIS_CONN_STRING=redis://127.0.0.1:6379/2
+    volumes:
+      - ./data:/data
+    networks:
+      - ai-net
+
+networks:
+  ai-net:
+    driver: bridge

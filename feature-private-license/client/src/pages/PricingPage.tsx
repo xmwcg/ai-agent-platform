@@ -1,0 +1,553 @@
+import { useState, useEffect, useRef } from 'react';
+import {
+  Card, Typography, Button, Tag, message, Modal, Divider, Segmented, Row, Col, Spin, Result,
+} from 'antd';
+import {
+  CheckOutlined, CrownOutlined, ThunderboltOutlined, WalletOutlined,
+  WechatOutlined, LoadingOutlined,
+} from '@ant-design/icons';
+import { QRCodeSVG } from 'qrcode.react';
+import { billingAPI, extractApiError } from '@/services/api';
+import { useResponsive } from '@/hooks/useResponsive';
+
+const { Title, Paragraph, Text } = Typography;
+
+type PriceType = 'credits' | 'month' | 'year' | 'enterprise';
+
+interface PlanFromServer {
+  id: string;
+  name: string;
+  tagline: string;
+  priceMonthly: number; // 分
+  priceYearly: number;  // 分
+  credits: number;
+  features: string[];
+  highlighted?: boolean;
+}
+
+interface CreditsPackage {
+  id: string;
+  name: string;
+  credits: number;
+  price: number; // 分
+  description: string;
+}
+
+interface EnterprisePackage {
+  id: string;
+  name: string;
+  tagline: string;
+  version: string;
+  price: number; // 分
+  validDays: number;
+  seats: number;
+  features: string[];
+  highlighted?: boolean;
+}
+
+function centsToYuan(cents: number): string {
+  if (cents <= 0) return '免费';
+  return `¥${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
+}
+
+export default function PricingPage() {
+  const { isMobile } = useResponsive();
+  const [priceType, setPriceType] = useState<PriceType>('month');
+  const [currentPlan, setCurrentPlan] = useState('free');
+  const [paying, setPaying] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<PlanFromServer | CreditsPackage | EnterprisePackage | null>(null);
+  /** 当前选中项的业务类型，用于下单时区分订阅/积分/私有化 */
+  const [selectedType, setSelectedType] = useState<'plan' | 'credits' | 'enterprise'>('plan');
+  const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  // 支付方式与支付流程状态
+  type PayProvider = 'wechat';
+  const PAY_PROVIDERS: { key: PayProvider; label: string; icon: React.ReactNode; color: string; bg: string }[] = [
+    { key: 'wechat', label: '微信支付', icon: <WechatOutlined style={{ color: '#09bb07', fontSize: 18 }} />, color: '#09bb07', bg: '#f6ffed' },
+  ];
+  const [payProvider, setPayProvider] = useState<PayProvider>('wechat');
+  const [payStatus, setPayStatus] = useState<'confirm' | 'creating' | 'waiting' | 'success' | 'expired'>('confirm');
+  const [qr, setQr] = useState<{ value: string; orderNo: string; itemName: string } | null>(null);
+  const pollRef = useRef<number | null>(null);
+  // 后端下发的「已配置可用」支付方式（缺密钥的渠道自动隐藏，后期填密钥即自动上线）
+  const [paymentMethods, setPaymentMethods] = useState<{ key: string; label: string; enabled: boolean }[]>([]);
+
+  // 从后端加载数据
+  const [plans, setPlans] = useState<PlanFromServer[]>([]);
+  const [creditsPackages, setCreditsPackages] = useState<CreditsPackage[]>([]);
+  const [enterprisePackages, setEnterprisePackages] = useState<EnterprisePackage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    async function load() {
+      try {
+      const [plansRes, pkgsRes, entRes, subRes, methodsRes] = await Promise.all([
+        billingAPI.getPlans(),
+        billingAPI.getCreditsPackages(),
+        billingAPI.getPrivateLicensePackages().catch(() => null),
+        billingAPI.getSubscription().catch(() => null),
+        billingAPI.getPaymentMethods().catch(() => null),
+      ]);
+      // 过滤掉免费版（不需要购买），或按需保留
+      const allPlans = (plansRes as any)?.data || [];
+      setPlans(allPlans);
+      setCreditsPackages((pkgsRes as any)?.data || []);
+      setEnterprisePackages((entRes as any)?.data || []);
+      setPaymentMethods((methodsRes as any)?.data?.methods || []);
+      if ((subRes as any)?.data?.plan) {
+        setCurrentPlan((subRes as any).data.plan);
+      }
+      } catch (e) {
+        setLoadError(extractApiError(e, '加载套餐失败'));
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  // 支付方式加载后，若当前选中的渠道不可用，则自动切到第一个可用渠道
+  useEffect(() => {
+    if (paymentMethods.length === 0) return;
+    setPayProvider((prev) => {
+      const current = paymentMethods.find((p) => p.key === prev);
+      if (!current || !current.enabled) {
+        const first = paymentMethods.find((p) => p.enabled);
+        return first ? (first.key as PayProvider) : prev;
+      }
+      return prev;
+    });
+  }, [paymentMethods]);
+
+  // 组件卸载时清理轮询定时器
+  useEffect(() => () => stopPolling(), []);
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const closeModal = () => {
+    stopPolling();
+    setConfirmOpen(false);
+    setPayStatus('confirm');
+    setQr(null);
+    setPaying(null);
+  };
+
+  const handleSelect = (
+    item: PlanFromServer | CreditsPackage | EnterprisePackage,
+    type: 'plan' | 'credits' | 'enterprise',
+    period?: 'monthly' | 'yearly'
+  ) => {
+    const id = 'id' in item ? item.id : '';
+    if (type === 'plan' && id === currentPlan) {
+      message.info('您已订阅此套餐');
+      return;
+    }
+    setSelectedItem(item);
+    setSelectedType(type);
+    setSelectedPeriod(period || 'monthly');
+    setPayStatus('confirm');
+    setQr(null);
+    setConfirmOpen(true);
+  };
+
+  // 轮询订单状态，付款成功后自动到账（后端对真实网关会主动查单兜底激活）
+  const startPolling = (orderNo: string, itemName: string, isCredits: boolean) => {
+    stopPolling();
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const r: any = await billingAPI.getOrderStatus(orderNo);
+        const st = r?.data?.status;
+        if (st === 'paid') {
+          stopPolling();
+          setPayStatus('success');
+          if (!isCredits && r?.data?.plan) setCurrentPlan(r.data.plan);
+          message.success(isCredits ? `成功购买 ${itemName}` : '支付成功！套餐已激活');
+        } else if (st === 'expired') {
+          stopPolling();
+          setPayStatus('expired');
+        }
+      } catch {
+        // 单次轮询失败忽略，等待下一次
+      }
+    }, 3000);
+  };
+
+  const handlePay = async () => {
+    if (!selectedItem) return;
+    const isCredits = selectedType === 'credits';
+    const isEnterprise = selectedType === 'enterprise';
+    const itemName = getItemName(selectedItem);
+    setPayStatus('creating');
+    setPaying('id' in selectedItem ? selectedItem.id : 'package');
+    try {
+      let res: any;
+      if (isEnterprise) {
+        res = await billingAPI.createPrivateLicenseOrder({
+          packageId: selectedItem.id,
+          provider: payProvider,
+        });
+      } else if (!isCredits) {
+        res = await billingAPI.createOrder({
+          plan: selectedItem.id as 'free' | 'pro' | 'max' | 'team',
+          period: selectedPeriod,
+          provider: payProvider,
+        });
+      } else {
+        res = await billingAPI.createCreditsOrder({
+          packageId: selectedItem.id,
+          provider: payProvider,
+        });
+      }
+      const pp = res?.data?.payParams || {};
+      const orderNo = res?.data?.orderNo as string;
+
+      if (res?.data?.provider !== 'wechat') {
+        throw new Error('当前仅支持微信支付');
+      }
+      const qrValue = pp.codeUrl;
+      if (!qrValue || typeof qrValue !== 'string') {
+        throw new Error('未获取到真实微信支付二维码，请稍后重试');
+      }
+      setQr({ value: qrValue, orderNo, itemName });
+      setPayStatus('waiting');
+      startPolling(orderNo, itemName, isCredits);
+    } catch (e) {
+      setPayStatus('confirm');
+      message.error(extractApiError(e, '支付失败'));
+    }
+    setPaying(null);
+  };
+
+  // 获取付费套餐（不含免费版）
+  const paidPlans = plans.filter((p) => p.id !== 'free');
+
+  // 后端未确认真实微信支付可用时，不展示或启用支付入口。
+  const visibleProviders = PAY_PROVIDERS.filter((pp) =>
+    paymentMethods.some((method) => method.key === pp.key && method.enabled)
+  );
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '80px 0' }}>
+        <Spin size="large" />
+        <Paragraph type="secondary" style={{ marginTop: 16 }}>加载套餐信息...</Paragraph>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ textAlign: 'center', padding: '80px 0' }}>
+        <Paragraph type="danger">{loadError}</Paragraph>
+        <Button onClick={() => window.location.reload()}>重试</Button>
+      </div>
+    );
+  }
+
+  const displayPlans = priceType === 'credits'
+    ? creditsPackages
+    : priceType === 'enterprise'
+      ? enterprisePackages
+      : paidPlans;
+
+  const getItemPrice = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string => {
+    if ('priceMonthly' in item) {
+      if (priceType === 'year') return centsToYuan(item.priceYearly);
+      return centsToYuan(item.priceMonthly);
+    }
+    if ('version' in item) {
+      // 企业版私有化授权（一次性）
+      return centsToYuan((item as EnterprisePackage).price);
+    }
+    // 积分包
+    return centsToYuan((item as CreditsPackage).price);
+  };
+
+  const getItemOriginalPrice = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string | null => {
+    if ('priceMonthly' in item && priceType === 'year') {
+      // 年付 = 月付 × 10，标出原价（月付 × 12）
+      const orig = item.priceMonthly * 12;
+      return `原价 ¥${(orig / 100).toFixed(0)}`;
+    }
+    return null;
+  };
+
+  const getItemId = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string =>
+    'id' in item ? item.id : (item as CreditsPackage).id;
+
+  const getItemName = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string =>
+    'id' in item ? item.name : (item as CreditsPackage).name;
+
+  const getItemFeatures = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string[] => {
+    if ('features' in item) return item.features;
+    const pkg = item as CreditsPackage;
+    return [`${pkg.credits} 积分`, '可用于 AI 对话 / API 调用 / 工具使用', '永久有效'];
+  };
+
+  const getItemHighlighted = (item: PlanFromServer | CreditsPackage | EnterprisePackage): boolean => {
+    if ('highlighted' in item) return !!item.highlighted;
+    // 积分包：500 积分的为推荐
+    return (item as CreditsPackage).credits === 500;
+  };
+
+  const getItemBadge = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string | null => {
+    if ('highlighted' in item && item.highlighted) return '推荐';
+    if ('credits' in item && item.credits >= 2000) return '最划算';
+    return null;
+  };
+
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '12px 4px' : '24px 16px' }}>
+      {/* 标题 */}
+      <div style={{ textAlign: 'center', marginBottom: isMobile ? 20 : 32 }}>
+        <Title level={isMobile ? 3 : 2}>灵活的付费方案</Title>
+        <Paragraph type="secondary" style={{ fontSize: 16 }}>
+          积分按需购买 · 按月订阅 · 包年优惠 —— 想用就付，不用不扣费
+        </Paragraph>
+
+        <Segmented
+          value={priceType}
+          onChange={(v) => setPriceType(v as PriceType)}
+          size={isMobile ? 'middle' : 'large'}
+          style={{ marginTop: 16 }}
+          options={[
+            { value: 'credits', label: '⚡ 积分', icon: <ThunderboltOutlined /> },
+            { value: 'month', label: '💳 按月', icon: <WalletOutlined /> },
+            { value: 'year', label: '🏆 包年', icon: <CrownOutlined /> },
+            { value: 'enterprise', label: '🏢 企业版', icon: <CrownOutlined /> },
+          ]}
+        />
+      </div>
+
+      {/* 免费版卡片 */}
+      {priceType !== 'credits' && plans.some((p) => p.id === 'free') && (
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <Tag color="green" style={{ fontSize: 14, padding: '4px 16px' }}>
+            {currentPlan === 'free' ? '当前方案：免费版' : '已有免费版可用'}
+          </Tag>
+        </div>
+      )}
+
+      {/* 套餐/积分包卡片列表 */}
+      {displayPlans.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <Paragraph type="secondary">
+            {priceType === 'credits' ? '暂无积分包可选' : '暂无付费套餐'}
+          </Paragraph>
+        </div>
+      ) : (
+        <Row gutter={[20, 20]} justify="center">
+          {displayPlans.map((item) => {
+            const id = getItemId(item);
+            const highlighted = getItemHighlighted(item);
+            const badge = getItemBadge(item);
+            return (
+              <Col xs={24} sm={12} md={8} key={id}>
+                <Card
+                  className={`pricing-card ${highlighted ? 'highlight' : ''}`}
+                  hoverable
+                  actions={[
+                    <Button
+                      key="buy"
+                      type={highlighted ? 'primary' : 'default'}
+                      block
+                      onClick={() => {
+                        const type = priceType === 'credits' ? 'credits'
+                          : priceType === 'enterprise' ? 'enterprise' : 'plan';
+                        handleSelect(item, type, priceType === 'year' ? 'yearly' : 'monthly');
+                      }}
+                      loading={paying === id}
+                      style={{
+                        margin: '0 16px',
+                        background: highlighted ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : undefined,
+                        border: highlighted ? 'none' : undefined,
+                      }}
+                    >
+                      {priceType === 'enterprise'
+                        ? '立即购买授权'
+                        : currentPlan === id ? '当前方案' : ('priceMonthly' in item && item.priceMonthly === 0) ? '免费使用' : priceType === 'credits' ? '立即购买' : '立即订阅'}
+                    </Button>,
+                  ]}
+                >
+                  {badge && <Tag className="plan-badge" color="#8b5cf6">{badge}</Tag>}
+                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                    <Text strong style={{ fontSize: 18 }}>{getItemName(item)}</Text>
+                    <div style={{ margin: '8px 0' }}>
+                      <Text style={{ fontSize: 32, fontWeight: 800, fontFamily: 'Inter, sans-serif' }}>
+                        {getItemPrice(item)}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 14 }}>
+                        {priceType === 'enterprise'
+                          ? (('validDays' in item && (item as EnterprisePackage).validDays === -1) ? ' · 永久' : ' · 一次性')
+                          : priceType === 'credits' ? ' / 包' : priceType === 'year' ? ' / 年' : ' / 月'}
+                      </Text>
+                    </div>
+                    {getItemOriginalPrice(item) && (
+                      <Text delete type="secondary" style={{ fontSize: 13 }}>
+                        {getItemOriginalPrice(item)}
+                      </Text>
+                    )}
+                    {priceType === 'enterprise' && 'tagline' in item && (
+                      <div style={{ marginTop: 6 }}>
+                        <Text type="secondary" style={{ fontSize: 13 }}>{(item as EnterprisePackage).tagline}</Text>
+                      </div>
+                    )}
+                  </div>
+                  <Divider style={{ margin: '0 0 12px' }} />
+                  <div style={{ minHeight: 160 }}>
+                    {getItemFeatures(item).map((f, i) => (
+                      <div key={i} style={{ padding: '5px 0', fontSize: 14 }}>
+                        <CheckOutlined style={{ color: '#10b981', marginRight: 8 }} />
+                        {f}
+                      </div>
+                    ))}
+                    {'credits' in item && item.credits > 0 && (
+                      <div style={{ padding: '5px 0', fontSize: 14 }}>
+                        <CheckOutlined style={{ color: '#f59e0b', marginRight: 8 }} />
+                        赠送 {item.credits} 积分
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </Col>
+            );
+          })}
+        </Row>
+      )}
+
+      {/* 支付弹窗：确认 → 扫码 → 结果 */}
+      <Modal
+        title={payStatus === 'success' ? '支付成功' : payStatus === 'waiting' ? '扫码支付' : '确认订单'}
+        open={confirmOpen}
+        onCancel={closeModal}
+        footer={null}
+        destroyOnClose
+        maskClosable={payStatus !== 'waiting'}
+      >
+        {/* 确认下单 + 选择支付方式 */}
+        {selectedItem && (payStatus === 'confirm' || payStatus === 'creating') && (
+          <div>
+            <Paragraph>
+              <strong>项目：</strong>{getItemName(selectedItem)}
+              {priceType !== 'credits' && ` - ${selectedPeriod === 'yearly' ? '年付' : '月付'}`}
+            </Paragraph>
+            <Paragraph><strong>价格：</strong>{getItemPrice(selectedItem)}</Paragraph>
+            <Divider style={{ margin: '12px 0' }} />
+            <Paragraph style={{ marginBottom: 8 }}><strong>支付方式</strong></Paragraph>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {visibleProviders.map((pp) => {
+                const active = payProvider === pp.key;
+                return (
+                  <div
+                    key={pp.key}
+                    onClick={() => setPayProvider(pp.key)}
+                    style={{
+                      padding: '8px 16px',
+                      border: active ? `2px solid ${pp.color}` : '1px solid #e8e8e8',
+                      borderRadius: 8,
+                      background: active ? pp.bg : '#fff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 14,
+                      fontWeight: active ? 600 : 400,
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {pp.icon}
+                    {pp.label}
+                  </div>
+                );
+              })}
+            </div>
+            {visibleProviders.length === 0 && (
+              <Paragraph type="danger" style={{ marginTop: 12, marginBottom: 0 }}>
+                微信支付尚未配置完成，当前暂不接受付款。
+              </Paragraph>
+            )}
+            <div style={{ textAlign: 'right', marginTop: 24 }}>
+              <Button onClick={closeModal} style={{ marginRight: 8 }}>返回</Button>
+              <Button
+                type="primary"
+                loading={payStatus === 'creating'}
+                disabled={visibleProviders.length === 0}
+                onClick={handlePay}
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none' }}
+              >
+                确认支付
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 扫码等待 */}
+        {payStatus === 'waiting' && qr && (
+          <div style={{ textAlign: 'center', padding: '8px 0' }}>
+            <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+              请使用微信扫描二维码完成支付
+            </Paragraph>
+            <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 12, border: '1px solid #eee' }}>
+              <QRCodeSVG value={qr.value} size={200} level="M" includeMargin />
+            </div>
+            <Paragraph style={{ marginTop: 16, fontSize: 22, fontWeight: 800 }}>
+              {selectedItem && getItemPrice(selectedItem)}
+            </Paragraph>
+            <Paragraph type="secondary">
+              <LoadingOutlined style={{ marginRight: 6 }} />
+              等待支付结果…（付款后自动到账）
+            </Paragraph>
+            <Button onClick={closeModal}>取消支付</Button>
+          </div>
+        )}
+
+        {/* 支付成功 */}
+        {payStatus === 'success' && (
+          <Result
+            status="success"
+            title="支付成功"
+            subTitle={qr ? qr.itemName : (selectedItem ? getItemName(selectedItem) : '')}
+            extra={<Button type="primary" onClick={closeModal}>完成</Button>}
+          />
+        )}
+
+        {/* 订单过期 */}
+        {payStatus === 'expired' && (
+          <Result
+            status="warning"
+            title="订单已过期"
+            subTitle="支付二维码已失效，请重新下单"
+            extra={<Button type="primary" onClick={() => { setQr(null); setPayStatus('confirm'); }}>重新下单</Button>}
+          />
+        )}
+      </Modal>
+
+      <style>{`
+        .pricing-card { border-radius: 14px; transition: all 0.3s; position: relative; }
+        .pricing-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.1); }
+        .pricing-card.highlight {
+          border: 2px solid #818cf8;
+          box-shadow: 0 0 20px rgba(129,140,248,0.15);
+        }
+        .plan-badge {
+          position: absolute; top: 12px; right: 12px;
+          border-radius: 10px; padding: 2px 12px;
+        }
+        /* ─── 移动端适配 ─── */
+        @media (max-width: 768px) {
+          .pricing-card { border-radius: 12px; }
+          .pricing-card .ant-card-body { padding: 16px !important; }
+        }
+        @media (max-width: 480px) {
+          .pricing-card .ant-card-actions > li { margin: 0 !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
