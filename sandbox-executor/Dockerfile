@@ -9,7 +9,9 @@ WORKDIR /app
 COPY package.json tsconfig.json ./
 COPY src/ ./src/
 
-RUN npm ci --omit=dev && \
+# 先安装全部依赖（含 typescript / @types），编译后再 prune 掉 dev 依赖，
+# 避免 --omit=dev 后 npx tsc 需临时联网下载 typescript 导致的随机构建失败。
+RUN npm ci && \
     npx tsc && \
     npm prune --omit=dev
 
