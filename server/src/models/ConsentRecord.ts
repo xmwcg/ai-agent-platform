@@ -6,7 +6,13 @@
  */
 import mongoose, { Schema, Document } from "mongoose";
 
-export type ConsentType = "terms_of_service" | "privacy_policy" | "cookie_policy" | "refund_policy" | "data_processing";
+export type ConsentType =
+  | "terms_of_service"
+  | "privacy_policy"
+  | "cookie_policy"
+  | "refund_policy"
+  | "points_rules"
+  | "data_processing";
 
 export interface IConsentRecord extends Document {
   userId: mongoose.Types.ObjectId;
@@ -26,7 +32,14 @@ const ConsentRecordSchema = new Schema<IConsentRecord>(
     consentType: {
       type: String,
       required: true,
-      enum: ["terms_of_service", "privacy_policy", "cookie_policy", "refund_policy", "data_processing"],
+      enum: [
+        "terms_of_service",
+        "privacy_policy",
+        "cookie_policy",
+        "refund_policy",
+        "points_rules",
+        "data_processing",
+      ],
     },
     version: { type: String, required: true },
     accepted: { type: Boolean, required: true },
