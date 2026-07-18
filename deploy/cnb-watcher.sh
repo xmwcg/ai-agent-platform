@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # ============================================================
 # AIbak 服务器侧 CNB 生产发布 watcher
-# - 只监听通过 CNB 门禁后晋级的 deploy/production
-# - 只拉取提交 SHA 对应镜像，不在 2G 应用机编译源码
-# - 以镜像 digest 部署；内外网全部探针成功后才写状态
-# - 失败自动恢复上一成功镜像，并通过真实渠道告警
+# - 监听 main 分支的新提交 SHA（git push cnb main 即触发）
+# - 服务器本地 docker build（不再依赖 registry 不可变镜像）
+# - 镜像按 SHA 打标签，并以本地镜像 Id 作为不可变摘要写入发布状态
+# - 内外网全部探针成功后才写状态；失败自动回滚并通过真实渠道告警
 # ============================================================
 set -Eeuo pipefail
 
 REPO_URL=${REPO_URL:-https://cnb.cool/aibak.site/ai-agent-platform.git}
-RELEASE_BRANCH=${RELEASE_BRANCH:-deploy/production}
+# 监听 main：CNB CI 已不再发布不可变镜像，改为服务器本地 docker build，
+# 由 main 的新 SHA 直接触发「git push cnb main → 自动部署」（不再依赖 registry）。
+RELEASE_BRANCH=${RELEASE_BRANCH:-main}
 GIT_DIR=${GIT_DIR:-/opt/ai-agent-platform.git}
 RUNTIME_DIR=${RUNTIME_DIR:-/usr/local/lib/aibak-deploy}
 RELEASES_DIR=${RELEASES_DIR:-$RUNTIME_DIR/releases}
@@ -27,6 +29,10 @@ REGISTRY=${REGISTRY:-docker.cnb.cool}
 IMAGE_REPOSITORY=${IMAGE_REPOSITORY:-$REGISTRY/aibak.site/ai-agent-platform}
 SERVER_IMAGE_REPOSITORY=${SERVER_IMAGE_REPOSITORY:-$IMAGE_REPOSITORY/server}
 CLIENT_IMAGE_REPOSITORY=${CLIENT_IMAGE_REPOSITORY:-$IMAGE_REPOSITORY/client}
+# ── 本地构建模式（替代从 registry 拉取不可变镜像）──
+BUILD_MODE=${BUILD_MODE:-local}
+BUILD_DIR=${BUILD_DIR:-$RUNTIME_DIR/build}
+LOCAL_IMAGE_PREFIX=${LOCAL_IMAGE_PREFIX:-aibak-platform}
 COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-ai-agent-platform}
 MAX_ATTEMPTS=${MAX_ATTEMPTS:-3}
 RETRY_DELAY_SECONDS=${RETRY_DELAY_SECONDS:-30}
@@ -215,21 +221,40 @@ registry_login() {
     --username "$registry_username" --password-stdin >>"$LOG" 2>&1
 }
 
-pull_immutable_image() {
-  local repository=$1
-  local sha=$2
-  local output_name=$3
-  local tag="${repository}:${sha}"
-  docker pull "$tag" >>"$DEPLOY_LOG" 2>&1
+# 在服务器本地构建镜像（替代从 registry 拉取不可变镜像）。
+# 全量导出 SHA 对应源码到 BUILD_DIR，用 docker-compose.build.yml 构建，
+# 镜像以 SHA 打标签（aibak-platform-server:<sha> / aibak-platform-client:<sha>），
+# 并取本地镜像 Id 作为不可变摘要写入发布状态，供 /api/health 验收比对。
+build_local_images() {
+  local sha=$1
+  local build_dir="${BUILD_DIR}/${sha}"
+  local build_compose="${build_dir}/docker-compose.build.yml"
+  rm -rf "$build_dir"
+  mkdir -p "$build_dir"
 
-  local immutable_ref
-  immutable_ref=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$tag" \
-    | awk -v prefix="${repository}@" 'index($0, prefix) == 1 { print; exit }')
-  if [[ ! "$immutable_ref" =~ ^${repository}@sha256:[a-f0-9]{64}$ ]]; then
-    log "镜像未返回合法不可变摘要: $repository"
+  log "导出源码 $sha 到构建目录 $build_dir"
+  if ! repo_git archive --format=tar "$sha" 2>>"$LOG" | tar -x -C "$build_dir" >>"$LOG" 2>&1; then
+    log "导出源码失败: $sha"
     return 1
   fi
-  printf -v "$output_name" '%s' "$immutable_ref"
+  [ -f "$build_compose" ] || { log "构建用 compose 缺失: $build_compose"; return 1; }
+
+  log "本地 docker build（server + client）SHA=$sha"
+  if ! APP_COMMIT_SHA="$sha" "${COMPOSE[@]}" -f "$build_compose" build >>"$DEPLOY_LOG" 2>&1; then
+    log "docker build 失败: $sha"
+    return 1
+  fi
+
+  local server_tag="${LOCAL_IMAGE_PREFIX}-server:${sha}"
+  local client_tag="${LOCAL_IMAGE_PREFIX}-client:${sha}"
+  docker image inspect -f '{{.Id}}' "$server_tag" >/dev/null 2>&1 || { log "server 镜像未生成: $server_tag"; return 1; }
+  docker image inspect -f '{{.Id}}' "$client_tag" >/dev/null 2>&1 || { log "client 镜像未生成: $client_tag"; return 1; }
+
+  BUILT_SERVER_IMAGE="$server_tag"
+  BUILT_CLIENT_IMAGE="$client_tag"
+  BUILT_SERVER_DIGEST=$(docker image inspect -f '{{.Id}}' "$server_tag")
+  BUILT_CLIENT_DIGEST=$(docker image inspect -f '{{.Id}}' "$client_tag")
+  log "本地构建完成: $BUILT_SERVER_IMAGE / $BUILT_CLIENT_IMAGE"
 }
 
 reset_loaded_state() {
@@ -270,12 +295,18 @@ load_state() {
 
 state_is_complete() {
   [[ "$LOADED_APP_COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]] \
-    && [[ "$LOADED_SERVER_IMAGE" =~ ^([^[:space:]]+@)?sha256:[a-f0-9]{64}$ ]] \
-    && [[ "$LOADED_CLIENT_IMAGE" =~ ^([^[:space:]]+@)?sha256:[a-f0-9]{64}$ ]] \
+    && image_ref_valid "$LOADED_SERVER_IMAGE" \
+    && image_ref_valid "$LOADED_CLIENT_IMAGE" \
     && [[ "$LOADED_SERVER_IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] \
     && [[ "$LOADED_CLIENT_IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] \
     && [ -f "$LOADED_RELEASE_COMPOSE_FILE" ] \
     && [ -f "$LOADED_NGINX_RUNTIME_CONFIG" ]
+}
+
+# 镜像引用合法：不可变摘要（name@sha256:...）或本地标签（name:tag）
+image_ref_valid() {
+  [[ "$1" =~ ^([^[:space:]]+@)?sha256:[a-f0-9]{64}$ ]] \
+    || [[ "$1" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*:[a-zA-Z0-9._-]+$ ]]
 }
 
 write_release_state() {
@@ -283,10 +314,10 @@ write_release_state() {
   local sha=$2
   local server_image=$3
   local client_image=$4
-  local compose_file=$5
-  local nginx_config=$6
-  local server_digest=${server_image##*@}
-  local client_digest=${client_image##*@}
+  local server_digest=$5
+  local client_digest=$6
+  local compose_file=$7
+  local nginx_config=$8
   local tmp="${file}.tmp.$$"
   cat >"$tmp" <<EOF
 COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME
@@ -316,7 +347,7 @@ capture_running_release() {
     || [[ ! "$client_image" =~ ^sha256:[a-f0-9]{64}$ ]]; then
     return 1
   fi
-  write_release_state "$output_file" "$fallback_sha" "$server_image" "$client_image" "$compose_file" "$nginx_config"
+  write_release_state "$output_file" "$fallback_sha" "$server_image" "$client_image" "$server_image" "$client_image" "$compose_file" "$nginx_config"
 }
 
 validate_production_configuration() {
@@ -419,7 +450,10 @@ preflight() {
     log "Docker daemon 不可用"
     return 1
   }
-  registry_login || return 1
+  # 本地构建模式不再需要登录 registry；仅 registry 模式才登录
+  if [ "$BUILD_MODE" != "local" ]; then
+    registry_login || return 1
+  fi
 }
 
 ensure_git_repository
@@ -482,25 +516,23 @@ elif ! capture_running_release "$ROLLBACK_STATE" "$CURRENT_SHA" \
 fi
 
 for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
-  log "部署尝试 $attempt/$MAX_ATTEMPTS：拉取不可变镜像"
-  SERVER_IMAGE=''
-  CLIENT_IMAGE=''
-  if pull_immutable_image "$SERVER_IMAGE_REPOSITORY" "$REMOTE_SHA" SERVER_IMAGE \
-    && pull_immutable_image "$CLIENT_IMAGE_REPOSITORY" "$REMOTE_SHA" CLIENT_IMAGE; then
-    write_release_state "$CANDIDATE_STATE" "$REMOTE_SHA" "$SERVER_IMAGE" "$CLIENT_IMAGE" \
-      "$RELEASE_DIR/docker-compose.production.yml" "$RELEASE_DIR/nginx.ssl.runtime.conf"
-
-    if validate_production_configuration "$CANDIDATE_STATE" \
-      && compose_up "$CANDIDATE_STATE" \
-      && verify_release "$CANDIDATE_STATE" internal \
-      && verify_release "$CANDIDATE_STATE" public; then
-      mv -f "$CANDIDATE_STATE" "$STATE_FILE"
-      chmod 0600 "$STATE_FILE"
-      atomic_write_text "$LEGACY_STATE_FILE" "$REMOTE_SHA"
-      rm -f "$FAILED_STATE_FILE" "$ROLLBACK_STATE"
-      notify_success "部署成功：SHA=$REMOTE_SHA server=${SERVER_IMAGE##*@} client=${CLIENT_IMAGE##*@}"
-      exit 0
-    fi
+  log "部署尝试 $attempt/$MAX_ATTEMPTS：服务器本地构建镜像（SHA=$REMOTE_SHA）"
+  if build_local_images "$REMOTE_SHA" \
+    && write_release_state "$CANDIDATE_STATE" "$REMOTE_SHA" \
+       "$BUILT_SERVER_IMAGE" "$BUILT_CLIENT_IMAGE" "$BUILT_SERVER_DIGEST" "$BUILT_CLIENT_DIGEST" \
+       "$RELEASE_DIR/docker-compose.production.yml" "$RELEASE_DIR/nginx.ssl.runtime.conf" \
+    && validate_production_configuration "$CANDIDATE_STATE" \
+    && compose_up "$CANDIDATE_STATE" \
+    && verify_release "$CANDIDATE_STATE" internal \
+    && verify_release "$CANDIDATE_STATE" public; then
+    mv -f "$CANDIDATE_STATE" "$STATE_FILE"
+    chmod 0600 "$STATE_FILE"
+    atomic_write_text "$LEGACY_STATE_FILE" "$REMOTE_SHA"
+    rm -f "$FAILED_STATE_FILE" "$ROLLBACK_STATE"
+    rm -rf "${BUILD_DIR}/${REMOTE_SHA}"
+    docker image prune -f >>"$DEPLOY_LOG" 2>&1 || true
+    notify_success "部署成功：SHA=$REMOTE_SHA server=${BUILT_SERVER_DIGEST##*@} client=${BUILT_CLIENT_DIGEST##*@}"
+    exit 0
   fi
 
   log "新版本部署或验收失败: $REMOTE_SHA"

@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.7
 FROM node:22-bookworm-slim AS build
 
+# 增大 Node 堆内存，避免 vite 在生产机构建时 OOM（尤其 2G 内存的部署机）
+ENV NODE_OPTIONS=--max-old-space-size=2048
+
 WORKDIR /usr/src/app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
