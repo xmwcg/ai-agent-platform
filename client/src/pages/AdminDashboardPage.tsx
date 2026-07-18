@@ -24,7 +24,7 @@ import {
   UserAddOutlined,
 } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
-import { extractApiError, opsAPI, type OpsSnapshot } from '@/services/api';
+import { extractApiError, opsAPI, billingAPI, type OpsSnapshot } from '@/services/api';
 import { useUIStore } from '@/stores/ui';
 
 const { Title, Text, Paragraph } = Typography;
@@ -384,6 +384,9 @@ export default function AdminDashboardPage() {
         </Col>
       </Row>
 
+      {/* 毛利看板：仅管理员可见，聚合收入−成本，绝不对客户开放 */}
+      <ProfitDashboard dark={dark} />
+
       <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
         <Col xs={24} xl={14}>
           <Card title="变现质量" size="small">
@@ -424,5 +427,111 @@ export default function AdminDashboardPage() {
         </Paragraph>
       </Card>
     </div>
+  );
+}
+
+/**
+ * 毛利看板（仅管理员可见）
+ * 聚合：∑已支付收入（订阅/积分/私有化） − ∑全站 AI 成本（按日汇总）。
+ * 数据来自后端 /api/billing/profit-summary（requireAdmin 守卫），绝不对客户开放。
+ */
+function ProfitDashboard({ dark }: { dark: boolean }) {
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res: any = await billingAPI.getProfitSummary(month);
+      setData(res?.data ?? null);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 403) setError('需要管理员权限');
+      else setError(extractApiError(err, '毛利看板加载失败'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month]);
+
+  const fenToYuan = (fen: number) => `¥${((fen || 0) / 100).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`;
+  const axis = makeAxis(dark);
+  const costChart = data ? {
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis' },
+    grid: { left: 52, right: 20, top: 24, bottom: 30 },
+    xAxis: { type: 'category', data: (data.dailyCost || []).map((_: any, i: number) => `${i + 1}`), ...axis },
+    yAxis: { type: 'value', ...axis },
+    series: [{
+      name: '每日 AI 成本(元)',
+      type: 'line',
+      smooth: true,
+      data: (data.dailyCost || []).map((v: number) => (v / 100).toFixed(2)),
+      lineStyle: { color: COLORS.danger, width: 2 },
+      itemStyle: { color: COLORS.danger },
+      areaStyle: { color: 'rgba(225,112,85,0.18)' },
+    }],
+  } : {};
+
+  return (
+    <Card
+      title="💰 毛利看板（内部 · 仅管理员）"
+      size="small"
+      style={{ marginTop: 12 }}
+      extra={
+        <Space>
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${dark ? COLORS.splitDark : COLORS.splitLight}` }}
+          />
+          <Button size="small" icon={<ReloadOutlined />} onClick={load}>刷新</Button>
+        </Space>
+      }
+    >
+      {error ? (
+        <Alert type="warning" showIcon message={error} />
+      ) : loading && !data ? (
+        <div style={{ textAlign: 'center', padding: 32 }}><Spin /></div>
+      ) : data ? (
+        <>
+          <Row gutter={[12, 12]}>
+            <Col xs={12} md={6}>
+              <Statistic title="总收入" value={fenToYuan(data.revenue?.total)} valueStyle={{ color: COLORS.success }} />
+              <Text type="secondary">订阅 {fenToYuan(data.revenue?.subscription)} / 积分 {fenToYuan(data.revenue?.credits_pack)} / 私有化 {fenToYuan(data.revenue?.private_license)}</Text>
+            </Col>
+            <Col xs={12} md={6}>
+              <Statistic title="总成本(AI)" value={fenToYuan(data.cost)} valueStyle={{ color: COLORS.danger }} />
+              <Text type="secondary">全站模型调用估算成本</Text>
+            </Col>
+            <Col xs={12} md={6}>
+              <Statistic title="毛利" value={fenToYuan(data.grossProfit)} valueStyle={{ color: COLORS.primary }} />
+              <Text type="secondary">收入 − 成本</Text>
+            </Col>
+            <Col xs={12} md={6}>
+              <Statistic title="毛利率" value={data.margin} suffix="%" valueStyle={{ color: data.margin >= 0 ? COLORS.success : COLORS.danger }} />
+              <Text type="secondary">订单数 {data.orderCount}</Text>
+            </Col>
+          </Row>
+          <div style={{ marginTop: 12 }}>
+            <ReactECharts option={costChart} style={{ height: 240 }} notMerge lazyUpdate />
+          </div>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginTop: 8 }}
+            message="内部数据，严禁对客户展示。利润 = 会员/积分/私有化收入 − 全站 AI 调用成本。"
+          />
+        </>
+      ) : null}
+    </Card>
   );
 }

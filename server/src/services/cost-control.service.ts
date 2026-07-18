@@ -22,6 +22,11 @@ function costKey(userId: string): string {
   return `ai_cost:${userId}:${todayKey()}`;
 }
 
+/** 全局成本键（全站当日 AI 成本汇总，用于毛利看板，仅多一次 incrby，开销可忽略） */
+function globalCostKey(date = todayKey()): string {
+  return `ai_cost:global:${date}`;
+}
+
 /** 记录一次 AI 调用的预估成本（分），返回累计值 */
 export async function recordAiCost(userId: string, estimatedFen: number): Promise<number> {
   try {
@@ -29,6 +34,10 @@ export async function recordAiCost(userId: string, estimatedFen: number): Promis
     const key = costKey(userId);
     const total = await redisClient.incrby(key, Math.ceil(estimatedFen));
     await redisClient.expire(key, 86400);
+    // 同步累加全局日成本（毛利看板用）
+    const gKey = globalCostKey();
+    await redisClient.incrby(gKey, Math.ceil(estimatedFen));
+    await redisClient.expire(gKey, 86400 * 32); // 保留约一个月，便于月度聚合
     return total;
   } catch (err: any) {
     logger.warn('cost-control', `记录成本失败(忽略): ${err?.message}`);
@@ -40,6 +49,15 @@ export async function recordAiCost(userId: string, estimatedFen: number): Promis
 export async function getDailyCost(userId: string): Promise<number> {
   try {
     return Number(await redisClient.get(costKey(userId))) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 查询指定日期（YYYY-MM-DD）全站 AI 成本（分），用于毛利看板月度聚合 */
+export async function getGlobalCost(date: string): Promise<number> {
+  try {
+    return Number(await redisClient.get(globalCostKey(date))) || 0;
   } catch {
     return 0;
   }

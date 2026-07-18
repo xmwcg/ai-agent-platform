@@ -17,7 +17,7 @@ import { CreditLot } from "../models/CreditLot";
 import { OutboxEvent } from "../models/OutboxEvent";
 import { AppError } from "../lib/http-error";
 import { logger } from "../lib/logger";
-import { deductCredits } from "./credit-ledger.service";
+import { CreditsTransaction } from "../models/CreditsTransaction";
 
 export function genRefundNo(): string {
   const timePart = Date.now().toString(36).toUpperCase().padStart(9, "0");
@@ -299,23 +299,39 @@ export class RefundService {
         }
 
         if (totalToReverse > 0) {
-          await User.updateOne(
-            { _id: refund.userId },
+          const userBefore = await User.findById(refund.userId).select("credits").session(session);
+          const balanceBefore = Number(userBefore?.credits || 0);
+
+          if (balanceBefore < totalToReverse) {
+            throw new AppError(409, "退款权益回收失败：积分余额不足", "REFUND_CREDIT_INSUFFICIENT");
+          }
+
+          const updatedUser = await User.findOneAndUpdate(
+            { _id: refund.userId, credits: { $gte: totalToReverse } },
             { $inc: { credits: -totalToReverse } },
-            { session }
+            { new: true, session }
           );
 
-          await deductCredits({
-            userId: refund.userId.toString(),
-            amount: totalToReverse,
+          if (!updatedUser) {
+            throw new AppError(409, "退款权益回收失败：积分余额发生并发变化，请重试", "REFUND_CREDIT_CONFLICT");
+          }
+          const balanceAfter = Number(updatedUser.credits || 0);
+
+          await CreditsTransaction.create([{
+            userId: refund.userId,
+            type: "adjustment",
+            amount: -totalToReverse,
+            balanceBefore,
+            balanceAfter,
             idempotencyKey: "refund-reverse:" + refund.refundNo,
             businessType: "refund_reversal",
             businessId: refund.refundNo,
             sourceOrderNo: order.orderNo,
+            status: "committed",
+            operatorId: refund.approvedBy?.toString(),
+            auditReason: "订单退款 " + refund.refundNo + " 权益回收",
             description: "退款 " + refund.refundNo + " 权益回收",
-            auditReason: "订单退款 " + refund.refundNo,
-            session,
-          });
+          }], { session });
         }
 
         await Order.updateOne(

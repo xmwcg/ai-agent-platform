@@ -58,6 +58,7 @@ import { renderPrometheusMetrics } from './lib/prometheus';
 import { requireAdmin } from './middleware/requireAdmin';
 import { requestIdMiddleware } from './middleware/request-id';
 import { reloadCustomProviders } from './gateway/ai-gateway.service';
+import { ReconciliationService } from './services/reconciliation.service';
 import { mediaWorker } from './services/queue.service';
 import { OutboxWorker } from './services/outbox-worker';
 
@@ -228,6 +229,56 @@ export interface BootstrapOptions {
   dependencies?: Partial<BootstrapDependencies>;
 }
 
+
+/**
+ * 每日对账定时器
+ * 每天凌晨 2:00 (UTC+8) 自动触发前一天的对账
+ * 使用 setInterval 轮询实现，无需额外依赖
+ */
+function scheduleDailyReconciliation(): NodeJS.Timeout {
+  const RUN_HOUR_UTC8 = 2;
+  const CHECK_INTERVAL_MS = 60_000; // 每分钟检查一次
+
+  const getNextRunMs = (): number => {
+    const now = new Date();
+    const runTime = new Date(now);
+    runTime.setHours(RUN_HOUR_UTC8, 0, 0, 0);
+    if (runTime <= now) {
+      runTime.setDate(runTime.getDate() + 1);
+    }
+    return runTime.getTime() - now.getTime();
+  };
+
+  let lastRunDate = '';
+
+  const runIfNeeded = async () => {
+    const now = new Date();
+    // 只在 2:00~2:05 这个窗口触发，防止多次执行
+    if (now.getHours() !== RUN_HOUR_UTC8) return;
+
+    const todayStr = now.toISOString().slice(0, 10);
+    if (lastRunDate === todayStr) return;
+
+    lastRunDate = todayStr;
+    logger.info('reconciliation-cron', `开始每日自动对账（日期: ${todayStr}）`);
+
+    try {
+      const result = await ReconciliationService.triggerReconciliation();
+      logger.info('reconciliation-cron', `对账完成: batchId=${result.batchId} status=${result.status} matched=${result.matchedOrders} unmatched=${result.unmatchedOrders}`);
+    } catch (err: any) {
+      logger.error('reconciliation-cron', `对账失败: ${err.message || String(err)}`);
+    }
+  };
+
+  // 初始延迟到下一个 2:00
+  const initialDelay = getNextRunMs();
+  logger.info('reconciliation-cron', `每日对账定时器已注册，首次将在 ${Math.round(initialDelay / 3600000)} 小时后触发`);
+
+  const timer = setInterval(runIfNeeded, CHECK_INTERVAL_MS);
+  // 允许进程退出（不阻止关闭）
+  timer.unref();
+  return timer;
+}
 function defaultBootstrapDependencies(): BootstrapDependencies {
   return {
     validateEnv: validateStartupEnv,
@@ -270,6 +321,9 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Server 
   await startManagedDependency('自定义 AI Provider', dependencies.reloadProviders);
   await startManagedDependency('媒体任务 Worker', dependencies.startMediaWorker);
   await startManagedDependency('Outbox Worker', async () => { dependencies.startOutboxWorker(); });
+
+  // 每日对账定时器（每天凌晨 2:00 UTC+8）
+  scheduleDailyReconciliation();
 
   if (options.listen === false) return undefined;
   return dependencies.startHttpServer();

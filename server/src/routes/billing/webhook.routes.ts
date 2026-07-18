@@ -11,6 +11,9 @@ import { PaymentAttempt } from "../../models/PaymentAttempt";
 import { OutboxEvent } from "../../models/OutboxEvent";
 import { getPaymentGateway } from "../../services/payment.service";
 import { activateSubscription, grantCreditsPack } from "./logic";
+import { issuePrivateLicense } from "../../services/private-license.service";
+import { getPrivateLicensePackage } from "../../config/private-license";
+import { User } from "../../models/User";
 import { sendError } from "../../lib/http-error";
 import { logger } from "../../lib/logger";
 import crypto from "crypto";
@@ -226,6 +229,18 @@ router.post("/webhook/:provider", async (req: Request, res: Response) => {
         { orderNo: order.orderNo },
         { $set: { fulfillmentStatus: "fulfilled" as FulfillmentStatus } }
       );
+    } else if (order.orderType === "private_license" && order.packageId) {
+      // 私有化授权：调金网通签发 License，不进积分账本（避免双账本冲突）
+      const licenseResult = await fulfillPrivateLicense(order.userId.toString(), order.packageId, order.orderNo);
+      await Order.updateOne(
+        { orderNo: order.orderNo },
+        {
+          $set: {
+            fulfillmentStatus: licenseResult.ok ? ("fulfilled" as FulfillmentStatus) : ("pending" as FulfillmentStatus),
+            licensePayload: licenseResult.payload,
+          },
+        }
+      );
     } else {
       await activateSubscription(order.userId.toString(), order.plan, order.period, order.orderNo);
       await Order.updateOne(
@@ -269,6 +284,33 @@ router.post("/webhook/:provider", async (req: Request, res: Response) => {
     return res.status(200).json({ received: true });
   }
 });
+
+/**
+ * 私有化授权履约：调金网通签发 License 并回写订单。
+ * 签发失败时订单 fulfillmentStatus 保持 pending，允许人工补发，不阻断支付成功。
+ */
+async function fulfillPrivateLicense(
+  userId: string,
+  packageId: string,
+  orderNo: string
+): Promise<{ ok: boolean; payload?: Record<string, unknown> }> {
+  const pkg = getPrivateLicensePackage(packageId);
+  if (!pkg) {
+    logger.error("private-license", `未知私有化套餐: packageId=${packageId} orderNo=${orderNo}`);
+    return { ok: false };
+  }
+  try {
+    const user = await User.findById(userId).select("email").lean();
+    const userEmail = (user as any)?.email || `order-${orderNo}@aibak.site`;
+    const issued = await issuePrivateLicense(pkg, orderNo, userEmail);
+    logger.info("private-license", `License 签发成功: orderNo=${orderNo} packageId=${packageId}`);
+    return { ok: true, payload: issued as unknown as Record<string, unknown> };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("private-license", `License 签发失败，需人工补发: orderNo=${orderNo} err=${message}`);
+    return { ok: false };
+  }
+}
 
 /**
  * 处理退款回调

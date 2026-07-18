@@ -161,6 +161,14 @@ export const billingAPI = {
     apiClient.post('/billing/orders', data),
   createCreditsOrder: (data: { packageId: string; provider?: PaymentProvider }) =>
     apiClient.post('/billing/credits-packages/order', data),
+  // 私有化授权包列表（企业版）
+  getPrivateLicensePackages: () => apiClient.get('/billing/private-license-packages'),
+  // 购买私有化授权（企业版），复用现有微信支付流程
+  createPrivateLicenseOrder: (data: { packageId: string; provider?: PaymentProvider }) =>
+    apiClient.post('/billing/private-license/order', data),
+  // 毛利看板（仅 Admin，后端 requireAdmin 守卫，不对客户开放）
+  getProfitSummary: (month?: string) =>
+    apiClient.get('/billing/profit-summary', { params: month ? { month } : {} }),
   // 查询订单支付状态（前端扫码后轮询；真实网关会主动查单兜底激活）
   getOrderStatus: (orderNo: string) => apiClient.get(`/billing/orders/${orderNo}/status`),
   cancelSubscription: () => apiClient.post('/billing/subscription/cancel'),

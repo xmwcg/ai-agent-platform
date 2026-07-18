@@ -12,7 +12,7 @@ import { useResponsive } from '@/hooks/useResponsive';
 
 const { Title, Paragraph, Text } = Typography;
 
-type PriceType = 'credits' | 'month' | 'year';
+type PriceType = 'credits' | 'month' | 'year' | 'enterprise';
 
 interface PlanFromServer {
   id: string;
@@ -33,6 +33,18 @@ interface CreditsPackage {
   description: string;
 }
 
+interface EnterprisePackage {
+  id: string;
+  name: string;
+  tagline: string;
+  version: string;
+  price: number; // 分
+  validDays: number;
+  seats: number;
+  features: string[];
+  highlighted?: boolean;
+}
+
 function centsToYuan(cents: number): string {
   if (cents <= 0) return '免费';
   return `¥${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
@@ -44,7 +56,9 @@ export default function PricingPage() {
   const [currentPlan, setCurrentPlan] = useState('free');
   const [paying, setPaying] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<PlanFromServer | CreditsPackage | null>(null);
+  const [selectedItem, setSelectedItem] = useState<PlanFromServer | CreditsPackage | EnterprisePackage | null>(null);
+  /** 当前选中项的业务类型，用于下单时区分订阅/积分/私有化 */
+  const [selectedType, setSelectedType] = useState<'plan' | 'credits' | 'enterprise'>('plan');
   const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'yearly'>('monthly');
   // 支付方式与支付流程状态
   type PayProvider = 'wechat';
@@ -61,15 +75,17 @@ export default function PricingPage() {
   // 从后端加载数据
   const [plans, setPlans] = useState<PlanFromServer[]>([]);
   const [creditsPackages, setCreditsPackages] = useState<CreditsPackage[]>([]);
+  const [enterprisePackages, setEnterprisePackages] = useState<EnterprisePackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     async function load() {
       try {
-      const [plansRes, pkgsRes, subRes, methodsRes] = await Promise.all([
+      const [plansRes, pkgsRes, entRes, subRes, methodsRes] = await Promise.all([
         billingAPI.getPlans(),
         billingAPI.getCreditsPackages(),
+        billingAPI.getPrivateLicensePackages().catch(() => null),
         billingAPI.getSubscription().catch(() => null),
         billingAPI.getPaymentMethods().catch(() => null),
       ]);
@@ -77,6 +93,7 @@ export default function PricingPage() {
       const allPlans = (plansRes as any)?.data || [];
       setPlans(allPlans);
       setCreditsPackages((pkgsRes as any)?.data || []);
+      setEnterprisePackages((entRes as any)?.data || []);
       setPaymentMethods((methodsRes as any)?.data?.methods || []);
       if ((subRes as any)?.data?.plan) {
         setCurrentPlan((subRes as any).data.plan);
@@ -121,13 +138,18 @@ export default function PricingPage() {
     setPaying(null);
   };
 
-  const handleSelect = (item: PlanFromServer | CreditsPackage, period?: 'monthly' | 'yearly') => {
+  const handleSelect = (
+    item: PlanFromServer | CreditsPackage | EnterprisePackage,
+    type: 'plan' | 'credits' | 'enterprise',
+    period?: 'monthly' | 'yearly'
+  ) => {
     const id = 'id' in item ? item.id : '';
-    if (id === currentPlan) {
+    if (type === 'plan' && id === currentPlan) {
       message.info('您已订阅此套餐');
       return;
     }
     setSelectedItem(item);
+    setSelectedType(type);
     setSelectedPeriod(period || 'monthly');
     setPayStatus('confirm');
     setQr(null);
@@ -158,13 +180,19 @@ export default function PricingPage() {
 
   const handlePay = async () => {
     if (!selectedItem) return;
-    const isCredits = !('priceMonthly' in selectedItem);
+    const isCredits = selectedType === 'credits';
+    const isEnterprise = selectedType === 'enterprise';
     const itemName = getItemName(selectedItem);
     setPayStatus('creating');
     setPaying('id' in selectedItem ? selectedItem.id : 'package');
     try {
       let res: any;
-      if (!isCredits) {
+      if (isEnterprise) {
+        res = await billingAPI.createPrivateLicenseOrder({
+          packageId: selectedItem.id,
+          provider: payProvider,
+        });
+      } else if (!isCredits) {
         res = await billingAPI.createOrder({
           plan: selectedItem.id as 'free' | 'pro' | 'max' | 'team',
           period: selectedPeriod,
@@ -224,18 +252,24 @@ export default function PricingPage() {
 
   const displayPlans = priceType === 'credits'
     ? creditsPackages
-    : paidPlans;
+    : priceType === 'enterprise'
+      ? enterprisePackages
+      : paidPlans;
 
-  const getItemPrice = (item: PlanFromServer | CreditsPackage): string => {
+  const getItemPrice = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string => {
     if ('priceMonthly' in item) {
       if (priceType === 'year') return centsToYuan(item.priceYearly);
       return centsToYuan(item.priceMonthly);
+    }
+    if ('version' in item) {
+      // 企业版私有化授权（一次性）
+      return centsToYuan((item as EnterprisePackage).price);
     }
     // 积分包
     return centsToYuan((item as CreditsPackage).price);
   };
 
-  const getItemOriginalPrice = (item: PlanFromServer | CreditsPackage): string | null => {
+  const getItemOriginalPrice = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string | null => {
     if ('priceMonthly' in item && priceType === 'year') {
       // 年付 = 月付 × 10，标出原价（月付 × 12）
       const orig = item.priceMonthly * 12;
@@ -244,25 +278,25 @@ export default function PricingPage() {
     return null;
   };
 
-  const getItemId = (item: PlanFromServer | CreditsPackage): string =>
+  const getItemId = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string =>
     'id' in item ? item.id : (item as CreditsPackage).id;
 
-  const getItemName = (item: PlanFromServer | CreditsPackage): string =>
+  const getItemName = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string =>
     'id' in item ? item.name : (item as CreditsPackage).name;
 
-  const getItemFeatures = (item: PlanFromServer | CreditsPackage): string[] => {
+  const getItemFeatures = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string[] => {
     if ('features' in item) return item.features;
     const pkg = item as CreditsPackage;
     return [`${pkg.credits} 积分`, '可用于 AI 对话 / API 调用 / 工具使用', '永久有效'];
   };
 
-  const getItemHighlighted = (item: PlanFromServer | CreditsPackage): boolean => {
+  const getItemHighlighted = (item: PlanFromServer | CreditsPackage | EnterprisePackage): boolean => {
     if ('highlighted' in item) return !!item.highlighted;
     // 积分包：500 积分的为推荐
     return (item as CreditsPackage).credits === 500;
   };
 
-  const getItemBadge = (item: PlanFromServer | CreditsPackage): string | null => {
+  const getItemBadge = (item: PlanFromServer | CreditsPackage | EnterprisePackage): string | null => {
     if ('highlighted' in item && item.highlighted) return '推荐';
     if ('credits' in item && item.credits >= 2000) return '最划算';
     return null;
@@ -286,6 +320,7 @@ export default function PricingPage() {
             { value: 'credits', label: '⚡ 积分', icon: <ThunderboltOutlined /> },
             { value: 'month', label: '💳 按月', icon: <WalletOutlined /> },
             { value: 'year', label: '🏆 包年', icon: <CrownOutlined /> },
+            { value: 'enterprise', label: '🏢 企业版', icon: <CrownOutlined /> },
           ]}
         />
       </div>
@@ -322,7 +357,11 @@ export default function PricingPage() {
                       key="buy"
                       type={highlighted ? 'primary' : 'default'}
                       block
-                      onClick={() => handleSelect(item as PlanFromServer | CreditsPackage, priceType === 'year' ? 'yearly' : 'monthly')}
+                      onClick={() => {
+                        const type = priceType === 'credits' ? 'credits'
+                          : priceType === 'enterprise' ? 'enterprise' : 'plan';
+                        handleSelect(item, type, priceType === 'year' ? 'yearly' : 'monthly');
+                      }}
                       loading={paying === id}
                       style={{
                         margin: '0 16px',
@@ -330,7 +369,9 @@ export default function PricingPage() {
                         border: highlighted ? 'none' : undefined,
                       }}
                     >
-                      {currentPlan === id ? '当前方案' : ('priceMonthly' in item && item.priceMonthly === 0) ? '免费使用' : priceType === 'credits' ? '立即购买' : '立即订阅'}
+                      {priceType === 'enterprise'
+                        ? '立即购买授权'
+                        : currentPlan === id ? '当前方案' : ('priceMonthly' in item && item.priceMonthly === 0) ? '免费使用' : priceType === 'credits' ? '立即购买' : '立即订阅'}
                     </Button>,
                   ]}
                 >
@@ -342,13 +383,20 @@ export default function PricingPage() {
                         {getItemPrice(item)}
                       </Text>
                       <Text type="secondary" style={{ fontSize: 14 }}>
-                        /{priceType === 'credits' ? '包' : priceType === 'year' ? '年' : '月'}
+                        {priceType === 'enterprise'
+                          ? (('validDays' in item && (item as EnterprisePackage).validDays === -1) ? ' · 永久' : ' · 一次性')
+                          : priceType === 'credits' ? ' / 包' : priceType === 'year' ? ' / 年' : ' / 月'}
                       </Text>
                     </div>
                     {getItemOriginalPrice(item) && (
                       <Text delete type="secondary" style={{ fontSize: 13 }}>
                         {getItemOriginalPrice(item)}
                       </Text>
+                    )}
+                    {priceType === 'enterprise' && 'tagline' in item && (
+                      <div style={{ marginTop: 6 }}>
+                        <Text type="secondary" style={{ fontSize: 13 }}>{(item as EnterprisePackage).tagline}</Text>
+                      </div>
                     )}
                   </div>
                   <Divider style={{ margin: '0 0 12px' }} />

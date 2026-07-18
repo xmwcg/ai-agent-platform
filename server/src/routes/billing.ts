@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { AuthRequest, requireAuth } from '../middleware/auth';
+import { AuthRequest, requireAuth, requireAdmin } from '../middleware/auth';
 import { User } from '../models/User';
 import { Order, PaymentProvider, BillingPeriod } from '../models/Order';
 import { PLANS, PlanId, getPlan } from '../config/billing';
 import { CREDITS_PACKAGES } from '../config/credits-pricing';
+import { PRIVATE_LICENSE_PACKAGES, getPrivateLicensePackage } from '../config/private-license';
+import { getGlobalCost } from '../services/cost-control.service';
 import { getPaymentGateway, isRealGateway, listPaymentMethods } from '../services/payment.service';
 import { resolveUserPlan, getQuotaUsage } from '../middleware/subscription';
 import { sendError } from '../lib/http-error';
@@ -78,6 +80,70 @@ router.post('/credits-packages/order', requireAuth, async (req: AuthRequest, res
         orderNo,
         amount: pkg.price,
         credits: pkg.credits,
+        currency: 'CNY',
+        provider: payProvider,
+        isReal: isRealGateway(payProvider),
+        payParams: result.payParams,
+        expiredAt: order.expiresAt,
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 私有化授权包列表（公开）
+router.get('/private-license-packages', (_req: Request, res: Response) => {
+  res.json({ success: true, data: PRIVATE_LICENSE_PACKAGES });
+});
+
+// 购买私有化授权（需登录）——复用现有微信支付下单流程，订单类型为 private_license
+router.post('/private-license/order', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { packageId, provider } = req.body as { packageId?: string; provider?: PaymentProvider };
+    if (!packageId) {
+      return res.status(400).json({ success: false, error: '缺少 packageId' });
+    }
+    const pkg = getPrivateLicensePackage(packageId);
+    if (!pkg) {
+      return res.status(400).json({ success: false, error: '无效的私有化授权包' });
+    }
+    const payProvider = resolvePaymentProvider(provider);
+    const orderNo = genOrderNo();
+    const order = await Order.create({
+      orderNo,
+      userId: req.user!.id,
+      orderType: 'private_license',
+      plan: 'free',
+      packageId,
+      licenseVersion: pkg.version,
+      period: 'monthly',
+      amount: pkg.price,
+      currency: 'CNY',
+      provider: payProvider,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    const gateway = getPaymentGateway(payProvider);
+    const result = await gateway.createOrder({
+      orderNo,
+      amount: pkg.price,
+      currency: 'CNY',
+      description: `AI Agent Platform - 私有化授权 ${pkg.name}`,
+      clientIp: req.ip,
+    });
+
+    order.payParams = result.payParams;
+    if (result.paymentIntentId) {
+      order.paymentIntentId = result.paymentIntentId;
+    }
+    await order.save();
+
+    res.json({
+      success: true,
+      data: {
+        orderNo,
+        amount: pkg.price,
         currency: 'CNY',
         provider: payProvider,
         isReal: isRealGateway(payProvider),
@@ -203,6 +269,10 @@ router.get('/orders/:orderNo/pay', requireAuth, async (req: AuthRequest, res: Re
       const balance = await grantCreditsPack(order.userId.toString(), order.packageId, order.orderNo);
       return res.json({ success: true, data: { paid: true, orderType: 'credits_pack', credits: balance } });
     }
+    if (order.orderType === 'private_license' && order.packageId) {
+      // 私有化订单：mock/轮询路径仅标记已支付，license 由 webhook 履约（生产）签发
+      return res.json({ success: true, data: { paid: true, orderType: 'private_license', packageId: order.packageId } });
+    }
     await activateSubscription(order.userId.toString(), order.plan, order.period, order.orderNo);
     res.json({ success: true, data: { paid: true, plan: order.plan } });
   } catch (err) {
@@ -241,6 +311,8 @@ router.get('/orders/:orderNo/status', requireAuth, async (req: AuthRequest, res:
           if (claimed) {
             if (claimed.orderType === 'credits_pack' && claimed.packageId) {
               await grantCreditsPack(claimed.userId.toString(), claimed.packageId, claimed.orderNo);
+            } else if (claimed.orderType === 'private_license' && claimed.packageId) {
+              // 私有化订单：轮询路径仅标记已支付，license 由 webhook 履约签发
             } else {
               await activateSubscription(claimed.userId.toString(), claimed.plan, claimed.period, claimed.orderNo);
             }
@@ -382,6 +454,65 @@ router.use(refundRoutes);
 
 // 对账子模块
 router.use(reconciliationRoutes);
+
+/* ============================================================
+ * 毛利看板（仅 Admin 内部，绝不对客户开放）
+ * 聚合：∑已支付收入（按订单类型/月份） − ∑全站 AI 成本（按日汇总）
+ * ============================================================ */
+router.get('/profit-summary', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const month = (req.query.month as string) || new Date().toISOString().slice(0, 7); // YYYY-MM
+    const monthStart = `${month}-01`;
+    const nextMonth = new Date(`${month}-01`);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const monthEnd = nextMonth.toISOString().slice(0, 10);
+
+    // 1) 收入：按订单类型聚合当月已支付订单金额（分）
+    const paidOrders = await Order.find({
+      paymentStatus: 'paid',
+      paidAt: { $gte: new Date(monthStart), $lt: nextMonth },
+    }).lean();
+
+    const revenue = { subscription: 0, credits_pack: 0, private_license: 0, total: 0 };
+    for (const o of paidOrders as any[]) {
+      const t = o.orderType as keyof typeof revenue;
+      if (t in revenue) {
+        (revenue as any)[t] += o.amount || 0;
+        revenue.total += o.amount || 0;
+      }
+    }
+
+    // 2) 成本：聚合当月每日全站 AI 成本（分）
+    let costTotal = 0;
+    const days: number[] = [];
+    const d = new Date(monthStart);
+    while (d.toISOString().slice(0, 7) === month) {
+      days.push(Number(await getGlobalCost(d.toISOString().slice(0, 10))));
+      d.setDate(d.getDate() + 1);
+    }
+    costTotal = days.reduce((s, v) => s + v, 0);
+
+    // 3) 毛利
+    const grossProfit = revenue.total - costTotal;
+    const margin = revenue.total > 0 ? Math.round((grossProfit / revenue.total) * 1000) / 10 : 0;
+
+    res.json({
+      success: true,
+      data: {
+        month,
+        revenue,              // 分
+        cost: costTotal,       // 分
+        grossProfit,          // 分
+        margin,               // 毛利率 %
+        dailyCost: days,       // 当月每日成本（分），供折线图
+        orderCount: paidOrders.length,
+        note: '内部毛利看板，仅管理员可见，不对客户开放',
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
 
 export default router;
 
