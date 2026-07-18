@@ -81,6 +81,31 @@ ${research}`,
       const script = scriptResult.reply?.trim();
       if (!script) throw new Error('脚本 Provider 返回空内容');
 
+      // 视觉提示词：把脚本转成「纯画面、无品牌/口号/文案」的镜头化英文描述，专供视频模型。
+      // 视频模型有内容策略过滤，直接喂整段带品牌名/slogan 的营销脚本会触发 content_policy_violation。
+      let visualPrompt = '';
+      if (compose) {
+        const visualResult = await route({
+          ...(typeof provider === 'string' ? { provider: provider as any } : {}),
+          ...(typeof model === 'string' && model.trim() ? { model: model.trim() } : {}),
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a cinematography prompt writer for a text-to-video model. Convert the given script into ONE concise English shot description of the VISUALS only: subjects, actions, setting, lighting, camera movement, mood and style. Rules: describe only what the camera sees; NO brand names, NO logos, NO slogans, NO on-screen text/captions, NO marketing claims, NO people speaking words. Keep it under 60 words. Output the description only, no preamble.',
+            },
+            {
+              role: 'user',
+              content: `Topic: ${cleanTopic}\nStyle: ${style || 'cinematic commercial'}\nScript:\n${script}`,
+            },
+          ],
+          maxTokens: 220,
+          temperature: 0.4,
+        });
+        visualPrompt = (visualResult.reply || '').trim();
+        if (!visualPrompt) throw new Error('视觉提示词 Provider 返回空内容');
+      }
+
       let composeResult: any = null;
       if (compose) {
         // 成片优先使用 Agnes 视频模型（agnes-video-v2.0），未配置时回退 MoneyPrinterTurbo
@@ -89,7 +114,8 @@ ${research}`,
         const videoProvider = agnesReady ? 'agnes' : 'moneyprinterturbo';
         composeResult = await mediaGenService.generate({
           type: 'text2video',
-          prompt: script,
+          // Agnes 视频用纯画面视觉提示词；回退 MPT 时用完整脚本（MPT 需要文案生成配音字幕）
+          prompt: videoProvider === 'agnes' ? visualPrompt : script,
           provider: videoProvider as any,
           ...(duration ? { duration } : {}),
           ...(style ? { style } : {}),
@@ -105,6 +131,7 @@ ${research}`,
           stages: {
             research: { content: research, provider: researchResult.provider, model: researchResult.model },
             script: { content: script, provider: scriptResult.provider, model: scriptResult.model },
+            ...(visualPrompt ? { visualPrompt } : {}),
             compose: composeResult,
           },
           next: compose
