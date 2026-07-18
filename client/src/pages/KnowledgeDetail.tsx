@@ -413,7 +413,7 @@ export default function KnowledgeDetail() {
           {/* 元信息 */}
           <Space size={20} style={{ marginBottom: 16 }} wrap>
             <span style={{ color: '#64748b' }}><UserOutlined /> {doc?.author?.username}</span>
-            <span style={{ color: '#64748b' }}><ClockCircleOutlined /> {new Date(doc?.updatedAt || doc?.createdAt).toLocaleDateString('zh-CN')}</span>
+            <span style={{ color: '#64748b' }}><ClockCircleOutlined /> {new Date(doc?.updatedAt ?? doc?.createdAt ?? "").toLocaleDateString('zh-CN')}</span>
             <span style={{ color: '#64748b' }}><EyeOutlined /> {doc?.viewCount} 浏览</span>
             <span style={{ color: '#64748b' }}>
               <HeartOutlined /> {doc?.likeCount} 赞
@@ -484,8 +484,8 @@ export default function KnowledgeDetail() {
               <div>格式: {doc?.htmlContent ? '富文本' : 'Markdown'}</div>
               <div>字数: ~{shownContent.length || 0}</div>
               <div>标签: {doc?.tags?.length || 0} 个</div>
-              <div>创建: {new Date(doc?.createdAt).toLocaleDateString('zh-CN')}</div>
-              <div>更新: {new Date(doc?.updatedAt || doc?.createdAt).toLocaleDateString('zh-CN')}</div>
+              <div>创建: {new Date(doc?.createdAt ?? "").toLocaleDateString('zh-CN')}</div>
+              <div>更新: {new Date(doc?.updatedAt ?? doc?.createdAt ?? "").toLocaleDateString('zh-CN')}</div>
             </div>
           </Card>
           <Card size="small">
