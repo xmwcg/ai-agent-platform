@@ -7,6 +7,8 @@ import request from 'supertest';
 import { phoneHash } from '../lib/field-crypto';
 
 // mock User 模型，避免真实 DB 连接
+jest.mock('../models/AuthSession', () => ({ AuthSession: { create: jest.fn().mockResolvedValue({ userId: 'uid-1', status: 'active' }), findOne: jest.fn().mockResolvedValue(null), deleteMany: jest.fn().mockResolvedValue({ deletedCount: 0 }) } }));
+
 jest.mock('../models/User', () => {
   const fakeUser = {
     _id: 'uid-1',
@@ -24,7 +26,7 @@ jest.mock('../models/User', () => {
 
 import authRouter from './auth';
 import { redisClient } from '../config/database';
-import { generateToken } from '../middleware/auth';
+import { generateAccessToken } from '../middleware/auth';
 
 const app = express();
 app.use(express.json());
@@ -95,3 +97,4 @@ describe('手机号验证码登录', () => {
     expect(res.status).toBe(400);
   });
 });
+

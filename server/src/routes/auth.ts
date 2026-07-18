@@ -856,4 +856,85 @@ router.post('/unbind/douyin', requireAuth, async (req: AuthRequest, res: Respons
   }
 });
 
+// ===================== 微信小程序登录（引流：code2session 换 openid，找/建用户并下发 JWT） =====================
+// 小程序 wx.login() 拿 code → 后端 jscode2session 换 openid → 复用 User 模型(wechatOpenid) → 发令牌
+// 仅做登录绑定，不碰计费；支付仍由 H5 走现有微信支付 + 现有账本
+const miniLoginSchema: ValidationSchema = {
+  code: { required: true, type: 'string', minLength: 1, maxLength: 128 },
+};
+
+router.post('/wechat/mini-login', authLimiter, validate(miniLoginSchema), async (req: Request, res: Response) => {
+  try {
+    const cfg = OAUTH_CONFIG.wechatMini;
+    if (process.env.NODE_ENV === 'production' && !cfg.enabled) {
+      return res.status(503).json({ success: false, error: '小程序登录暂未开放', code: 'MINI_LOGIN_NOT_CONFIGURED' });
+    }
+
+    const { code } = req.body as { code: string };
+
+    let openid: string;
+    if (cfg.mock) {
+      openid = `mock_mini_openid_${code.slice(0, 8)}`;
+    } else {
+      const { data: wxRes } = await axios.get(cfg.tokenUrl, {
+        params: {
+          appid: cfg.clientId,
+          secret: cfg.clientSecret,
+          js_code: code,
+          grant_type: 'authorization_code',
+        },
+        timeout: 8000,
+      });
+      if (wxRes.errcode) {
+        logger.warn("auth", `[mini-login] jscode2session failed: errcode=${wxRes.errcode} errmsg=${wxRes.errmsg}`);
+        return res.status(401).json({ success: false, error: '微信登录校验失败', code: wxRes.errcode, detail: wxRes.errmsg });
+      }
+      openid = wxRes.openid;
+      if (!openid) return res.status(401).json({ success: false, error: '无法获取微信 openid' });
+    }
+
+    // 复用现有 User 模型（wechatOpenid 唯一），找/建用户
+    let user = await User.findOne({ wechatOpenid: openid });
+    if (!user) {
+      user = await User.create({
+        wechatOpenid: openid,
+        password: crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, ''),
+        name: '微信用户',
+        provider: 'wechat',
+        providerId: openid,
+        email: `wxmini_${openid.slice(0, 16)}@aibak.local`,
+      });
+      try {
+        await processReferralOnRegister(user._id.toString(), req.body.referralCode);
+      } catch (e) {
+        logger.warn("auth", `[mini-login] referral process failed: ${(e as Error)?.message}`);
+      }
+    }
+
+    // 复用现有令牌签发 + 会话创建逻辑
+    const jti = crypto.randomUUID();
+    const refreshToken = generateRefreshToken();
+    const tokenHash = hashRefreshToken(refreshToken);
+    const deviceFingerprint = generateDeviceFingerprint(req);
+
+    await AuthSession.create({
+      userId: user._id,
+      refreshToken,
+      refreshTokenHash: tokenHash,
+      accessTokenJti: jti,
+      deviceFingerprint,
+      userAgent: req.headers['user-agent'] || '',
+      ipAddress: req.ip || req.socket.remoteAddress || '',
+      status: 'active',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+    setRefreshTokenCookie(res, refreshToken);
+
+    const token = generateAccessToken({ id: user._id.toString(), email: user.email, role: user.role, jti });
+    return res.json({ success: true, token, user: user.toJSON() });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
 export default router;

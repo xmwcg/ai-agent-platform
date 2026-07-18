@@ -2,7 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import billingRoutes from './billing';
 import authRoutes from './auth';
-import { generateToken } from '../middleware/auth';
+import { generateAccessToken } from '../middleware/auth';
 
 const originalEnv = process.env;
 
@@ -36,7 +36,7 @@ describe('Batch 0 生产路由门禁', () => {
   });
 
   it.each(['mock', 'alipay', 'stripe'])('下单拒绝 provider=%s', async (provider) => {
-    const token = generateToken({ id: 'user-1', email: 'user@example.com', role: 'user' });
+    const token = generateAccessToken({ id: 'user-1', email: 'user@example.com', role: 'user' });
     const response = await request(createApp())
       .post('/api/billing/orders')
       .set('Authorization', `Bearer ${token}`)
@@ -47,7 +47,7 @@ describe('Batch 0 生产路由门禁', () => {
   });
 
   it('生产 Mock 支付确认入口不可用', async () => {
-    const token = generateToken({ id: 'user-1', email: 'user@example.com', role: 'user' });
+    const token = generateAccessToken({ id: 'user-1', email: 'user@example.com', role: 'user' });
     const response = await request(createApp())
       .get('/api/billing/orders/AI123/pay')
       .set('Authorization', `Bearer ${token}`);

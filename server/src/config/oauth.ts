@@ -24,7 +24,7 @@ function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
-export const OAUTH_CONFIG: Record<'wechat' | 'douyin', OAuthProviderConfig> = {
+export const OAUTH_CONFIG: Record<'wechat' | 'douyin' | 'wechatMini', OAuthProviderConfig> = {
   wechat: {
     enabled: !!(process.env.WECHAT_OPEN_APPID && process.env.WECHAT_OPEN_SECRET),
     mock: !isProduction() && !(process.env.WECHAT_OPEN_APPID && process.env.WECHAT_OPEN_SECRET),
@@ -37,6 +37,18 @@ export const OAUTH_CONFIG: Record<'wechat' | 'douyin', OAuthProviderConfig> = {
       process.env.WECHAT_LOGIN_REDIRECT ||
       `${process.env.PUBLIC_BASE_URL || ''}/api/auth/wechat/callback`,
     scope: 'snsapi_login',
+  },
+  // 微信小程序登录（引流小程序，code2session 换 openid，独立于网站应用/支付凭据）
+  wechatMini: {
+    enabled: !!(process.env.WECHAT_MINI_APPID && process.env.WECHAT_MINI_SECRET),
+    mock: !isProduction() && !(process.env.WECHAT_MINI_APPID && process.env.WECHAT_MINI_SECRET),
+    authorizeUrl: '',
+    tokenUrl: 'https://api.weixin.qq.com/sns/jscode2session',
+    userinfoUrl: '',
+    clientId: process.env.WECHAT_MINI_APPID || '',
+    clientSecret: process.env.WECHAT_MINI_SECRET || '',
+    redirectUri: '',
+    scope: 'snsapi_userinfo',
   },
   douyin: {
     enabled: !!(process.env.DOUYIN_CLIENT_KEY && process.env.DOUYIN_CLIENT_SECRET),

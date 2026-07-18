@@ -1,68 +1,55 @@
-/**
- * 私有化授权签发服务 —— 复用金网通 License 机制
- *
- * 私有化订单支付成功后，由 webhook 履约阶段调用本服务，
- * 向同机的金网通 license-issuer（/opt/jinwangtong/store，POST /api/admin/issue）
- * 请求签发 license.json，并将结果回写订单。
- *
- * 与现有 credit-ledger 积分账本完全解耦：私有化授权不进积分系统，避免双账本冲突。
- */
 import axios from 'axios';
-import { JINWANGTONG_ISSUE, PrivateLicensePackage } from '../config/private-license';
+import { PrivateLicensePackage } from '../config/private-license';
 import { logger } from '../lib/logger';
 
 export interface IssuedLicense {
-  /** 金网通返回的 license.json 内容（原样存库，用户控制台可下载） */
   licenseJson: Record<string, unknown>;
-  /** 可下载的授权文件在线地址（若有） */
   downloadUrl?: string;
-  /** 授权序列号/指纹（便于客服对账） */
   serial?: string;
 }
 
+// 金网通 store 签发服务地址与管理员令牌（由部署环境变量注入）
+const JW_STORE_BASE = process.env.JINWANGTONG_STORE_URL || 'http://127.0.0.1:3100';
+const JW_ADMIN_TOKEN = process.env.JINWANGTONG_ADMIN_TOKEN || '';
+
 /**
- * 向金网通管理接口签发一份私有化 license。
- * @param pkg 私有化套餐配置（含 version、validDays、seats）
- * @param orderNo 本平台订单号（作为授权备注，便于对账）
- * @param userEmail 下单用户邮箱（作为授权归属）
+ * 调用金网通 store 的 /api/admin/issue（模式 B）直接签发私有化 license。
+ * 契约：{ product, version, validDays, seats, offline, email, orderNo, adminToken }
+ * 金网通用 PLATFORM_EDITION_MAP[version] 映射内部 edition，validDays<0 视为永久(36500)。
  */
 export async function issuePrivateLicense(
   pkg: PrivateLicensePackage,
   orderNo: string,
   userEmail: string
 ): Promise<IssuedLicense> {
-  const { baseUrl, issuePath, adminToken, timeoutMs } = JINWANGTONG_ISSUE;
-
-  if (!adminToken) {
-    // 未配置管理令牌时记录告警但不阻断订单（订单仍标记为 paid，license 可后续人工补发）
-    logger.warn('private-license', 'JINWANGTONG_ADMIN_TOKEN 未配置，无法自动签发 license，需人工发货');
+  if (!JW_ADMIN_TOKEN) {
+    logger.warn('private-license', '未配置 JINWANGTONG_ADMIN_TOKEN，跳过实际签发');
     throw new Error('LICENSE_ISSUER_NOT_CONFIGURED');
   }
 
+  const validDays = pkg.validDays < 0 ? 36500 : pkg.validDays; // 永久用 100 年占位
+  const seats = pkg.seats < 0 ? 999999 : pkg.seats; // 不限席位用极大值
+
   const resp = await axios.post(
-    `${baseUrl}${issuePath}`,
+    `${JW_STORE_BASE}/api/admin/issue`,
     {
-      product: pkg.version,
-      version: pkg.version,
-      validDays: pkg.validDays,
-      seats: pkg.seats,
+      product: 'aibak-private',
+      version: pkg.version, // ent-standard / ent-pro / ent-ultimate
+      validDays,
+      seats,
       offline: pkg.offline,
-      orderNo,
       email: userEmail,
+      orderNo,
+      adminToken: JW_ADMIN_TOKEN,
     },
-    {
-      headers: {
-        Authorization: `Bearer ${adminToken}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: timeoutMs,
-    }
+    { timeout: 10000 }
   );
 
   const data = resp.data || {};
+  const license = data.license || data;
   return {
-    licenseJson: data.license || data,
+    licenseJson: license,
     downloadUrl: data.downloadUrl,
-    serial: data.serial || data.license?.serial,
+    serial: (license && (license.serial || license.sign)) || undefined,
   };
 }

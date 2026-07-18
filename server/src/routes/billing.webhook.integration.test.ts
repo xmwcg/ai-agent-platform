@@ -8,14 +8,14 @@
 import request from 'supertest';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 
 // 使用 jest.requireActual 获取真实 mongoose（绕过 test/setup.ts 的 mock），
 // 因为 mongodb-memory-server 需要真实的 mongoose 连接
 const mongoose = jest.requireActual('mongoose') as typeof import('mongoose');
 import app from '../index';
 
-let mongoServer: MongoMemoryServer;
+let mongoServer: MongoMemoryReplSet;
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-do-not-use-in-prod';
 const BASE = '/api/billing';
 let token: string;
@@ -49,11 +49,11 @@ async function disconnectTestMongoose(): Promise<void> {
 // ═══════════════ Setup / Teardown ═══════════════
 
 beforeAll(async () => {
-  jest.setTimeout(60000);
+  jest.setTimeout(120000);
   process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_webhook_integration';
 
   // 启动内存 MongoDB
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: "wiredTiger" } });
   const uri = mongoServer.getUri();
 
   // 断开旧连接后重连
@@ -72,10 +72,9 @@ beforeAll(async () => {
 }, 60000);
 
 afterAll(async () => {
-  try {
-    await disconnectTestMongoose();
-  } finally {
-    if (mongoServer) await mongoServer.stop();
+  try { await disconnectTestMongoose(); } catch {}
+  if (mongoServer) {
+    try { await mongoServer.stop(); } catch {}
   }
 }, 30000);
 

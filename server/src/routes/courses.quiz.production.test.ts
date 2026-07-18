@@ -3,7 +3,7 @@ import request from 'supertest';
 import coursesRouter from './courses';
 import { Course } from '../models/Course';
 import { UserCourseProgress } from '../models/UserCourseProgress';
-import { generateToken } from '../middleware/auth';
+import { generateAccessToken } from '../middleware/auth';
 
 function createApp() {
   const app = express();
@@ -12,7 +12,7 @@ function createApp() {
   return app;
 }
 
-const token = generateToken({ id: 'user-quiz-1', email: 'quiz@example.com', role: 'user' });
+const token = generateAccessToken({ id: 'user-quiz-1', email: 'quiz@example.com', role: 'user' });
 const auth = { Authorization: `Bearer ${token}` };
 
 function createCourse(overrides: Record<string, unknown> = {}) {

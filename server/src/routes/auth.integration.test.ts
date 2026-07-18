@@ -14,7 +14,7 @@ jest.setTimeout(15000);
 
 import express from 'express';
 import request from 'supertest';
-import { generateToken } from '../middleware/auth';
+import { generateAccessToken } from '../middleware/auth';
 import coursesRouter from '../routes/courses';
 import mcpRouter from '../routes/mcp';
 import billingRouter from '../routes/billing';
@@ -35,8 +35,8 @@ jest.mock('../middleware/subscription', () => {
   };
 });
 
-const userToken = generateToken({ id: 'user-1', email: 'u@example.com', role: 'user' });
-const otherToken = generateToken({ id: 'user-2', email: 'o@example.com', role: 'user' });
+const userToken = generateAccessToken({ id: 'user-1', email: 'u@example.com', role: 'user' });
+const otherToken = generateAccessToken({ id: 'user-2', email: 'o@example.com', role: 'user' });
 const authHeader = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 function mount(router: any, prefix = ''): express.Express {

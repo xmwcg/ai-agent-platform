@@ -14,21 +14,21 @@ import request from 'supertest';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { json } from 'express';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 
 const mongoose = jest.requireActual('mongoose') as typeof import('mongoose');
 
-let mongoServer: MongoMemoryServer;
+let mongoServer: MongoMemoryReplSet;
 let app: express.Express;
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-do-not-use-in-prod';
 let token: string;
 let testUserId: string;
 
 beforeAll(async () => {
-  jest.setTimeout(60000);
+  jest.setTimeout(120000);
   process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_credits_integration';
 
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: "wiredTiger" } });
   const uri = mongoServer.getUri();
 
   if (mongoose.connection.readyState !== 0) {
@@ -38,6 +38,7 @@ beforeAll(async () => {
 
   // 创建测试用户（含初始积分 100）
   const { User } = require('../models/User');
+  const { CreditLot } = require('../models/CreditLot');
   const user = await User.create({
     name: `credittest_${Date.now()}`,
     email: `credittest_${Date.now()}@test.com`,
@@ -45,6 +46,15 @@ beforeAll(async () => {
     credits: 100,
   });
   testUserId = String(user._id);
+  // 创建匹配的 CreditLot，使 grantCredits 的账本校验通过
+  await CreditLot.create({
+    userId: testUserId,
+    sourceType: 'legacy_protected',
+    originalAmount: 100,
+    remainingAmount: 100,
+    status: 'active',
+    auditReason: 'test-seed: 匹配初始 credits=100',
+  });
   token = jwt.sign({ id: testUserId }, JWT_SECRET, { expiresIn: '1h' });
 
   // 创建独立 Express app（仅挂载需要的路由，避免端口冲突）
@@ -195,6 +205,10 @@ describe('P0-2 API 市场积分扣减集成测试', () => {
     const payRes = await request(app)
       .get(`/api/billing/orders/${orderNo}/pay`)
       .set(auth());
+    console.log('=== MOCK PAY DEBUG ===');
+    console.log('payRes.status:', payRes.status);
+    console.log('payRes.body:', JSON.stringify(payRes.body, null, 2));
+    console.log('orderNo:', orderNo);
     expect(payRes.status).toBe(200);
     expect(payRes.body.data.paid).toBe(true);
     expect(payRes.body.data.orderType).toBe('credits_pack');

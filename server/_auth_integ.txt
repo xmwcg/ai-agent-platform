@@ -1,0 +1,75 @@
+  console.warn
+    2026-07-18T09:37:48.233Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/services/rag.ts:1:1)
+      at Object.<anonymous> (src/routes/rag.ts:2:1)
+      at Object.<anonymous> (src/routes/auth.integration.test.ts:21:1)
+
+  console.log
+    2026-07-18T09:37:48.302Z [INFO] asset-store 本地磁盘资产存储已就绪: G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\server\.cache\assets
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:37:48.365Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+(node:28656) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/routes/auth.integration.test.ts (14.786 s)
+  S1 课程路由写操作鉴权
+    √ 匿名 POST /courses 必须返回 401（修复前为裸奔） (46 ms)
+    √ 匿名 PUT /courses/:id 必须返回 401 (4 ms)
+    √ 匿名 PATCH /courses/:id/publish 必须返回 401 (3 ms)
+    √ 匿名 POST /courses/:id/chapters 必须返回 401 (5 ms)
+    √ GET /courses（读）对匿名开放 (3 ms)
+  S2 MCP 路由写操作鉴权
+    √ 匿名 POST /mcp/servers 必须返回 401 (3 ms)
+    √ 匿名 PUT /mcp/servers/:id 必须返回 401 (2 ms)
+    √ 匿名 DELETE /mcp/servers/:id 必须返回 401 (2 ms)
+    √ 匿名 POST /mcp/servers/:id/call 必须返回 401 (3 ms)
+    √ 匿名 POST /mcp/servers/:id/connect 必须返回 401 (4 ms)
+    √ GET /mcp/servers（读）对匿名开放 (3 ms)
+  S3 模拟支付接口鉴权
+    √ 匿名 GET /billing/orders/:orderNo/pay 必须返回 401 (3 ms)
+    √ 登录但订单不存在返回 404（而非激活他人订单） (4 ms)
+    √ 登录用户访问他人订单返回 403（归属校验） (4 ms)
+  S4 RAG 嵌入接口鉴权
+    √ 匿名 POST /rag/embed/document/:id 必须返回 401 (3 ms)
+    √ 匿名 POST /rag/embed/documents 必须返回 401 (3 ms)
+    √ 匿名 GET /rag/status 必须返回 401 (3 ms)
+  S5 AI 会话删除鉴权
+    √ 匿名 DELETE /ai/session/:id 必须返回 401 (2 ms)
+    √ 匿名 DELETE /ai/session/:id/delete 必须返回 401 (3 ms)
+    √ 登录用户删除不存在会话返回 404（进入 handler 验证） (4 ms)
+    √ 登录用户删除他人会话返回 403（归属校验） (3 ms)
+  S6 diagnostics 鉴权
+    √ 匿名 GET /diagnostics 必须返回 401 (3 ms)
+    √ 登录用户可访问 /diagnostics (10029 ms)
+  M8 compare 生成接口鉴权
+    √ 匿名 POST /compare/generate 仍可用（optionalAuth，匿名放行） (2 ms)
+    √ 匿名缺 items 返回 400（进入 handler 验证参数） (2 ms)
+    √ 登录用户 POST /compare/generate 通过（消耗 ai_chat 配额） (2 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       26 passed, 26 total
+Snapshots:   0 total
+Time:        15.137 s
+Ran all test suites matching /src\\routes\\auth.integration.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

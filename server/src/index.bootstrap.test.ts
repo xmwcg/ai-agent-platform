@@ -16,6 +16,7 @@ function dependencySet(events: string[] = []): jest.Mocked<BootstrapDependencies
     loadMcp: step('mcp', undefined),
     reloadProviders: step('providers', undefined),
     startMediaWorker: step('worker', undefined),
+    startOutboxWorker: jest.fn(() => { events.push('outbox'); }),
     startHttpServer: jest.fn(() => {
       events.push('listen');
       return {} as Server;
@@ -78,7 +79,7 @@ describe('bootstrap production startup order', () => {
     const server = await bootstrap({ dependencies });
 
     expect(server).toBeDefined();
-    expect(events).toEqual(['validate', 'mongo', 'redis', 'mcp', 'providers', 'worker', 'listen']);
+    expect(events).toEqual(['validate', 'mongo', 'redis', 'mcp', 'providers', 'worker', 'outbox', 'listen']);
   });
 
   it('can run the full startup gate without binding a port', async () => {

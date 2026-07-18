@@ -2,13 +2,13 @@
  * 鉴权 Token 安全单测（纯函数：generateToken / verifyToken）
  * 锁定 JWT 签发与校验的核心安全行为：正常往返、篡改拒绝、非法值拒绝。
  */
-import { generateToken, verifyToken } from './auth';
+import { generateAccessToken, verifyToken } from './auth';
 
 const PAYLOAD = { id: 'user-123', email: 'a@b.com', role: 'user' };
 
 describe('JWT 鉴权 Token', () => {
   it('generateToken 签发的 Token 可被 verifyToken 还原', () => {
-    const token = generateToken(PAYLOAD);
+    const token = generateAccessToken(PAYLOAD);
     expect(typeof token).toBe('string');
     const decoded = verifyToken(token);
     expect(decoded).not.toBeNull();
@@ -18,7 +18,7 @@ describe('JWT 鉴权 Token', () => {
   });
 
   it('篡改 Token（尾部追加字符）被拒绝，返回 null', () => {
-    const token = generateToken(PAYLOAD);
+    const token = generateAccessToken(PAYLOAD);
     expect(verifyToken(token + 'x')).toBeNull();
   });
 
@@ -31,8 +31,8 @@ describe('JWT 鉴权 Token', () => {
   });
 
   it('不同 payload 签发的 Token 不可互通', () => {
-    const t1 = generateToken(PAYLOAD);
-    const t2 = generateToken({ id: 'other', email: 'c@d.com', role: 'admin' });
+    const t1 = generateAccessToken(PAYLOAD);
+    const t2 = generateAccessToken({ id: 'other', email: 'c@d.com', role: 'admin' });
     expect(verifyToken(t1)).not.toEqual(verifyToken(t2));
     expect(verifyToken(t2)!.role).toBe('admin');
   });

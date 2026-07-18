@@ -1,7 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import sandboxRoutes from './sandbox';
-import { generateToken } from '../middleware/auth';
+import { generateAccessToken } from '../middleware/auth';
 
 function createApp() {
   const app = express();
@@ -61,7 +61,7 @@ describe('Sandbox 部署与生产模式门禁', () => {
       SANDBOX_REMOTE_URL: 'https://sandbox.internal.example.com/run',
       SANDBOX_REMOTE_TOKEN: 'remote-token',
     };
-    const token = generateToken({ id: 'user-1', email: 'user@example.com', role: 'user' });
+    const token = generateAccessToken({ id: 'user-1', email: 'user@example.com', role: 'user' });
 
     const response = await request(createApp())
       .post('/api/sandbox/run')

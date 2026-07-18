@@ -1,0 +1,14 @@
+PASS src/middleware/auth.test.ts
+  JWT 鉴权 Token
+    √ generateToken 签发的 Token 可被 verifyToken 还原 (8 ms)
+    √ 篡改 Token（尾部追加字符）被拒绝，返回 null
+    √ 非法 Token（非 JWT 字符串）返回 null (1 ms)
+    √ 空 Token 返回 null（不抛异常）
+    √ 不同 payload 签发的 Token 不可互通 (2 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       5 passed, 5 total
+Snapshots:   0 total
+Time:        2.899 s, estimated 3 s
+Ran all test suites matching /src\\middleware\\auth.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

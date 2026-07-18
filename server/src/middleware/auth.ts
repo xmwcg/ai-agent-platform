@@ -54,7 +54,7 @@ export function generateAccessToken(payload: { id: string; email: string; role: 
   return jwt.sign(
     { id: payload.id, email: payload.email, role: payload.role, jti, sessionId: payload.sessionId, type: "access" },
     JWT_SECRET,
-    { expiresIn: ACCESS_TOKEN_EXPIRY as any, jwtid: jti }
+    { expiresIn: ACCESS_TOKEN_EXPIRY as any }
   );
 }
 

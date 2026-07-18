@@ -5,7 +5,7 @@
  */
 import express from 'express';
 import request from 'supertest';
-import { generateToken } from '../middleware/auth';
+import { generateAccessToken } from '../middleware/auth';
 import csRouter from './customer-service';
 import { buildAuditEntry } from '../models/CustomerService';
 
@@ -36,7 +36,7 @@ jest.mock('../models/CustomerService', () => {
 });
 
 const { CustomerService, CustomerServiceSession, CustomerServiceAuditLog } = require('../models/CustomerService');
-const userToken = generateToken({ id: 'user-1', email: 'u@example.com', role: 'user' });
+const userToken = generateAccessToken({ id: 'user-1', email: 'u@example.com', role: 'user' });
 const authHeader = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 const fakeCs = {

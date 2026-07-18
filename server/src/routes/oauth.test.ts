@@ -1,3 +1,5 @@
+jest.mock('../models/AuthSession', () => ({ AuthSession: { create: jest.fn().mockResolvedValue({ userId: 'uid-1', status: 'active' }), findOne: jest.fn().mockResolvedValue(null), deleteMany: jest.fn().mockResolvedValue({ deletedCount: 0 }) } }));
+
 /**
  * 第三方 OAuth 登录 + 账号绑定/解绑 集成测试
  *
@@ -12,7 +14,7 @@ jest.setTimeout(15000);
 
 import express from 'express';
 import request from 'supertest';
-import { generateToken } from '../middleware/auth';
+import { generateAccessToken } from '../middleware/auth';
 import authRouter from '../routes/auth';
 
 // ── mock User 模型（内存版，可控行为）──
@@ -81,7 +83,7 @@ jest.mock('../models/User', () => {
 // 注意：jest.mock 会被自动提升，下面 import 在 mock 生效后执行
 import { User } from '../models/User';
 
-const token = generateToken({ id: 'user-1', email: 'u1@example.com', role: 'user' });
+const token = generateAccessToken({ id: 'user-1', email: 'u1@example.com', role: 'user' });
 const authHeader = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 function mount(): express.Express {
@@ -275,3 +277,4 @@ describe('绑定状态查询', () => {
     expect(res.body.data.hasPassword).toBe(true);
   });
 });
+

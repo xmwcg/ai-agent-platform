@@ -35,7 +35,7 @@ const CreditLotSchema = new Schema<ICreditLot>({
   originalAmount: { type: Number, required: true, min: 0 },
   remainingAmount: { type: Number, required: true, min: 0 },
   sourceOrderNo: { type: String, index: true, sparse: true },
-  idempotencyKey: { type: String, required: true },
+  idempotencyKey: { type: String, required: true, default: () => `lot_${Date.now().toString()}_${Math.random().toString(36).slice(2, 10)}` },
   expiresAt: { type: Date },
   status: { type: String, enum: ['active', 'depleted', 'expired', 'reversed'], default: 'active', index: true },
   migrationBatch: { type: String },

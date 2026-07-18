@@ -1,0 +1,69 @@
+(node:8788) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:8788) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+  console.log
+    2026-07-18T09:39:19.221Z [INFO] auth [SMS Mock] 向 138****0000 发送验证码: 934475
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:39:19.262Z [INFO] auth [SMS Mock] 向 138****0000 发送验证码: 248721
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:39:19.274Z [INFO] auth [SMS Mock] 向 138****0000 发送验证码: 623298
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+FAIL src/routes/auth.login.test.ts
+  微信扫码登录（Mock）
+    √ GET /auth/wechat/qr 返回可渲染的 authorizeUrl 与 state (25 ms)
+    × GET /auth/wechat/callback?code=mock&state=xxx 返回 token（format=json） (25 ms)
+    √ 非法 state 回调被拒 (4 ms)
+  手机号验证码登录
+    √ POST /auth/sms/send 返回 devCode 并写入 redis (52 ms)
+    × POST /auth/sms/login 用正确验证码登录成功 (11 ms)
+    √ 验证码错误被拒 (8 ms)
+    √ 手机号格式非法被校验拦截 (4 ms)
+
+  ● 微信扫码登录（Mock） › GET /auth/wechat/callback?code=mock&state=xxx 返回 token（format=json）
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      55 |     const state = qr.body.state;
+      56 |     const res = await request(app).get(`/wechat/callback?code=mock&state=${state}&format=json`);
+    > 57 |     expect(res.status).toBe(200);
+         |                        ^
+      58 |     expect(res.body.success).toBe(true);
+      59 |     expect(res.body.token).toBeTruthy();
+      60 |   });
+
+      at Object.<anonymous> (src/routes/auth.login.test.ts:57:24)
+
+  ● 手机号验证码登录 › POST /auth/sms/login 用正确验证码登录成功
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      80 |     const code = send.body.devCode;
+      81 |     const res = await request(app).post('/sms/login').send({ phone: PHONE, code });
+    > 82 |     expect(res.status).toBe(200);
+         |                        ^
+      83 |     expect(res.body.success).toBe(true);
+      84 |     expect(res.body.token).toBeTruthy();
+      85 |   });
+
+      at Object.<anonymous> (src/routes/auth.login.test.ts:82:24)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 5 passed, 7 total
+Snapshots:   0 total
+Time:        4.778 s, estimated 10 s
+Ran all test suites matching /src\\routes\\auth.login.test.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

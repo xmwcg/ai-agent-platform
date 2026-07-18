@@ -1,3 +1,5 @@
+jest.mock('../models/SandboxExecution', () => ({ SandboxExecution: { create: jest.fn().mockResolvedValue({ _id: 'test-id', toObject: () => ({ _id: 'test-id' }) }) } }));
+
 import {
   normalizeLanguage,
   detectDangerousPatterns,
@@ -232,3 +234,5 @@ describe('sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=tr
     expect(res.exitCode).not.toBe(0);
   });
 });
+
+

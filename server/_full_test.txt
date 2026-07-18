@@ -1,0 +1,2371 @@
+FAIL src/services/sandbox.service.test.ts (9.605 s)
+  sandbox.service pure functions
+    √ production 无论客户端显式选择什么都固定 remote
+    normalizeLanguage
+      √ 归一化常见别名 (14 ms)
+      √ 返回 null 表示不支持 (1 ms)
+    detectDangerousPatterns
+      √ 识别高危写法 (3 ms)
+      √ 安全代码返回空数组 (2 ms)
+      √ 非字符串输入返回空数组 (1 ms)
+    sanitizeOutput
+      √ 不截断短输出 (1 ms)
+      √ 截断超长输出并加提示
+    selectSandboxMode（阶段1c：local 默认禁用）
+      √ 默认 mock
+      √ local 默认降级为 mock（需 SANDBOX_LOCAL_ENABLED=true 才生效） (1 ms)
+      √ remote / mock 不受影响 (1 ms)
+    buildLocalCommand
+      √ python 使用隔离模式 -I (1 ms)
+      √ javascript/typeScript 使用 node
+      √ bash 使用 bash
+  sandbox.service providers
+    √ mock 模式执行简单 python 并模拟输出 (1 ms)
+    √ mock 模式拒绝危险代码 (1 ms)
+    √ mock 模式执行 javascript 并模拟输出
+    √ 不支持的语言返回 error (1 ms)
+    √ remote 未配置时返回 error 并给出配置提示
+    √ providers() 报告三个模式及配置状态 (1 ms)
+  sandbox.service · mode:local 请求（默认降级为 mock，阶段1c）
+    √ 默认：mode:local 请求被降级为 mock 执行（不真正在本机执行）
+    √ 默认：危险代码在降级后仍被 deny-list 拦截 (1 ms)
+  sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=true）
+    × 启用后：mode:local 真正在本机执行并返回 stdout
+    × 启用后：危险代码仍被硬拦截（denied）
+    × 启用后：代码抛错返回 error 状态
+
+  ● sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=true） › 启用后：mode:local 真正在本机执行并返回 stdout
+
+    OverwriteModelError: Cannot overwrite `SandboxExecution` model once compiled.
+
+      108 | SandboxExecutionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 });
+      109 |
+    > 110 | export const SandboxExecution = mongoose.model<ISandboxExecution>(
+          |                                          ^
+      111 |   "SandboxExecution",
+      112 |   SandboxExecutionSchema
+      113 | );
+
+      at Object.model (node_modules/mongoose/lib/mongoose.js:609:13)
+      at Object.<anonymous> (src/models/SandboxExecution.ts:110:42)
+      at Object.<anonymous> (src/services/sandbox.service.ts:20:1)
+      at src/services/sandbox.service.test.ts:193:13
+      at Object.<anonymous> (src/services/sandbox.service.test.ts:192:10)
+
+  ● sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=true） › 启用后：危险代码仍被硬拦截（denied）
+
+    OverwriteModelError: Cannot overwrite `SandboxExecution` model once compiled.
+
+      108 | SandboxExecutionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 });
+      109 |
+    > 110 | export const SandboxExecution = mongoose.model<ISandboxExecution>(
+          |                                          ^
+      111 |   "SandboxExecution",
+      112 |   SandboxExecutionSchema
+      113 | );
+
+      at Object.model (node_modules/mongoose/lib/mongoose.js:609:13)
+      at Object.<anonymous> (src/models/SandboxExecution.ts:110:42)
+      at Object.<anonymous> (src/services/sandbox.service.ts:20:1)
+      at src/services/sandbox.service.test.ts:193:13
+      at Object.<anonymous> (src/services/sandbox.service.test.ts:192:10)
+
+  ● sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=true） › 启用后：代码抛错返回 error 状态
+
+    OverwriteModelError: Cannot overwrite `SandboxExecution` model once compiled.
+
+      108 | SandboxExecutionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 });
+      109 |
+    > 110 | export const SandboxExecution = mongoose.model<ISandboxExecution>(
+          |                                          ^
+      111 |   "SandboxExecution",
+      112 |   SandboxExecutionSchema
+      113 | );
+
+      at Object.model (node_modules/mongoose/lib/mongoose.js:609:13)
+      at Object.<anonymous> (src/models/SandboxExecution.ts:110:42)
+      at Object.<anonymous> (src/services/sandbox.service.ts:20:1)
+      at src/services/sandbox.service.test.ts:193:13
+      at Object.<anonymous> (src/services/sandbox.service.test.ts:192:10)
+
+  console.warn
+    2026-07-18T09:44:03.465Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/skills/defs/ai-chat.skill.ts:2:1)
+      at Object.<anonymous> (src/skills/registry.ts:9:1)
+      at Object.<anonymous> (src/routes/skills.ts:17:1)
+      at Object.<anonymous> (src/skills/skills.production-gates.test.ts:13:1)
+
+PASS src/routes/sandbox.status.test.ts (10.781 s)
+  Sandbox 部署与生产模式门禁
+    √ 公开状态探针返回部署能力 (136 ms)
+    √ 生产探针固定 remote 且 mock/local 不可用 (7 ms)
+    √ 生产 /run 拒绝客户端提交 mode (51 ms)
+
+(node:33652) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33652) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+FAIL src/routes/oauth.test.ts (11.18 s)
+  OAuth 登录方式可用状态
+    √ GET /login-methods 未配密钥时 enabled=false 但 mock=true (64 ms)
+  微信扫码登录（mock 路径）
+    √ GET /wechat/qr 返回 mock 授权地址并写入 state (7 ms)
+    × GET /wechat/callback 用有效 state + code=mock 登录成功并返回 token (35 ms)
+    √ GET /wechat/callback 非法/缺失 state 返回 400 (6 ms)
+  抖音扫码登录（mock 路径）
+    √ GET /douyin/qr 返回 mock 授权地址并写入 state (5 ms)
+    √ GET /douyin/h5 返回 mock 跳转地址 (6 ms)
+    × GET /douyin/callback 用有效 state + code=mock 登录成功并返回 token (13 ms)
+    √ GET /douyin/callback 非法 state 返回 400 (6 ms)
+  账号绑定鉴权与守卫
+    √ POST /bind/wechat 匿名必须 401 (50 ms)
+    √ POST /bind/wechat 登录用户绑定成功 (6 ms)
+    √ POST /bind/douyin 登录用户绑定成功 (5 ms)
+    √ 缺少 code 返回 400 (5 ms)
+  账号解绑守卫（防失联）
+    √ POST /unbind/wechat 匿名必须 401 (3 ms)
+    √ 有密码时解绑微信成功 (6 ms)
+    √ 无密码且无其他 OAuth 时解绑微信被拒（NEED_PASSWORD） (5 ms)
+    √ 无密码且无其他 OAuth 时解绑抖音被拒（NEED_PASSWORD） (5 ms)
+    √ 未绑定微信时解绑返回 400 (4 ms)
+  绑定状态查询
+    √ GET /bindings 匿名必须 401 (4 ms)
+    √ GET /bindings 返回当前绑定状态 (5 ms)
+
+  ● 微信扫码登录（mock 路径） › GET /wechat/callback 用有效 state + code=mock 登录成功并返回 token
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      145 |     const res = await request(mount())
+      146 |       .get(`/wechat/callback?code=mock&state=${state}&format=json`);
+    > 147 |     expect(res.status).toBe(200);
+          |                        ^
+      148 |     expect(res.body.success).toBe(true);
+      149 |     expect(res.body.token).toBeTruthy();
+      150 |     expect(res.body.user.provider).toBe('wechat');
+
+      at Object.<anonymous> (src/routes/oauth.test.ts:147:24)
+
+  ● 抖音扫码登录（mock 路径） › GET /douyin/callback 用有效 state + code=mock 登录成功并返回 token
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      179 |     const res = await request(mount())
+      180 |       .get(`/douyin/callback?code=mock&state=${state}&format=json`);
+    > 181 |     expect(res.status).toBe(200);
+          |                        ^
+      182 |     expect(res.body.success).toBe(true);
+      183 |     expect(res.body.token).toBeTruthy();
+      184 |     expect(res.body.user.provider).toBe('douyin');
+
+      at Object.<anonymous> (src/routes/oauth.test.ts:181:24)
+
+(node:7812) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7812) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+  console.warn
+    2026-07-18T09:44:04.691Z [WARN] webhook 验签失败: provider=wechat
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at src/routes/billing/webhook.routes.ts:59:14
+
+PASS src/routes/batch0-production-gates.test.ts
+  Batch 0 生产路由门禁
+    √ 下单拒绝 provider=mock (57 ms)
+    √ 下单拒绝 provider=alipay (8 ms)
+    √ 下单拒绝 provider=stripe (7 ms)
+    √ 生产 Mock 支付确认入口不可用 (7 ms)
+    √ 生产支付方式只返回微信 (5 ms)
+    √ 生产拒绝 mock webhook (6 ms)
+    √ 生产拒绝 alipay webhook (5 ms)
+    √ 生产拒绝 stripe webhook (5 ms)
+    √ 生产微信 webhook 缺少签名头时返回签名错误 (100 ms)
+    √ 生产短信发送和登录均关闭 (16 ms)
+    √ 生产未配置微信登录时隐藏并拒绝演示回调 (19 ms)
+
+  console.warn
+    2026-07-18T09:44:04.859Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/routes/ai.ts:2:1)
+      at Object.<anonymous> (src/index.ts:18:1)
+      at Object.<anonymous> (src/index.bootstrap.test.ts:2:1)
+
+PASS src/routes/courses.quiz.production.test.ts
+  课程测验真实数据与答案保护
+    √ GET 从课程数据库结果返回测验，但不泄漏正确答案和解析 (45 ms)
+    √ 公开课程详情同样不泄漏测验正确答案和解析 (9 ms)
+    √ 未发布课程不能读取测验 (32 ms)
+    √ 非法章节索引在查询数据库前被拒绝 (5 ms)
+    √ 超出范围的章节索引被拒绝 (5 ms)
+    √ POST answers=null 时拒绝非对象答案 (8 ms)
+    √ POST answers=[] 时拒绝非对象答案 (3 ms)
+    √ POST answers="answer" 时拒绝非对象答案 (5 ms)
+    √ POST 由服务端正确评分并在提交后返回答案解析 (5 ms)
+    √ 未发布课程不能提交测验 (4 ms)
+
+(node:7812) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+  console.log
+    2026-07-18T09:44:05.452Z [INFO] auth [SMS Mock] 向 138****0000 发送验证码: 563646
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:05.473Z [INFO] auth [SMS Mock] 向 138****0000 发送验证码: 762146
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:05.473Z [INFO] asset-store 本地磁盘资产存储已就绪: G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\server\.cache\assets
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.warn
+    2026-07-18T09:44:05.269Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/routes/ai.ts:2:1)
+      at Object.<anonymous> (src/index.ts:18:1)
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:16:1)
+
+  console.log
+    2026-07-18T09:44:05.494Z [INFO] auth [SMS Mock] 向 138****0000 发送验证码: 202195
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/routes/auth.login.test.ts
+  微信扫码登录（Mock）
+    √ GET /auth/wechat/qr 返回可渲染的 authorizeUrl 与 state (8 ms)
+    √ GET /auth/wechat/callback?code=mock&state=xxx 返回 token（format=json） (9 ms)
+    √ 非法 state 回调被拒 (4 ms)
+  手机号验证码登录
+    √ POST /auth/sms/send 返回 devCode 并写入 redis (25 ms)
+    √ POST /auth/sms/login 用正确验证码登录成功 (9 ms)
+    √ 验证码错误被拒 (8 ms)
+    √ 手机号格式非法被校验拦截 (3 ms)
+
+  console.warn
+    2026-07-18T09:44:05.568Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.audit.test.ts:9:1)
+
+  console.log
+    2026-07-18T09:44:05.684Z [INFO] asset-store 本地磁盘资产存储已就绪: G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\server\.cache\assets
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.warn
+    2026-07-18T09:44:05.637Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/routes/ai.ts:2:1)
+      at Object.<anonymous> (src/index.ts:18:1)
+      at Object.<anonymous> (src/routes/query-center.security.test.ts:8:1)
+
+PASS src/routes/customer-service.audit.test.ts
+  buildAuditEntry 纯函数
+    √ 空来源时 similarityAvg 为 0 (2 ms)
+    √ 多来源时 similarityAvg 为均值（保留3位） (1 ms)
+  对话落审计日志
+    √ 普通问答应写入审计日志（含问题/答案/未转人工） (28 ms)
+    √ 命中转人工关键词应记录 escalated=true 且答案为转人工话术 (7 ms)
+  合规审计日志接口
+    √ 匿名访问 /:id/audit-logs 必须 401 (4 ms)
+    √ 授权后可分页查询并拿到总数 (7 ms)
+    √ 可导出 CSV 且带有 BOM 与表头 (5 ms)
+    √ 统计接口返回结构（总量/转人工率/满意度/高频来源） (7 ms)
+    √ 非拥有者访问审计日志应 403 (6 ms)
+
+  console.warn
+    2026-07-18T09:44:05.852Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/routes/ai.ts:2:1)
+      at Object.<anonymous> (src/index.ts:18:1)
+      at Object.<anonymous> (src/routes/marketplace.middleware-order.test.ts:7:1)
+
+  console.warn
+    2026-07-18T09:44:05.872Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/routes/ai.ts:2:1)
+      at Object.<anonymous> (src/index.ts:18:1)
+      at Object.<anonymous> (src/services/credit-ledger.service.test.ts:9:1)
+
+  console.log
+    2026-07-18T09:44:06.130Z [INFO] asset-store 本地磁盘资产存储已就绪: G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\server\.cache\assets
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:06.438Z [INFO] asset-store 本地磁盘资产存储已就绪: G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\server\.cache\assets
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:06.477Z [INFO] asset-store 本地磁盘资产存储已就绪: G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\server\.cache\assets
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:06.845Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.warn
+    2026-07-18T09:44:06.703Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/services/rag.ts:1:1)
+      at Object.<anonymous> (src/routes/rag.ts:2:1)
+      at Object.<anonymous> (src/routes/auth.integration.test.ts:21:1)
+
+  console.log
+    2026-07-18T09:44:06.944Z [INFO] asset-store 本地磁盘资产存储已就绪: G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\server\.cache\assets
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/skills/skills.production-gates.test.ts (13.871 s)
+  技能生产真实性门禁
+    √ 视频调研失败时终止流水线并返回失败 (34 ms)
+    √ 视频脚本失败时不进入合成阶段 (1 ms)
+    √ 视频合成失败时不把错误包装成成功结果
+    √ 视频流水线成功时返回真实阶段元数据与可追踪任务 (2 ms)
+    √ 代码解释调用真实生成服务而不是回显输入冒充结果 (1 ms)
+    √ 翻译技能调用真实翻译服务并返回 Provider 元数据 (1 ms)
+    √ 未接入通用协议的客服与知识技能明确标记为不可调用
+  技能调用路由失败语义
+    √ invokable=false 返回 501，不进入技能实现 (87 ms)
+    √ 技能返回 ok=false 时路由返回非 2xx 与机器错误码 (5 ms)
+
+  console.log
+    2026-07-18T09:44:07.090Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/middleware/auth.test.ts
+  JWT 鉴权 Token
+    √ generateToken 签发的 Token 可被 verifyToken 还原 (6 ms)
+    √ 篡改 Token（尾部追加字符）被拒绝，返回 null (1 ms)
+    √ 非法 Token（非 JWT 字符串）返回 null (1 ms)
+    √ 空 Token 返回 null（不抛异常）
+    √ 不同 payload 签发的 Token 不可互通 (2 ms)
+
+(node:35648) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  console.warn
+    2026-07-18T09:44:07.513Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/ai-text.service.ts:1:1)
+      at Object.<anonymous> (src/routes/marketplace.ts:14:1)
+      at Object.<anonymous> (src/routes/marketplace-credits.integration.test.ts:54:29)
+
+(node:29240) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS src/routes/text2img.test.ts
+  成本封顶：数量与分辨率
+    √ n 超过上限被钳制为 2，非法分辨率归一为 1024x1024 (26 ms)
+    √ n 缺失时默认 1，合法分辨率放行 (5 ms)
+  匿名用户每日限次真实生成
+    √ 未达上限：走真实混元（返回 hunyuan）并累加计数 (5 ms)
+    √ 非生产已达上限：可转 Mock 演示，不再垫付 (5 ms)
+    √ 生产已达上限：返回 429，绝不调用 Mock 或生成假图片 (5 ms)
+  安全校验
+    √ 空 prompt 被拒 (4 ms)
+
+  console.log
+    2026-07-18T09:44:07.971Z [INFO] index CORS 配置 → 白名单: https://aibak.site, http://159.75.124.59, http://localhost:5173, http://localhost, https://localhost, http://aibak.site, https://159.75.124.59
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:07.982Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:08.033Z [INFO] reconciliation-cron 每日对账定时器已注册，首次将在 8 小时后触发
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/services/media-gen.test.ts
+  媒体生成 - 多厂商 Provider 抽象
+    √ Mock 模式提交任务返回 processing（异步，需轮询 queryTask） (2 ms)
+    √ 空提示词抛错 (36 ms)
+    √ text2img（文生图）在 Mock 下异步返回 processing，轮询后 completed (2247 ms)
+    √ 列出 7 个厂商，免费额度可用、其余真实厂商默认未配置、Mock 始终可用 (1 ms)
+    √ 无配置的文生图优先选择真实 CloudBase 免费额度 (1 ms)
+    √ 配置混元后优先选中混元 (1 ms)
+
+  console.log
+    2026-07-18T09:44:08.047Z [INFO] reconciliation-cron 每日对账定时器已注册，首次将在 8 小时后触发
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.warn
+    2026-07-18T09:44:08.050Z [WARN] index MCP 配置 启动失败，非生产环境继续运行: local database is optional
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at startManagedDependency (src/index.ts:319:12)
+      at bootstrap (src/index.ts:334:3)
+      at Object.<anonymous> (src/index.bootstrap.test.ts:100:5)
+
+  console.warn
+    2026-07-18T09:44:08.053Z [WARN] index 自定义 AI Provider 启动失败，非生产环境继续运行: local providers unavailable
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at startManagedDependency (src/index.ts:319:12)
+      at bootstrap (src/index.ts:335:3)
+      at Object.<anonymous> (src/index.bootstrap.test.ts:100:5)
+
+  console.warn
+    2026-07-18T09:44:08.056Z [WARN] index 媒体任务 Worker 启动失败，非生产环境继续运行: local worker unavailable
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at startManagedDependency (src/index.ts:319:12)
+      at bootstrap (src/index.ts:336:3)
+      at Object.<anonymous> (src/index.bootstrap.test.ts:100:5)
+
+  console.log
+    2026-07-18T09:44:08.057Z [INFO] reconciliation-cron 每日对账定时器已注册，首次将在 8 小时后触发
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+(node:29732) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29732) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+FAIL src/index.bootstrap.test.ts (14.765 s)
+  bootstrap production startup order
+    √ does not connect or listen when environment validation fails (18 ms)
+    √ does not start later services or listen when MongoDB fails (2 ms)
+    √ does not start workers or listen when Redis fails (1 ms)
+    √ fails closed before listen when production MCP startup fails (23 ms)
+    √ fails closed before listen when production AI provider startup fails (1 ms)
+    √ fails closed before listen when production media worker startup fails (1 ms)
+    × starts HTTP only after every production dependency succeeds (14 ms)
+    √ can run the full startup gate without binding a port (2 ms)
+    √ keeps development usable when an optional managed dependency is unavailable (10 ms)
+
+  ● bootstrap production startup order › starts HTTP only after every production dependency succeeds
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+    @@ -3,7 +3,8 @@
+        "mongo",
+        "redis",
+        "mcp",
+        "providers",
+        "worker",
+    +   "outbox",
+        "listen",
+      ]
+
+      80 |
+      81 |     expect(server).toBeDefined();
+    > 82 |     expect(events).toEqual(['validate', 'mongo', 'redis', 'mcp', 'providers', 'worker', 'listen']);
+         |                    ^
+      83 |   });
+      84 |
+      85 |   it('can run the full startup gate without binding a port', async () => {
+
+      at Object.<anonymous> (src/index.bootstrap.test.ts:82:20)
+
+PASS src/services/media-gen.task.test.ts
+  媒体生成 - 异步任务与厂商抽象
+    √ listMediaProviders 含 7 个厂商，Mock 与免费额度可用、其余真实厂商默认未配置 (2 ms)
+    √ Mock 生成后约 2 秒轮询转为已完成 (2223 ms)
+    √ 未知厂商 queryTask 抛错 (14 ms)
+
+PASS src/lib/object-storage.test.ts
+  对象存储 object-storage
+    √ isHttpUrl 正确判定 (7 ms)
+    √ 默认使用本地存储兜底 (2 ms)
+    √ base64 图片落盘并返回 /generated 稳定 URL (41 ms)
+
+FAIL src/routes/marketplace-credits.integration.test.ts (15.475 s)
+  P0-2 API 市场积分扣减集成测试
+    √ GET /api/marketplace/credits 返回余额和套餐 (104 ms)
+    √ 匿名访问 /api/marketplace/credits 应 401 (8 ms)
+    √ GET /api/marketplace/credits/history 返回分页明细 (100 ms)
+    √ 可按 type=deduction 过滤 (10 ms)
+    √ 可按 type=grant 过滤 (28 ms)
+    √ 分页 pageSize=2 限制正确 (15 ms)
+    √ GET /api/billing/credits-packages 返回积分包列表 (4 ms)
+    √ POST /api/billing/credits-packages/order 创建积分包订单 (55 ms)
+    √ 缺少 packageId 返回 400 (9 ms)
+    √ 无效 packageId 返回 400 (5 ms)
+    × Mock 支付后余额增加且产生 purchase 记录 (153 ms)
+    √ GET /api/marketplace/usage/report 含 totalCreditsDeducted 字段 (8 ms)
+    √ GET /api/marketplace/usage/export 含 creditsDeducted 列 (7 ms)
+
+  ● P0-2 API 市场积分扣减集成测试 › Mock 支付后余额增加且产生 purchase 记录
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      196 |       .get(`/api/billing/orders/${orderNo}/pay`)
+      197 |       .set(auth());
+    > 198 |     expect(payRes.status).toBe(200);
+          |                           ^
+      199 |     expect(payRes.body.data.paid).toBe(true);
+      200 |     expect(payRes.body.data.orderType).toBe('credits_pack');
+      201 |
+
+      at Object.<anonymous> (src/routes/marketplace-credits.integration.test.ts:198:27)
+
+  console.log
+    2026-07-18T09:44:08.457Z [INFO] index CORS 配置 → 白名单: https://aibak.site, http://159.75.124.59, http://localhost:5173, http://localhost, https://localhost, http://aibak.site, https://159.75.124.59
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:08.468Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+(node:10940) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10940) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+  console.warn
+    2026-07-18T09:44:08.629Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.production.test.ts:1:1)
+
+PASS src/routes/customer-service.production.test.ts
+  智能客服生产安全门禁
+    √ 生产环境即使误配 ENABLE_MOCK_MODE=true 也不会进入 Mock 分支 (2 ms)
+    √ Mock 仅允许开发测试环境显式启用 (1 ms)
+
+  console.warn
+    2026-07-18T09:44:08.588Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/skills/defs/ai-chat.skill.ts:2:1)
+      at Object.<anonymous> (src/skills/registry.ts:9:1)
+      at Object.<anonymous> (src/skills/skills-pipeline.test.ts:1:1)
+
+  console.log
+    2026-07-18T09:44:08.776Z [INFO] index CORS 配置 → 白名单: https://aibak.site, http://159.75.124.59, http://localhost:5173, http://localhost, https://localhost, http://aibak.site, https://159.75.124.59
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:09.036Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:09.038Z [INFO] database MongoDB connected successfully { uri: 'mongodb://db.example.internal:27017/aibak' }
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/config/database.production.test.ts
+  production database startup gate
+    √ rejects production startup when MONGODB_URI is missing (313 ms)
+    √ rejects production startup when MongoDB connection fails (337 ms)
+    √ rejects production startup when REDIS_URL is missing (268 ms)
+    √ rejects Redis connection failures without switching to MemoryRedis (302 ms)
+    √ rejects an invalid Redis ping without switching to MemoryRedis (313 ms)
+    √ uses real MongoDB and Redis only after both probes succeed (313 ms)
+
+(node:34068) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34068) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+  console.log
+    2026-07-18T09:44:09.112Z [INFO] index CORS 配置 → 白名单: https://aibak.site, http://159.75.124.59, http://localhost:5173, http://localhost, https://localhost, http://aibak.site, https://159.75.124.59
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/models/CreditsTransaction.test.ts
+  CreditsTransaction Model — Schema 层验证
+    √ 应创建 deduction 类型记录 (13 ms)
+    √ 应创建 grant 类型记录（订阅赠送） (1 ms)
+    √ 应创建 purchase 类型记录（积分包购买） (2 ms)
+    √ type 字段限定 deduction/grant/purchase
+    √ userId 为必填 (1 ms)
+    √ amount 为必填
+    √ balanceAfter 为必填
+    √ apiKeyId 为可选 (1 ms)
+    √ orderNo 为可选
+    √ resource 为可选
+    √ description 为可选 (1 ms)
+    √ userId 应有索引
+    √ createdAt 字段存在（timestamps: {createdAt: true}）
+
+  console.log
+    2026-07-18T09:44:09.222Z [INFO] index CORS 配置 → 白名单: https://aibak.site, http://159.75.124.59, http://localhost:5173, http://localhost, https://localhost, http://aibak.site, https://159.75.124.59
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.warn
+    2026-07-18T09:44:09.272Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/translation.service.ts:1:1)
+      at Object.<anonymous> (src/routes/tools.test.ts:1:1)
+
+  console.log
+    2026-07-18T09:44:09.284Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:09.289Z [INFO] asset-store 本地磁盘资产存储已就绪: G:\项目成品及测试\AIBAK\reasoni-deepseek\ai-agent-platform\server\.cache\assets
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/skills/skills-pipeline.test.ts
+  视频生产流水线技能 - 端到端闭环（Mock）
+    √ 技能名册含 video-pipeline 且可上架 (2 ms)
+    √ video-pipeline invoke 在 Mock 环境完整闭环 (2 ms)
+    √ 媒体厂商注册表含 moneyprinterturbo（默认未配置） (10 ms)
+
+  console.log
+    2026-07-18T09:44:09.315Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+(node:25976) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25976) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+  console.warn
+    2026-07-18T09:44:09.360Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/gateway/ai-gateway.service.ts:17:1)
+      at Object.<anonymous> (src/gateway/ai-gateway.test.ts:18:1)
+
+  console.log
+    2026-07-18T09:44:09.382Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+(node:7852) [MONGOOSE] Warning: Duplicate schema index on {"referredUserId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7852) [MONGOOSE] Warning: Duplicate schema index on {"expiresAt":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+PASS src/routes/diagnostics.runtime-safety.test.ts
+  GET /api/diagnostics/runtime-safety
+    √ returns 200 only when production has no mock or memory fallback enabled (11 ms)
+    √ returns 503 when any production mock switch is enabled (4 ms)
+    √ returns 503 when the process is using MemoryRedis (3 ms)
+
+  console.warn
+    2026-07-18T09:44:09.596Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.enhanced.test.ts:1:1)
+
+PASS src/routes/customer-service.enhanced.test.ts
+  智能客服 - 答案可追溯来源提取
+    √ 应提取 docId / 标题 / 置信度 / 摘要 (2 ms)
+    √ 空结果返回空数组
+
+PASS src/gateway/ai-gateway.test.ts
+  AI 网关 - 腾讯云 TC3 签名（混元 provider）
+    √ 签名幂等：相同输入得到相同 Authorization (16 ms)
+    √ 不同 payload 得到不同签名 (1 ms)
+    √ 签名与 action 无关（腾讯云规范：action 是请求头，不在签名头内） (1 ms)
+    √ 不同 secretKey 得到不同签名
+  AI 网关 - 路由与 provider 注册表
+    √ Mock 模式下网关至少含 mock provider (2 ms)
+    √ Mock 模式 route 返回 Mock 回复，不抛错 (1 ms)
+    √ production 即使误开 ENABLE_MOCK_MODE 也不会注册 mock provider (1 ms)
+    √ production 显式 provider/model=mock 直接拒绝，不静默改走真实厂商 (2 ms)
+  AI 网关 - 国内主流模型注册（低成本闭环）
+    √ 注册智谱 GLM / 通义千问 / 豆包并暴露在模型列表中 (2 ms)
+  AI 网关 - 第三方自定义模型路由（接入第三方模型 API 闭环）
+    √ 用户 ModelConfig 被加载为独立 provider 并参与路由 (2 ms)
+    √ 显式 provider 命中第三方自定义模型 (1 ms)
+
+PASS src/routes/tools.test.ts
+  工具模块单元测试
+    翻译服务
+      √ 应返回翻译结果与目标语言 (2 ms)
+      √ 空文本应抛错 (20 ms)
+    方案生成
+      √ 应生成 Markdown 方案并含大纲 (1 ms)
+    文件转换
+      √ 支持的转换矩阵应识别 md->html
+      √ 不支持的转换应识别 false
+      √ 转换应返回输出文件名 (40 ms)
+      √ 不支持的转换应抛错 (9 ms)
+    媒体生成
+      √ 文生视频应返回 processing 任务（异步，需轮询） (1 ms)
+      √ 空提示词应抛错 (2 ms)
+
+  console.warn
+    2026-07-18T09:44:10.047Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/skills/defs/ai-chat.skill.ts:2:1)
+      at Object.<anonymous> (src/skills/registry.ts:9:1)
+      at Object.<anonymous> (src/skills/skills.test.ts:1:1)
+
+PASS src/services/media-runtime.production.test.ts
+  媒体运行期生产 fail-closed
+    √ MoneyPrinterTurbo 提交失败时拒绝服务，不返回虚假 processing 任务 (3 ms)
+    √ MoneyPrinterTurbo 查询失败时拒绝服务，不伪装为仍在处理 (1 ms)
+    √ MoneyPrinterTurbo 已完成但无结果地址时拒绝无效结果 (1 ms)
+    √ MongoDB 未连接时生产任务写入不降级内存 (1 ms)
+    √ MongoDB 未连接时生产任务查询不读取进程内缓存
+
+PASS src/models/MediaUserKey.test.ts
+  MediaUserKey 模型（媒体 BYOK 凭据）
+    √ 定义 userId / provider / secretKeyEnc / enabled 字段 (2 ms)
+    √ userId + provider 唯一索引（upsert 语义，每个用户每厂商一条） (1 ms)
+
+[0mPOST /api/billing/orders [32m200[0m 49.569 ms - 267[0m
+  console.log
+    2026-07-18T09:44:10.471Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/routes/quickstart.test.ts
+  快速启动模板目录
+    √ 应同时包含通用模板与行业垂直模板 (1 ms)
+    √ 每个模板字段完整且可应用 (4 ms)
+    √ 模板 id 唯一
+    √ 通用模板均为 generic 分类
+    √ 行业模板均为 industry 分类且含 vertical 与合规触发词 (2 ms)
+
+PASS src/skills/skills.test.ts
+  技能注册表（agency-agents 风格）
+    √ 默认注册了 9 个核心技能（含 skill-authoring 与 summarize） (1 ms)
+    √ summarize 技能在 mock 下返回摘要结构 (10 ms)
+    √ summarize 缺 text 时返回错误 (1 ms)
+    √ summarize 透传 length/lang 参数
+    √ summarize 可上架开放 API 市场 (1 ms)
+    √ skill-authoring 元技能 manifest 含 superpowers 风格声明字段
+    √ skill-authoring 在缺 goal 时返回错误 (1 ms)
+    √ 技能 manifest 字段完整 (11 ms)
+    √ marketable 技能可被单独列出（开放 API 市场上架） (1 ms)
+    √ 所有技能均含 superpowers 风格声明字段（userStory + acceptanceCriteria），名册评审规范 (2 ms)
+    √ 可动态注册新技能（插拔） (1 ms)
+    √ 技能 invoke 返回结构正确 (1 ms)
+
+[0mGET /api/billing/orders/AI0MRQ6JP1L154977DE829C0AC03F00/pay [31m500[0m 63.018 ms - 122[0m
+  console.warn
+    2026-07-18T09:44:10.518Z [WARN] apm 告警[error_rate] 路由 /orders 指标超阈值 (count=2, errors=1, slow=0)
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at ServerResponse.<anonymous> (src/middleware/apm.ts:173:16)
+
+[0mPOST /api/billing/orders [32m200[0m 26.824 ms - 267[0m
+[0mPOST /api/auth/register [33m400[0m 5.159 ms - 71[0m
+  console.warn
+    2026-07-18T09:44:10.647Z [WARN] apm 告警[error_rate] 路由 /register 指标超阈值 (count=1, errors=1, slow=0)
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at ServerResponse.<anonymous> (src/middleware/apm.ts:173:16)
+
+[0mPOST /api/auth/register [33m400[0m 4.055 ms - 71[0m
+  console.warn
+    2026-07-18T09:44:10.686Z [WARN] apm 告警[error_rate] 路由 /register 指标超阈值 (count=1, errors=1, slow=0)
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at ServerResponse.<anonymous> (src/middleware/apm.ts:173:16)
+
+PASS src/services/media-gen.service.test.ts
+  BYOK 凭据注入
+    √ 混元：无 env 但传入 credentials 时仍成功生成（证明 BYOK 生效） (2 ms)
+    √ 混元：无 env 且无 credentials 时抛出未配置错误 (13 ms)
+    √ 可灵：注入的 Bearer Token 直接进入请求头（强断言凭据被使用） (1 ms)
+    √ 即梦：注入的 Bearer Token 直接进入请求头 (3 ms)
+    √ 可灵：无 env 且无 credentials 时抛出未配置错误 (5 ms)
+
+  console.warn
+    2026-07-18T09:44:10.703Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/embedding.ts:1:1)
+      at Object.<anonymous> (src/routes/customer-service.ts:6:1)
+      at Object.<anonymous> (src/routes/customer-service.escalation.test.ts:1:1)
+
+[0mPOST /api/billing/webhook/stripe [32m200[0m 161.859 ms - 17[0m
+[0mPOST /api/query-center/providers/openai/models [33m401[0m 3.258 ms - 36[0m
+  console.warn
+    2026-07-18T09:44:10.737Z [WARN] apm 告警[error_rate] 路由 /providers 指标超阈值 (count=1, errors=1, slow=0)
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at ServerResponse.<anonymous> (src/middleware/apm.ts:173:16)
+
+  console.warn
+    2026-07-18T09:44:10.755Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 21 次
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+  console.warn
+    2026-07-18T09:44:10.769Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 22 次
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+  console.warn
+    2026-07-18T09:44:10.773Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 23 次
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+  console.warn
+    2026-07-18T09:44:10.775Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 24 次
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+  console.warn
+    2026-07-18T09:44:10.779Z [WARN] secret-audit 高频测试连接告警：actor=actorX ip=1.2.3.4 在 60s 内触发 25 次
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at checkTestAbuse (src/services/secret-audit.service.ts:57:12)
+      at Object.<anonymous> (src/services/secret-audit.service.test.ts:40:29)
+
+PASS src/services/secret-audit.service.test.ts
+  secret-audit 密钥审计服务
+    √ logSecretAudit 异步写入且字段正确 (2 ms)
+    √ 写入失败时仍不抛错（不阻塞主流程）
+    √ checkTestAbuse 高频触发告警 (28 ms)
+    √ checkTestAbuse 正常频率不告警
+
+[0mGET /api/billing/subscription [32m200[0m 76.462 ms - -[0m
+[0mPOST /api/auth/register [33m400[0m 6.315 ms - 71[0m
+  console.warn
+    2026-07-18T09:44:10.856Z [WARN] apm 告警[error_rate] 路由 /register 指标超阈值 (count=1, errors=1, slow=0)
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at ServerResponse.<anonymous> (src/middleware/apm.ts:173:16)
+
+PASS src/routes/customer-service.escalation.test.ts
+  shouldEscalate 转人工判定
+    √ handoffEnabled 为 false 时恒不转人工 (1 ms)
+    √ 显式请求转人工 (1 ms)
+    √ 命中通用触发词转人工
+    √ 命中机器人行业触发词转人工 (1 ms)
+    √ 未命中任何触发词不转人工
+    √ 无触发词配置时仅通用词生效
+
+[0mPOST /api/billing/orders [32m200[0m 73.204 ms - 267[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 193.974 ms - 17[0m
+  console.log
+    2026-07-18T09:44:11.169Z [INFO] webhook 订单已支付，跳过激活: orderNo=AI0MRQ6JPEX38244A359973F65DEA10
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+[0mGET /api/search?q=order [32m200[0m 428.604 ms - 84[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 91.900 ms - 36[0m
+PASS src/scripts/validate-production-config.test.ts
+  production configuration static validator
+    √ accepts managed URLs, RSA merchant key and X.509 platform certificate (179 ms)
+    √ rejects non-MongoDB database protocol (69 ms)
+    √ rejects non-TLS public and remote sandbox URLs (38 ms)
+    √ rejects a non-RSA merchant private key (210 ms)
+    √ rejects a public key in place of the required X.509 platform certificate (169 ms)
+
+  console.warn
+    2026-07-18T09:44:11.277Z [WARN] webhook 验签失败: provider=stripe
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at src/routes/billing/webhook.routes.ts:59:14
+
+[0mPOST /api/billing/webhook/stripe [32m200[0m 1.517 ms - 17[0m
+PASS src/services/media-gen.production.test.ts
+  媒体生成生产安全门禁
+    √ 生产 Provider 列表明确标记 Mock 不可用 (2 ms)
+    √ 生产显式请求 Mock 生成被拒绝 (1 ms)
+    √ 生产查询 Mock 任务被拒绝
+    √ 生产视频无真实厂商时拒绝服务，不回退 Mock (14 ms)
+    √ 生产 BYOK 凭据可选择真实混元，不要求平台环境变量 (1 ms)
+    √ 非生产环境仍保留 Mock 作为开发测试兜底
+
+  console.warn
+    2026-07-18T09:44:11.305Z [WARN] webhook 验签失败: provider=stripe
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at src/routes/billing/webhook.routes.ts:59:14
+
+[0mPOST /api/billing/webhook/stripe [32m200[0m 1.754 ms - 17[0m
+[0mGET /api/search?q=private%20secret%20admin [32m200[0m 123.170 ms - 99[0m
+[0mPOST /api/billing/webhook/stripe [32m200[0m 40.680 ms - 17[0m
+[0mGET /api/query-center/account-summary [33m401[0m 0.680 ms - 36[0m
+  console.warn
+    2026-07-18T09:44:11.404Z [WARN] apm 告警[error_rate] 路由 /account-summary 指标超阈值 (count=1, errors=1, slow=0)
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at ServerResponse.<anonymous> (src/middleware/apm.ts:173:16)
+
+[0mPOST /api/billing/orders [32m200[0m 24.401 ms - 267[0m
+[0mGET /api/billing/orders/AI0MRQ6JPUI72AF566B6517FFEF6A8C/pay [31m500[0m 43.272 ms - 122[0m
+  console.log
+    2026-07-18T09:44:11.496Z [INFO] webhook 订单已支付，跳过激活: orderNo=AI0MRQ6JPUI72AF566B6517FFEF6A8C
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/models/ApiUsageLog.test.ts
+  ApiUsageLog 用量日志 Schema
+    √ 包含 keyId 字段（ObjectId 类型）
+    √ 包含 ownerId 字段（String 类型）
+    √ 包含 status 字段（枚举 success/quota_exceeded/error） (1 ms)
+    √ 包含 creditsDeducted 字段（可选 Number）
+    √ 包含 timestamp 字段（Date 类型，默认 now）
+
+[0mPOST /api/billing/webhook/stripe [32m200[0m 23.843 ms - 36[0m
+PASS src/routes/marketplace.middleware-order.test.ts (18.37 s)
+  Middleware Order: validate before enforceApiKey
+    √ 空 prompt 不应扣除日配额 (56 ms)
+    √ 缺少 prompt 不应扣除日配额 (1 ms)
+    √ 正常请求能通过（验证没破坏正常流程）
+
+PASS src/services/credit-ledger.service.test.ts (18.447 s)
+  CreditLedger - 幂等性
+    √ 相同幂等键只扣一次 (18 ms)
+  CreditLedger - 并发防透支
+    √ 并发10请求最多只扣5次成功
+  CreditLedger - 扣减顺序(免费→历史→付费)
+    √ 先扣免费额度 (1 ms)
+  CreditLedger - 余额一致性
+    √ reconcile 返回一致
+  CreditLedger - 事务原子性
+    √ User.credits 与 CreditLot 同步更新
+  CreditLedger - 过期免费额度
+    √ 已过期额度不留余额
+  CreditLedger - 重复履约
+    √ 订阅赠额不重复发放
+
+PASS src/middleware/rbac.test.ts
+  团队 RBAC 角色判定
+    √ 角色等级顺序正确 (1 ms)
+    √ 上级角色满足下级要求 (1 ms)
+    √ 下级角色不满足上级要求 (1 ms)
+    √ 未加入团队不满足任何要求
+
+[0mPOST /api/billing/orders [32m200[0m 4.931 ms - 267[0m
+PASS src/routes/model-calendar.test.ts
+  model calendar seed data
+    √ contains curated model-release events with valid fields (20 ms)
+    √ covers multiple vendors (1 ms)
+
+  console.warn
+    2026-07-18T09:44:11.577Z [WARN] webhook 重放攻击风险: provider=stripe sigTime=1784367251 now=1784367851
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at src/routes/billing/webhook.routes.ts:84:14
+
+[0mPOST /api/billing/webhook/stripe [32m200[0m 7.314 ms - 17[0m
+PASS src/routes/query-center.security.test.ts (18.245 s)
+  Model Fetch - 匿名拒绝
+    √ 未登录获取模型列表返回401 (87 ms)
+    √ 未登录 search 接口不含私人数据 (472 ms)
+  Model Fetch - SSRF防护
+    √ 用户指定的自定义 baseURL 被拒绝
+  Model Fetch - API Key不泄露
+    √ API Key错误不在响应中返回 (1 ms)
+  Query Center - 私有数据隔离
+    √ search 不泄露私有知识 (154 ms)
+    √ 未登录 account-summary 返回401 (45 ms)
+
+PASS src/services/apikey.service.test.ts
+  API Key 生成与配额计量
+    √ 生成密钥前缀与哈希稳定可校验 (2 ms)
+    √ 配额内允许、超配额拒绝 (1 ms)
+    √ 剩余额度计算正确
+    √ 跨日自动重置用量 (1 ms)
+    √ 当日不重置 (1 ms)
+    √ applyUsage 累加用量
+
+PASS src/routes/customer-service.test.ts
+  智能客服模型
+    √ csModel 字段存在且不冲突于 Document.model (1 ms)
+    √ embedCode 唯一性由 schema 保证 (1 ms)
+
+[0mPOST /api/billing/orders [32m200[0m 43.652 ms - 267[0m
+PASS src/routes/learning-path.production.test.ts
+  学习路径生产真实 AI 门禁
+    √ 生产环境 Provider 失败时返回 503，不回退静态模板伪装成功 (15 ms)
+    √ 生产环境 AI 返回非法 JSON 时返回 502 (6 ms)
+    √ 生产环境 AI 返回缺字段结构时返回 502 (4 ms)
+    √ 有效 AI 结果以 generatedBy=ai 返回 (34 ms)
+    √ 模板回退只允许非生产环境 (1 ms)
+    √ 开发环境 Provider 失败时明确返回 generatedBy=template 的预置模板 (5 ms)
+
+  console.warn
+    2026-07-18T09:44:11.956Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/services/ai-agent.ts:1:1)
+      at Object.<anonymous> (src/services/ai-agent.test.ts:1:1)
+
+PASS src/models/ModelConfig.test.ts
+  ModelConfig 模型配置 Schema
+    √ 包含 pinned 字段（Boolean，默认 false），用于运营置顶自定义模型 (1 ms)
+    √ isDefault 字段默认为 false (1 ms)
+    √ enabled 字段默认为 true
+    √ models 字段为字符串数组
+
+[0mPOST /api/billing/webhook/wechat [32m200[0m 186.725 ms - 17[0m
+[0mGET /api/billing/subscription [32m200[0m 91.791 ms - -[0m
+PASS src/services/knowledge-graph.service.test.ts
+  知识图谱聚合（aggregateGraph 纯函数）
+    √ 生成文档 / 标签 / 分类三类节点 (3 ms)
+    √ 生成 doc-tag 与 doc-category 归属边
+    √ 共享标签生成 doc-doc 共现边（权重=共享标签数） (1 ms)
+    √ relatedDocs 生成强关联 doc-doc 边（权重更高）
+    √ minSharedTags 过滤共现边，但保留显式 relatedDocs 强边 (1 ms)
+    √ includeTags=false 时不生成标签节点与共现边 (3 ms)
+    √ 空文档列表返回空图谱
+
+PASS src/services/media-providers/tongyi.provider.test.ts
+  TongyiProvider
+    √ 声明仅支持 text2img (4 ms)
+    √ isConfigured 依赖环境变量 (2 ms)
+    √ generate 提交异步任务并返回 processing（含 Bearer 鉴权 + 尺寸换算） (4 ms)
+    √ generate 未配置抛错 (14 ms)
+    √ queryTask 轮询到 SUCCEEDED 返回图片 URL (1 ms)
+    √ queryTask PENDING 返回 processing (1 ms)
+    √ queryTask FAILED 抛错
+
+[0mPOST /api/billing/orders [32m200[0m 32.705 ms - 267[0m
+  console.warn
+    2026-07-18T09:44:12.207Z [WARN] webhook 验签失败: provider=wechat
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at src/routes/billing/webhook.routes.ts:59:14
+
+[0mPOST /api/billing/webhook/wechat [32m200[0m 1.613 ms - 17[0m
+[0mPOST /api/billing/orders [32m200[0m 5.608 ms - 267[0m
+PASS src/middleware/rate-limit.test.ts
+  rate-limit middlewares
+    √ apiLimiter 是 express 中间件函数 (1 ms)
+    √ authLimiter 是 express 中间件函数 (2 ms)
+    √ test 环境下 authLimiter 直接放行（skip），调用 next 且不设置 429 (1 ms)
+
+PASS src/middleware/upload-limit.test.ts
+  createUploader 上传限制
+    √ 拒绝超类型白名单的文件 (21 ms)
+    √ 接受白名单内的文件 (33 ms)
+    √ 拒绝超过单文件大小上限的文件 (14 ms)
+
+PASS src/middleware/request-id.test.ts
+  request-id 中间件
+    √ 为每个请求生成 X-Request-Id 并回传响应头 (10 ms)
+    √ 沿用上游传入的 X-Request-Id（跨服务串联） (17 ms)
+
+  console.log
+    2026-07-18T09:44:12.302Z [INFO] notify [AI 成本预警] -> console: 当前套餐「free」今日 AI 成本约 ¥0.40 / 预算 ¥0.50，已逼近阈值，请注意限流或升级 BYOK。
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:12.307Z [INFO] notify [AI 成本预警] -> console: 当前套餐「free」今日 AI 成本约 ¥0.60 / 预算 ¥0.50，已逼近阈值，请注意限流或升级 BYOK。
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+[0mPOST /api/billing/webhook/wechat [32m200[0m 60.517 ms - 17[0m
+PASS src/services/cost-control.test.ts
+  estimateCostFen
+    √ 输入1M/输出1M token ≈ ¥3 = 300 分 (1 ms)
+    √ 零用量返回 0
+  recordAiCost / getDailyCost
+    √ 累计用量写入并通过 getDailyCost 读回
+  checkCostValve
+    √ 免费版预算50分：用量40分(>=70%) → warn，仍允许 (4 ms)
+    √ 免费版预算50分：用量60分(>=100%) → block，禁止 (3 ms)
+    √ 旗舰版预算-1（无限）→ 始终允许
+
+PASS src/services/referral.service.test.ts
+  referral.service · 佣金与提现（商业核心逻辑）
+    settleCommissions
+      √ 将 pending 佣金结算为 settled 并返回修改数 (2 ms)
+    requestWithdrawal
+      √ 低于最低提现额（¥50）直接抛错，且不查用户 (16 ms)
+      √ 成功路径：校验余额→锁定佣金→生成提现单 (1 ms)
+      √ 可提现余额不足时抛错 (1 ms)
+
+  console.log
+    2026-07-18T09:44:12.380Z [INFO] ai-agent Loaded 0 chat sessions from Redis
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/services/ai-agent.test.ts
+  AIAgentService.sendMessage 模型选择透传
+    √ 未指定覆盖时使用会话默认模型 (4 ms)
+    √ 前端选择器传入国内厂商模型（智谱 GLM）应透传
+    √ 第三方自定义模型（mc_<id>）应透传至网关路由 (1 ms)
+    √ 生产环境拒绝创建 Mock 会话 (1 ms)
+
+  console.log
+    2026-07-18T09:44:12.388Z [INFO] webhook 订单已支付，跳过激活: orderNo=AI0MRQ6JQHBA0D513E9D70EABECB07D
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/services/payment-crypto.test.ts
+  alipaySign · 支付宝请求签名
+    √ 对标准参数生成签名（非空串） (5 ms)
+    √ 签名排除 sign 字段自身 (4 ms)
+    √ 签名排除空值字段 (2 ms)
+    √ 按 key 升序排序拼接（确定性输出） (11 ms)
+  alipayVerify · 支付宝异步通知验签
+    √ 合法签名验证通过 (2 ms)
+    √ 篡改参数后验签失败 (2 ms)
+    √ 缺少 sign 字段返回 false
+    √ 错误公钥验签失败（不抛异常） (214 ms)
+    √ 验签排除 sign_type 字段 (3 ms)
+    √ 非法公钥 PEM 返回 false（不抛异常） (2 ms)
+
+[0mPOST /api/billing/webhook/wechat [32m200[0m 99.593 ms - 36[0m
+[0mPOST /api/billing/orders [32m200[0m 33.297 ms - 267[0m
+PASS src/models/ApiKey.test.ts
+  ApiKey 密钥 Schema
+    √ 包含 creditsEnabled 字段（Boolean，默认 false） (1 ms)
+    √ 包含 quotaDaily 字段（Number，默认 1000） (1 ms)
+    √ prefix 和 keyHash 均为必填 String
+
+  console.warn
+    2026-07-18T09:44:12.478Z [WARN] webhook 重放攻击风险: provider=wechat sigTime=1784367252 now=1784367852
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at src/routes/billing/webhook.routes.ts:84:14
+
+  console.log
+    2026-07-18T09:44:12.489Z [INFO] notify [测试] -> console: hello
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+[0mPOST /api/billing/webhook/wechat [32m200[0m 53.068 ms - 17[0m
+PASS src/services/notify.service.test.ts
+  notify.service 生产真实性门禁
+    √ 开发/测试未配置时默认 console，生产未配置时默认 disabled (1 ms)
+    √ console 仅在非生产环境标记为真实发送 (13 ms)
+    √ 未实现短信渠道不得把日志打印冒充发送成功 (2 ms)
+    √ 微信配置缺失时明确返回未送达，不降级 console (1 ms)
+    √ 仅微信接口确认成功后才返回 sent=true (19 ms)
+    √ 微信业务错误码返回未送达 (7 ms)
+
+PASS src/config/env-check.test.ts
+  生产启动环境校验
+    √ 完整真实生产配置通过 (2 ms)
+    √ 缺少 MONGODB_URI 时拒绝生产启动 (16 ms)
+    √ 缺少 REDIS_URL 时拒绝生产启动 (1 ms)
+    √ 缺少 ENCRYPTION_KEY 时拒绝生产启动 (1 ms)
+    √ 缺少 SANDBOX_REMOTE_URL 时拒绝生产启动 (1 ms)
+    √ 缺少 SANDBOX_REMOTE_TOKEN 时拒绝生产启动
+    √ 缺少 WECHAT_MCH_ID 时拒绝生产启动 (1 ms)
+    √ 缺少 WECHAT_APP_ID 时拒绝生产启动 (1 ms)
+    √ 缺少 WECHAT_API_V3_KEY 时拒绝生产启动 (1 ms)
+    √ 缺少 WECHAT_CERT_SERIAL 时拒绝生产启动 (1 ms)
+    √ 缺少 WECHAT_PRIVATE_KEY 时拒绝生产启动 (1 ms)
+    √ 缺少 WECHAT_PLATFORM_CERT 时拒绝生产启动 (1 ms)
+    √ 生产启用任一 Mock 开关时拒绝启动 (1 ms)
+    √ 生产支付渠道不是微信时拒绝启动 (1 ms)
+    √ 没有真实 AI Provider 时拒绝启动 (1 ms)
+    √ 生产通知渠道必须显式关闭或使用真实微信渠道 (3 ms)
+    √ 启用微信通知时必须配置真实模板消息参数 (1 ms)
+    √ 微信平台验签材料必须是 X.509 证书，不能用裸公钥代替 (1 ms)
+    √ 测试环境不执行生产配置门禁
+    √ 开发环境弱密钥只告警 (1 ms)
+
+PASS src/services/payment.webhook.test.ts
+  支付 Webhook 真实验签
+    Stripe HMAC-SHA256
+      √ 合法签名应验签通过 (1 ms)
+      √ 篡改签名应失败
+      √ 缺少字段应失败
+    微信 AES-256-GCM 解密
+      √ 加密后可正确解密回原文 (5 ms)
+      √ 错误密钥应抛错 (5 ms)
+    微信 RSA-SHA256 签名
+      √ 用私钥签名、公钥验签应通过 (128 ms)
+
+PASS src/services/payment.service.test.ts
+  payment.service · 密码学/验签纯函数（安全关键，可单测）
+    verifyStripeSignature
+      √ 合法签名返回 valid:true 且解析 timestamp (1 ms)
+      √ 篡改 body 导致签名不符 → valid:false (1 ms)
+      √ header 缺少 t 或 v1 → valid:false
+    normalizeAlipayPem
+      √ 裸 base64 私钥补全为合法 PEM (2 ms)
+      √ 已含 BEGIN 的 PEM 原样返回（不重复包装）
+    alipayBeijingTimestamp
+      √ 固定 now 输出 UTC+8 北京时间（格式 yyyy-MM-dd HH:mm:ss） (1 ms)
+    verifyWeChatSignature
+      √ 合法签名验证通过
+      √ 篡改 body 验证失败
+      √ 非法公钥 PEM 验证失败（不抛异常，返回 false） (1 ms)
+    decryptWeChatResource
+      √ AES-256-GCM 往返解密还原原始 JSON (1 ms)
+
+PASS src/services/workflow-engine.service.test.ts
+  workflow-engine.service · 拓扑编排
+    √ input → condition → output 串联得到正确结果（默认启用受限求值） (10 ms)
+    √ 节点按拓扑顺序执行（condition 能看到上游 input 节点的输出） (24 ms)
+  workflow-engine.service · code 节点（阶段1a 止血：默认禁用）
+    √ 默认禁用：不再执行任意 JS，返回禁用错误而不是结果
+    √ 默认禁用：无法访问全局/进程对象（消除 RCE） (1 ms)
+    √ 默认禁用优先于语法检查：危险或非法代码均被拒绝 (1 ms)
+  workflow-engine.service · condition 节点（阶段1a：受限表达式求值）
+    √ 条件为真时输出 trueBranch (12 ms)
+    √ 条件为假时输出 falseBranch (38 ms)
+    √ 通过 input 变量访问输入并求值（不再使用 {{input}} 插值，避免注入） (42 ms)
+    √ 表达式语法错误时回退为 falseBranch (13 ms)
+    √ 含危险标识符（如 process）的表达式被拒绝并回退 falseBranch（止血验证）
+  workflow-engine.service · code 节点（启用后：受限执行 / 危险代码拦截）
+    √ 启用后：受限代码可处理输入并返回结果 (68 ms)
+    √ 启用后：含危险标识符的代码被拦截（不执行）
+  workflow-engine.service · 生产真实性门禁
+    √ AI 对话 Provider 失败时节点和工作流失败，不返回伪成功文案 (1 ms)
+    √ RAG Provider 失败时节点和工作流失败，不回退空结果
+    √ 翻译 Provider 失败时节点和工作流失败，不把原文包装成译文 (1 ms)
+    √ 尚未接入真实执行器的 skill 节点明确失败 (1 ms)
+
+PASS src/models/WebhookEvent.test.ts
+  WebhookEvent Model — 幂等性保证
+    √ 应支持 Stripe eventId（evt_xxx 格式） (20 ms)
+    √ 应支持微信 payment transaction_id 格式 (1 ms)
+    √ status 默认值应为 received
+    √ failed 状态可携带 errorMessage
+    √ skipped 状态可记录重放攻击信息
+    √ processedAt 可在 processed 状态时设置 (1 ms)
+    √ receivedAt 默认应为当前时间（Date.now） (1 ms)
+    √ rawSummary 可存储回调体摘要（限长 512） (1 ms)
+    √ eventId 应声明为 unique（MongoDB 唯一索引） (3 ms)
+    √ orderNo 应有索引（支持按订单号查询关联事件） (1 ms)
+    √ receivedAt 应有索引（TTL 30天清理）
+  Order Model — paymentIntentId 增强字段
+    √ 应支持 Stripe paymentIntentId (pi_xxx) (3 ms)
+    √ paymentIntentId 为可选字段（mock 网关不返回） (1 ms)
+    √ paymentIntentId 应有索引（支持 Webhook 反查订单）
+
+PASS src/middleware/cors-config.test.ts
+  cors-config (L6)
+    √ parseAllowedOrigins: 缺省返回兜底公网来源（锁死防护） (1 ms)
+    √ parseAllowedOrigins: 逗号分隔多来源并去空白，且并入兜底来源
+    √ isOriginAllowed: 无 origin（同源/服务端）放行 (1 ms)
+    √ isOriginAllowed: 白名单命中放行
+    √ isOriginAllowed: 非白名单拒绝
+    √ buildCorsOptions: origin 回调对白名单放行、非白名单报错 (1 ms)
+    √ buildCorsOptions: 限制方法与请求头、开启 credentials
+
+PASS src/services/payment.production-gates.test.ts
+  生产支付渠道门禁
+    √ 生产拒绝 mock 网关 (46 ms)
+    √ 生产拒绝 alipay 网关
+    √ 生产拒绝 stripe 网关
+    √ 生产支付方式只暴露微信 (1 ms)
+    √ 生产微信回调缺少签名头时验签失败
+    √ 生产缺平台证书时网关不可用
+
+PASS src/lib/validation.test.ts
+  validation utils
+    √ isNonEmptyString 正确判定 (1 ms)
+    √ isStringArray 正确判定
+    √ isEmail 正确判定 (1 ms)
+    √ isObjectId 正确判定
+  validateObject
+    √ 全部合法通过 (1 ms)
+    √ 缺失必填返回错误
+    √ email 格式错误 (1 ms)
+    √ password 长度不足
+    √ oneOf 约束
+    √ objectId 约束 (1 ms)
+    √ 可选字段缺省不报错
+  validate middleware
+    √ 校验失败返回 400 并带错误码
+    √ 校验通过调用 next
+
+  console.log
+    2026-07-18T09:44:12.711Z [INFO] mcp MCP server connected: s1 (1 tools)
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/scripts/validate-production-contract.test.ts
+  CI production configuration contract
+    √ does not load a production env file while importing the fixture validator (1 ms)
+    √ validates without real production credentials (180 ms)
+    √ uses non-routable placeholders and production-safe mode flags (30 ms)
+
+PASS src/services/vector-store.test.ts
+  vector-store pure functions
+    cosineSimilarity
+      √ 相同向量相似度为 1 (2 ms)
+      √ 正交向量相似度为 0 (1 ms)
+      √ 反向向量相似度为 -1 (1 ms)
+      √ 维度不一致抛错 (14 ms)
+    rankByCosine
+      √ 按相似度降序返回 (1 ms)
+      √ minSimilarity 过滤
+      √ topK 截断 (1 ms)
+    selectVectorStoreKind
+      √ 默认 memory
+      √ 显式覆盖优先 (1 ms)
+      √ 按环境变量自动识别
+    getVectorStore
+      √ memory 始终可用，qdrant/pinecone 未配置时不可用 (1 ms)
+      √ memory search 复用 rankByCosine
+
+PASS src/services/mcp.service.test.ts
+  mcp.service · connectStdio（P0 高危：无白名单的命令透传）
+    √ 白名单内的命令（node）可正常连接，command/args 原样透传 (8 ms)
+    √ 阶段1b：非白名单命令（含危险命令）被拒绝，不再真正执行 (16 ms)
+    √ 阶段1b：通过绝对路径绕过白名单的命令同样被拒绝 (1 ms)
+    √ 非 stdio 传输调用 connectStdio 应抛错
+    √ 找不到服务器调用 connectStdio 应抛错 (11 ms)
+    √ 白名单内的命令若 MCP 握手失败，状态置为 error 并向上抛出 (2 ms)
+    √ registerServer 将配置持久化到数据库 (1 ms)
+
+  console.log
+    2026-07-18T09:44:12.766Z [INFO] rag-pipeline Chunked into 19 chunks (avg 23 chars/chunk)
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:12.775Z [INFO] rag-pipeline Chunked into 3 chunks (avg 229 chars/chunk)
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+  console.log
+    2026-07-18T09:44:12.777Z [INFO] rag-pipeline Chunked into 0 chunks (avg 3 chars/chunk)
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+FAIL src/routes/billing.webhook.integration.test.ts (19.578 s)
+  E2E-1: Mock 支付完整链路
+    × 下单 → 模拟支付 → 订阅激活 → 状态查询 → 重复支付幂等 (284 ms)
+  E2E-2: Stripe Webhook 验签与幂等
+    × 合法 Stripe Webhook → 验签通过 → 激活订阅 (294 ms)
+    × 同一 Webhook 事件重复发送 → 幂等跳过 (401 ms)
+  E2E-3: Webhook 畸形容错
+    √ 缺少签名 → 200，不激活 (56 ms)
+    √ 无效签名 → 200，不激活 (28 ms)
+    √ Webhook 携带不存在的订单号 → 记录失败，不崩溃 (87 ms)
+    √ 已支付订单再次接收 Webhook → 跳过 (122 ms)
+  E2E-4: 重放攻击防护
+    √ 过期时间戳（>5 分钟）→ 拒绝并记录 skipped (69 ms)
+  E2E-5: 微信支付 Webhook 验签与幂等
+    × 合法微信 Webhook → 验签通过 + 解密成功 → 激活订阅 (342 ms)
+    √ 微信签名错误 → 拒绝，不激活 (106 ms)
+    × 微信重复回调同一事件 → 幂等跳过 (186 ms)
+    √ 微信过期时间戳 → 重放攻击防护跳过 (115 ms)
+
+  ● E2E-1: Mock 支付完整链路 › 下单 → 模拟支付 → 订阅激活 → 状态查询 → 重复支付幂等
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      109 |       .get(`${BASE}/orders/${orderNo}/pay`)
+      110 |       .set('Authorization', `Bearer ${token}`);
+    > 111 |     expect(payRes.status).toBe(200);
+          |                           ^
+      112 |     expect(payRes.body.data.paid).toBe(true);
+      113 |
+      114 |     // Step 3: 查询订阅状态
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:111:27)
+
+  ● E2E-2: Stripe Webhook 验签与幂等 › 合法 Stripe Webhook → 验签通过 → 激活订阅
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "pro"
+    Received: "free"
+
+      167 |       .get(`${BASE}/subscription`)
+      168 |       .set('Authorization', `Bearer ${token}`);
+    > 169 |     expect(subRes.body.data.plan).toBe('pro');
+          |                                   ^
+      170 |
+      171 |     // 验证 WebhookEvent 已记录
+      172 |     const { WebhookEvent } = require('../models/WebhookEvent');
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:169:35)
+
+  ● E2E-2: Stripe Webhook 验签与幂等 › 同一 Webhook 事件重复发送 → 幂等跳过
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: undefined
+
+      202 |       .set('stripe-signature', sigHeader)
+      203 |       .send(eventBody);
+    > 204 |     expect(whRes2.body.idempotent).toBe(true);
+          |                                    ^
+      205 |
+      206 |     // 应只有一个 processed 事件（eventId 唯一索引，重复回调不重复记录）
+      207 |     const { WebhookEvent } = require('../models/WebhookEvent');
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:204:36)
+
+  ● E2E-5: 微信支付 Webhook 验签与幂等 › 合法微信 Webhook → 验签通过 + 解密成功 → 激活订阅
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "pro"
+    Received: "free"
+
+      426 |       .get(`${BASE}/subscription`)
+      427 |       .set('Authorization', `Bearer ${token}`);
+    > 428 |     expect(subRes.body.data.plan).toBe('pro');
+          |                                   ^
+      429 |
+      430 |     // 验证 WebhookEvent 已记录
+      431 |     const { WebhookEvent } = require('../models/WebhookEvent');
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:428:35)
+
+  ● E2E-5: 微信支付 Webhook 验签与幂等 › 微信重复回调同一事件 → 幂等跳过
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: undefined
+
+      533 |       .set('wechatpay-serial', 'SERIAL_001')
+      534 |       .send(callbackBody);
+    > 535 |     expect(whRes2.body.idempotent).toBe(true);
+          |                                    ^
+      536 |
+      537 |     // 应只有一个 processed
+      538 |     const { WebhookEvent } = require('../models/WebhookEvent');
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:535:36)
+
+  console.warn
+    2026-07-18T09:44:12.778Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.ts:335:31)
+      at Object.<anonymous> (src/config/ai-models.production.test.ts:1:1)
+
+  console.log
+    2026-07-18T09:44:12.779Z [INFO] rag-pipeline Chunked into 10 chunks (avg 41 chars/chunk)
+
+      at Object.log (src/lib/logger.ts:58:40)
+
+PASS src/config/credits-pricing.test.ts
+  Credits Pricing Config
+    √ 所有资源类型都应有定价 (1 ms)
+    √ chat 消耗 10 积分 (1 ms)
+    √ embed 消耗 5 积分 (1 ms)
+    √ compare 消耗 8 积分
+    √ image 消耗 15 积分
+    √ 已知资源返回正确定价 (1 ms)
+    √ 未知资源降级为 10
+    √ 积分包列表长度 >= 3
+    √ 每个积分包包含必要字段 (2 ms)
+    √ 积分包 id 不重复
+
+PASS src/services/rag-pipeline.test.ts
+  DocumentChunker
+    √ splits text by paragraphs and respects chunkSize (8 ms)
+    √ enforces maxChunks limit (3 ms)
+    √ returns no chunks for empty/whitespace text (2 ms)
+    √ applies chunkOverlap so adjacent chunks share context (2 ms)
+  DocumentParser
+    √ returns raw text for .txt files (4 ms)
+    √ throws on unsupported format (32 ms)
+  DEFAULT_CONFIG
+    √ has sane defaults
+
+  console.warn
+    2026-07-18T09:44:12.818Z [WARN] ai-models Mock mode enabled - AI responses will be simulated
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at AIModelManager.initializeProviders (src/config/ai-models.ts:73:14)
+      at new AIModelManager (src/config/ai-models.ts:61:10)
+      at Object.<anonymous> (src/config/ai-models.production.test.ts:37:21)
+
+PASS src/config/ai-models.production.test.ts
+  旧 AI 模型管理器生产安全门禁
+    √ 生产即使误开 Mock，也不暴露、不设默认且不能创建 Mock 客户端 (36 ms)
+    √ 非生产环境仍可显式启用 Mock (4 ms)
+
+PASS src/middleware/apm.test.ts
+  evaluateAlert
+    √ 空桶不告警 (1 ms)
+    √ 错误率超阈值触发 error_rate
+    √ 慢请求占比超阈值触发 slow_rate
+    √ 自定义阈值生效（覆盖默认） (1 ms)
+    √ 默认阈值与导出常量一致
+
+PASS src/config/billing.test.ts
+  billing plan logic
+    √ planRank orders free < pro < max < team (2 ms)
+    √ planRank returns -1 for invalid planId (1 ms)
+    √ planSatisfies compares tiers correctly (1 ms)
+    √ planSatisfies handles invalid planIds gracefully
+    √ getPlan returns plan by id
+    √ plans define daily quota limits
+    √ every plan defines the full quota resource set (5 ms)
+    √ amounts are stored in cents (no floating point) (1 ms)
+    √ pro plan is highlighted (recommended)
+    √ team plan has multiple seats (1 ms)
+  PER_USE_COST · 按次积分成本
+    √ all pay-per-use resources have positive cost in cents (1 ms)
+    √ media_video matches media_image2video cost (both ¥2)
+    √ media_image costs ¥0.2 (cheapest media)
+  BYOK_PREFERRED_RESOURCES · 优先走自带 Key
+    √ heavy resources prefer BYOK (video/image2video/api_chat) (1 ms)
+    √ media_image is NOT in BYOK list (cheap enough to absorb) (1 ms)
+  PLAN_AI_BUDGET_FEN · 日 AI 成本预算
+    √ free plan has lowest budget (50 fen = ¥0.5/day)
+    √ pro plan has medium budget (500 fen = ¥5/day)
+    √ max and team plans have unlimited budget (-1) (1 ms)
+    √ all 4 plans have a budget entry (1 ms)
+  COST_WARN_RATIO · 成本预警阈值
+    √ warns at 70% of budget (1 ms)
+
+PASS src/services/platform-audit.service.test.ts
+  logPlatformAudit
+    √ 写入角色变更审计并携带 oldRole/newRole (2 ms)
+    √ 封禁 / 解封动作映射正确 (1 ms)
+    √ 写入失败不抛出（异步吞错，不阻塞主业务） (2 ms)
+
+PASS src/lib/trace.test.ts
+  buildTraceEvent
+    √ 补全 traceId / timestamp 并保留输入字段 (2 ms)
+    √ 默认 status 为 ok (1 ms)
+  selectTracerMode
+    √ 默认（无任何配置）返回 noop
+    √ 显式 TRACER_MODE=langfuse 生效
+    √ 显式 TRACER_MODE=noop 生效 (1 ms)
+    √ 仅当三要素齐全时自动启用 langfuse
+
+  console.warn
+    2026-07-18T09:44:12.898Z [WARN] compare AI 对比生成失败: provider unavailable
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at CompareService.generateCompare (src/services/compare.service.ts:78:14)
+      at Object.<anonymous> (src/services/compare.production.test.ts:36:5)
+
+  console.warn
+    2026-07-18T09:44:12.906Z [WARN] compare AI 对比生成失败: 真实对比数据返回格式无效
+
+      57 | const consoleMethods: Record<ConsoleMethod, (...args: unknown[]) => void> = {
+      58 |   log: (...args: unknown[]) => console.log(...args),
+    > 59 |   warn: (...args: unknown[]) => console.warn(...args),
+         |                                         ^
+      60 |   error: (...args: unknown[]) => console.error(...args),
+      61 | };
+      62 |
+
+      at Object.warn (src/lib/logger.ts:59:41)
+      at write (src/lib/logger.ts:69:27)
+      at Object.warn (src/lib/logger.ts:78:5)
+      at CompareService.generateCompare (src/services/compare.service.ts:78:14)
+      at Object.<anonymous> (src/services/compare.production.test.ts:52:5)
+
+PASS src/services/compare.production.test.ts
+  技术对比生产真实数据门禁
+    √ 真实 AI Provider 失败时不回退硬编码参考数据 (9 ms)
+    √ 真实 AI 返回空结构时不使用硬编码价格和评分补齐 (2 ms)
+
+PASS src/skills/external-market.test.ts
+  开放市场供应链护栏
+    √ 策展目录全部通过校验（无合法条目被误删） (6 ms)
+    √ 拒绝 command 不在白名单的条目 (1 ms)
+    √ 拒绝 args 含 shell 元字符（; | & ` $ ( ) < > \）的条目
+    √ 拒绝 args 含危险 flag（-e / --eval）的条目
+    √ 拒绝非 http(s) 的 officialUrl
+    √ source 为空的条目被拒 (1 ms)
+
+PASS src/lib/http-error.test.ts
+  http-error sendError
+    √ AppError: 返回 safeMessage 与 code，不泄露内部 detail (1 ms)
+    √ 非 AppError 在 production 返回通用语，不透传 message
+    √ 非 AppError 在 development 透传 message 便于排查 (1 ms)
+    √ test 环境透传 message (2 ms)
+    √ 非 Error 类型被安全包裹 (1 ms)
+
+PASS src/lib/prometheus.test.ts
+  renderPrometheusMetrics
+    √ 包含 HELP/TYPE 与全局计数器 (1 ms)
+    √ 包含按路由指标（标签 + 秒级耗时） (1 ms)
+    √ 包含进程/运行时指标（字节换算正确）
+    √ 以有效的 exposition 格式换行结尾
+
+PASS src/services/media-gen.tc3.test.ts
+  腾讯云 TC3-HMAC-SHA256 签名
+    √ 生成标准 Authorization 头 (1 ms)
+    √ 相同输入幂等
+    √ 不同密钥得到不同签名
+    √ 签名与 action 无关（action 是请求头，不在签名头内，符合腾讯云规范）
+    √ 不同 payload 得到不同签名
+
+PASS src/lib/crypto.test.ts
+  crypto — AES-256-GCM 与双密钥轮换
+    √ 默认使用 ENCRYPTION_KEY 加密并解密 (3 ms)
+    √ 显式 key 加密、显式 key 解密；错误密钥解密失败 (31 ms)
+    √ 解密自动回退历史密钥 ENCRYPTION_KEY_PREV (1 ms)
+    √ 兼容 OLD_ENCRYPTION_KEY 作为历史密钥别名 (1 ms)
+    √ 明文兼容：无前缀原样返回 (2 ms)
+    √ 空值原样返回 (1 ms)
+    √ ENCRYPTION_KEY 缺失时加密抛错 (17 ms)
+
+PASS src/middleware/security-headers.test.ts
+  security-headers (L7)
+    √ production：开启 HSTS（1 年 + 子域 + preload） (1 ms)
+    √ development：关闭 HSTS，避免本地 http 被强升 (3 ms)
+    √ test：关闭 HSTS
+    √ 统一收紧：no-referrer、隐藏 X-Powered-By、禁止 iframe 嵌套 (1 ms)
+
+PASS src/middleware/resourceAccess.test.ts
+  资源级访问控制（团队 RBAC 下沉）纯函数
+    √ 资源直接归属用户 → 允许
+    √ 非归属且无团队 → 拒绝
+    √ 无 userId → 拒绝
+    √ 团队成员按角色判定（viewer 默认可读，member 可写）
+    √ 未知角色 → 拒绝
+
+PASS src/routes/tools.media-task.test.ts
+  工具媒体任务查询门禁
+    √ 允许查询 MoneyPrinterTurbo 返回的真实异步任务 (5 ms)
+    √ 生产环境在路由层拒绝 Mock 任务查询 (3 ms)
+
+PASS src/routes/auth.integration.test.ts (24.015 s)
+  S1 课程路由写操作鉴权
+    √ 匿名 POST /courses 必须返回 401（修复前为裸奔） (66 ms)
+    √ 匿名 PUT /courses/:id 必须返回 401 (6 ms)
+    √ 匿名 PATCH /courses/:id/publish 必须返回 401 (5 ms)
+    √ 匿名 POST /courses/:id/chapters 必须返回 401 (5 ms)
+    √ GET /courses（读）对匿名开放 (6 ms)
+  S2 MCP 路由写操作鉴权
+    √ 匿名 POST /mcp/servers 必须返回 401 (4 ms)
+    √ 匿名 PUT /mcp/servers/:id 必须返回 401 (5 ms)
+    √ 匿名 DELETE /mcp/servers/:id 必须返回 401 (4 ms)
+    √ 匿名 POST /mcp/servers/:id/call 必须返回 401 (6 ms)
+    √ 匿名 POST /mcp/servers/:id/connect 必须返回 401 (5 ms)
+    √ GET /mcp/servers（读）对匿名开放 (5 ms)
+  S3 模拟支付接口鉴权
+    √ 匿名 GET /billing/orders/:orderNo/pay 必须返回 401 (4 ms)
+    √ 登录但订单不存在返回 404（而非激活他人订单） (6 ms)
+    √ 登录用户访问他人订单返回 403（归属校验） (6 ms)
+  S4 RAG 嵌入接口鉴权
+    √ 匿名 POST /rag/embed/document/:id 必须返回 401 (4 ms)
+    √ 匿名 POST /rag/embed/documents 必须返回 401 (5 ms)
+    √ 匿名 GET /rag/status 必须返回 401 (5 ms)
+  S5 AI 会话删除鉴权
+    √ 匿名 DELETE /ai/session/:id 必须返回 401 (4 ms)
+    √ 匿名 DELETE /ai/session/:id/delete 必须返回 401 (4 ms)
+    √ 登录用户删除不存在会话返回 404（进入 handler 验证） (4 ms)
+    √ 登录用户删除他人会话返回 403（归属校验） (5 ms)
+  S6 diagnostics 鉴权
+    √ 匿名 GET /diagnostics 必须返回 401 (5 ms)
+    √ 登录用户可访问 /diagnostics (10027 ms)
+  M8 compare 生成接口鉴权
+    √ 匿名 POST /compare/generate 仍可用（optionalAuth，匿名放行） (4 ms)
+    √ 匿名缺 items 返回 400（进入 handler 验证参数） (2 ms)
+    √ 登录用户 POST /compare/generate 通过（消耗 ai_chat 配额） (3 ms)
+
+Summary of all failing tests
+FAIL src/services/sandbox.service.test.ts (9.605 s)
+  ● sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=true） › 启用后：mode:local 真正在本机执行并返回 stdout
+
+    OverwriteModelError: Cannot overwrite `SandboxExecution` model once compiled.
+
+      108 | SandboxExecutionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 });
+      109 |
+    > 110 | export const SandboxExecution = mongoose.model<ISandboxExecution>(
+          |                                          ^
+      111 |   "SandboxExecution",
+      112 |   SandboxExecutionSchema
+      113 | );
+
+      at Object.model (node_modules/mongoose/lib/mongoose.js:609:13)
+      at Object.<anonymous> (src/models/SandboxExecution.ts:110:42)
+      at Object.<anonymous> (src/services/sandbox.service.ts:20:1)
+      at src/services/sandbox.service.test.ts:193:13
+      at Object.<anonymous> (src/services/sandbox.service.test.ts:192:10)
+
+  ● sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=true） › 启用后：危险代码仍被硬拦截（denied）
+
+    OverwriteModelError: Cannot overwrite `SandboxExecution` model once compiled.
+
+      108 | SandboxExecutionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 });
+      109 |
+    > 110 | export const SandboxExecution = mongoose.model<ISandboxExecution>(
+          |                                          ^
+      111 |   "SandboxExecution",
+      112 |   SandboxExecutionSchema
+      113 | );
+
+      at Object.model (node_modules/mongoose/lib/mongoose.js:609:13)
+      at Object.<anonymous> (src/models/SandboxExecution.ts:110:42)
+      at Object.<anonymous> (src/services/sandbox.service.ts:20:1)
+      at src/services/sandbox.service.test.ts:193:13
+      at Object.<anonymous> (src/services/sandbox.service.test.ts:192:10)
+
+  ● sandbox.service · local 模式（启用后：SANDBOX_LOCAL_ENABLED=true） › 启用后：代码抛错返回 error 状态
+
+    OverwriteModelError: Cannot overwrite `SandboxExecution` model once compiled.
+
+      108 | SandboxExecutionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 86400 });
+      109 |
+    > 110 | export const SandboxExecution = mongoose.model<ISandboxExecution>(
+          |                                          ^
+      111 |   "SandboxExecution",
+      112 |   SandboxExecutionSchema
+      113 | );
+
+      at Object.model (node_modules/mongoose/lib/mongoose.js:609:13)
+      at Object.<anonymous> (src/models/SandboxExecution.ts:110:42)
+      at Object.<anonymous> (src/services/sandbox.service.ts:20:1)
+      at src/services/sandbox.service.test.ts:193:13
+      at Object.<anonymous> (src/services/sandbox.service.test.ts:192:10)
+
+FAIL src/routes/oauth.test.ts (11.18 s)
+  ● 微信扫码登录（mock 路径） › GET /wechat/callback 用有效 state + code=mock 登录成功并返回 token
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      145 |     const res = await request(mount())
+      146 |       .get(`/wechat/callback?code=mock&state=${state}&format=json`);
+    > 147 |     expect(res.status).toBe(200);
+          |                        ^
+      148 |     expect(res.body.success).toBe(true);
+      149 |     expect(res.body.token).toBeTruthy();
+      150 |     expect(res.body.user.provider).toBe('wechat');
+
+      at Object.<anonymous> (src/routes/oauth.test.ts:147:24)
+
+  ● 抖音扫码登录（mock 路径） › GET /douyin/callback 用有效 state + code=mock 登录成功并返回 token
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      179 |     const res = await request(mount())
+      180 |       .get(`/douyin/callback?code=mock&state=${state}&format=json`);
+    > 181 |     expect(res.status).toBe(200);
+          |                        ^
+      182 |     expect(res.body.success).toBe(true);
+      183 |     expect(res.body.token).toBeTruthy();
+      184 |     expect(res.body.user.provider).toBe('douyin');
+
+      at Object.<anonymous> (src/routes/oauth.test.ts:181:24)
+
+FAIL src/index.bootstrap.test.ts (14.765 s)
+  ● bootstrap production startup order › starts HTTP only after every production dependency succeeds
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+    @@ -3,7 +3,8 @@
+        "mongo",
+        "redis",
+        "mcp",
+        "providers",
+        "worker",
+    +   "outbox",
+        "listen",
+      ]
+
+      80 |
+      81 |     expect(server).toBeDefined();
+    > 82 |     expect(events).toEqual(['validate', 'mongo', 'redis', 'mcp', 'providers', 'worker', 'listen']);
+         |                    ^
+      83 |   });
+      84 |
+      85 |   it('can run the full startup gate without binding a port', async () => {
+
+      at Object.<anonymous> (src/index.bootstrap.test.ts:82:20)
+
+FAIL src/routes/marketplace-credits.integration.test.ts (15.475 s)
+  ● P0-2 API 市场积分扣减集成测试 › Mock 支付后余额增加且产生 purchase 记录
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      196 |       .get(`/api/billing/orders/${orderNo}/pay`)
+      197 |       .set(auth());
+    > 198 |     expect(payRes.status).toBe(200);
+          |                           ^
+      199 |     expect(payRes.body.data.paid).toBe(true);
+      200 |     expect(payRes.body.data.orderType).toBe('credits_pack');
+      201 |
+
+      at Object.<anonymous> (src/routes/marketplace-credits.integration.test.ts:198:27)
+
+FAIL src/routes/billing.webhook.integration.test.ts (19.578 s)
+  ● E2E-1: Mock 支付完整链路 › 下单 → 模拟支付 → 订阅激活 → 状态查询 → 重复支付幂等
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 500
+
+      109 |       .get(`${BASE}/orders/${orderNo}/pay`)
+      110 |       .set('Authorization', `Bearer ${token}`);
+    > 111 |     expect(payRes.status).toBe(200);
+          |                           ^
+      112 |     expect(payRes.body.data.paid).toBe(true);
+      113 |
+      114 |     // Step 3: 查询订阅状态
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:111:27)
+
+  ● E2E-2: Stripe Webhook 验签与幂等 › 合法 Stripe Webhook → 验签通过 → 激活订阅
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "pro"
+    Received: "free"
+
+      167 |       .get(`${BASE}/subscription`)
+      168 |       .set('Authorization', `Bearer ${token}`);
+    > 169 |     expect(subRes.body.data.plan).toBe('pro');
+          |                                   ^
+      170 |
+      171 |     // 验证 WebhookEvent 已记录
+      172 |     const { WebhookEvent } = require('../models/WebhookEvent');
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:169:35)
+
+  ● E2E-2: Stripe Webhook 验签与幂等 › 同一 Webhook 事件重复发送 → 幂等跳过
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: undefined
+
+      202 |       .set('stripe-signature', sigHeader)
+      203 |       .send(eventBody);
+    > 204 |     expect(whRes2.body.idempotent).toBe(true);
+          |                                    ^
+      205 |
+      206 |     // 应只有一个 processed 事件（eventId 唯一索引，重复回调不重复记录）
+      207 |     const { WebhookEvent } = require('../models/WebhookEvent');
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:204:36)
+
+  ● E2E-5: 微信支付 Webhook 验签与幂等 › 合法微信 Webhook → 验签通过 + 解密成功 → 激活订阅
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "pro"
+    Received: "free"
+
+      426 |       .get(`${BASE}/subscription`)
+      427 |       .set('Authorization', `Bearer ${token}`);
+    > 428 |     expect(subRes.body.data.plan).toBe('pro');
+          |                                   ^
+      429 |
+      430 |     // 验证 WebhookEvent 已记录
+      431 |     const { WebhookEvent } = require('../models/WebhookEvent');
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:428:35)
+
+  ● E2E-5: 微信支付 Webhook 验签与幂等 › 微信重复回调同一事件 → 幂等跳过
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: undefined
+
+      533 |       .set('wechatpay-serial', 'SERIAL_001')
+      534 |       .send(callbackBody);
+    > 535 |     expect(whRes2.body.idempotent).toBe(true);
+          |                                    ^
+      536 |
+      537 |     // 应只有一个 processed
+      538 |     const { WebhookEvent } = require('../models/WebhookEvent');
+
+      at Object.<anonymous> (src/routes/billing.webhook.integration.test.ts:535:36)
+
+
+Test Suites: 5 failed, 77 passed, 82 total
+Tests:       12 failed, 570 passed, 582 total
+Snapshots:   0 total
+Time:        25.776 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
