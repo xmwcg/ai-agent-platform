@@ -13,6 +13,8 @@ import { buildHelmetOptions } from './middleware/security-headers';
 // 导入数据库配置
 import { connectMongoDB, connectRedis, checkDatabaseHealth } from './config/database';
 import { validateStartupEnv } from './config/env-check';
+import { RelayChannel } from './models/RelayChannel';
+import { encryptSecret } from './lib/crypto';
 
 // 导入路由
 import aiRoutes from './routes/ai';
@@ -238,6 +240,7 @@ export interface BootstrapDependencies {
   startMediaWorker: () => Promise<unknown>;
   startOutboxWorker: () => void;
   startHttpServer: () => Server;
+  seedRelay?: () => Promise<unknown>;
 }
 
 export interface BootstrapOptions {
@@ -296,6 +299,36 @@ function scheduleDailyReconciliation(): NodeJS.Timeout {
   timer.unref();
   return timer;
 }
+/**
+ * 中转站默认上游渠道播种（幂等）：
+ * 仅当数据库中没有任意渠道、且环境变量已配置 DEEPSEEK_API_KEY 时，
+ * 自动创建一个指向 DeepSeek 的默认渠道，使中转站开箱即用。
+ * 已存在渠道时不重复创建，避免覆盖运营人员的配置。
+ */
+async function seedDefaultRelayChannel(): Promise<void> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) {
+    logger.warn('index', '未配置 DEEPSEEK_API_KEY，跳过中转站默认渠道播种');
+    return;
+  }
+  const count = await RelayChannel.countDocuments();
+  if (count > 0) {
+    logger.info('index', `已存在 ${count} 个中转站渠道，跳过播种`);
+    return;
+  }
+  await RelayChannel.create({
+    name: 'DeepSeek 默认渠道（自动播种）',
+    provider: 'deepseek',
+    baseURL: 'https://api.deepseek.com/v1',
+    apiKey: encryptSecret(apiKey),
+    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
+    authMode: 'bearer',
+    weight: 1,
+    enabled: true,
+  });
+  logger.info('index', '已自动播种默认中转站渠道（DeepSeek）');
+}
+
 function defaultBootstrapDependencies(): BootstrapDependencies {
   return {
     validateEnv: validateStartupEnv,
@@ -305,6 +338,7 @@ function defaultBootstrapDependencies(): BootstrapDependencies {
     reloadProviders: reloadCustomProviders,
     startMediaWorker: () => mediaWorker.start(),
     startOutboxWorker: () => OutboxWorker.start(),
+    seedRelay: seedDefaultRelayChannel,
     startHttpServer: () => {
       // 启动备份调度和运营指标采集
       startBackupScheduler();
@@ -345,6 +379,7 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Server 
   await startManagedDependency('自定义 AI Provider', dependencies.reloadProviders);
   await startManagedDependency('媒体任务 Worker', dependencies.startMediaWorker);
   await startManagedDependency('Outbox Worker', async () => { dependencies.startOutboxWorker(); });
+  await startManagedDependency('中转站默认渠道', async () => { if (dependencies.seedRelay) await dependencies.seedRelay(); });
 
   // 每日对账定时器（每天凌晨 2:00 UTC+8）
   scheduleDailyReconciliation();
