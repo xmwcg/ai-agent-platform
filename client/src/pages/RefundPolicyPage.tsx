@@ -51,7 +51,7 @@ export default function RefundPolicyPage() {
           },
           {
             title: "第二步：管理员审核（1-3 个工作日）",
-            description: "管理员将核对订单状态、已消费积分数额和剩余权益。审核期间订单状态变更为"退款审批中"。",
+            description: "管理员将核对订单状态、已消费积分数额和剩余权益。审核期间订单状态变更为「退款审批中」。",
           },
           {
             title: "第三步：审核结果通知",

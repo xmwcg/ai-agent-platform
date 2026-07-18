@@ -30,7 +30,7 @@ export default function PrivacyPage() {
         showIcon
         style={{ marginBottom: 24 }}
         message="政策更新提示"
-        description="本政策发生重大变更时，我们将通过平台公告、邮件或站内通知提前告知。重大变更将在您重新同意后才对您生效，不会仅以"继续使用即同意"的方式替代您的明确同意。"
+        description="本政策发生重大变更时，我们将通过平台公告、邮件或站内通知提前告知。重大变更将在您重新同意后才对您生效，不会仅以「继续使用即同意」的方式替代您的明确同意。"
       />
 
       <Title level={4}>1. 我们是谁</Title>
