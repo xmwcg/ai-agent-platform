@@ -144,6 +144,7 @@ code, pre, kbd, samp {
 /* ─── 页面过渡动画 ─── */
 .page-enter {
   animation: pageEnter 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: transform, opacity;
 }
 @keyframes pageEnter {
   from { opacity: 0; transform: translateY(12px); }
