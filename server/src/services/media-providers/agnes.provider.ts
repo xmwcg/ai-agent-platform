@@ -101,6 +101,24 @@ export class AgnesProvider implements MediaProvider {
     };
   }
 
+  /** 清洗文本：去换行/回车、合并空白、按上限截断，避免超长脚本触发上游 400。 */
+  private cleanText(s: string, max = 800): string {
+    return String(s || '')
+      .replace(/\n+/g, ' ')
+      .replace(/\r+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, max);
+  }
+
+  /** 把 axios 错误转成可读详情（带上游响应体），便于诊断。 */
+  private errDetail(e: unknown): string {
+    const em = e instanceof Error ? e.message : String(e);
+    const resp = (e as any)?.response?.data;
+    const detail = resp ? ` | upstream=${JSON.stringify(resp).slice(0, 300)}` : '';
+    return `${em}${detail}`;
+  }
+
   async generate(params: MediaGenParams): Promise<MediaGenResult> {
     const cfg = await this.ensureLoaded();
     const isVideo = params.type === 'text2video' || params.type === 'image2video';
@@ -158,8 +176,8 @@ export class AgnesProvider implements MediaProvider {
     }
 
     // —— 文生视频：异步提交 ——
-    const model = this.pickModel(cfg, 'video');
-    const body: Record<string, unknown> = { model, prompt: params.prompt };
+      const model = this.pickModel(cfg, 'video');
+      const body: Record<string, unknown> = { model, prompt: this.cleanText(params.prompt) };
     if (params.duration) body.duration = params.duration;
     if (params.size) body.size = params.size;
     try {
@@ -183,19 +201,18 @@ export class AgnesProvider implements MediaProvider {
       };
       await persistTask(taskId, result);
       return result;
-    } catch (e: unknown) {
-      if (e instanceof AppError) throw e;
-      const em = e instanceof Error ? e.message : String(e);
-      if (isProduction()) {
-        throw new AppError(
-          503,
-          'Agnes 视频生成暂时不可用，请稍后重试',
-          'MEDIA_PROVIDER_UNAVAILABLE',
-          `Agnes video submit failed: ${em}`
-        );
+      } catch (e: unknown) {
+        if (e instanceof AppError) throw e;
+        if (isProduction()) {
+          throw new AppError(
+            503,
+            'Agnes 视频生成暂时不可用，请稍后重试',
+            'MEDIA_PROVIDER_UNAVAILABLE',
+            `Agnes video submit failed: ${this.errDetail(e)}`
+          );
+        }
+        throw e;
       }
-      throw e;
-    }
   }
 
   async queryTask(taskId: string, _creds?: MediaCredentials): Promise<MediaGenResult> {
