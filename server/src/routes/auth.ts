@@ -15,6 +15,7 @@ import { processReferralOnRegister } from '../services/referral.service';
 import { phoneHash, normalizePhone, maskPhone, encryptField } from '../lib/field-crypto';
 import { OAUTH_CONFIG } from '../config/oauth';
 import { AuthSession } from '../models/AuthSession';
+import { ConsentRecord } from '../models/ConsentRecord';
 import { writeAuditLogAsync, writeAuditLog } from '../services/security-audit.service';
 
 const router = Router();
@@ -40,7 +41,15 @@ const loginSchema: ValidationSchema = {
 // 注册
 router.post('/register', authLimiter, validate(registerSchema), async (req: AuthRequest, res: Response) => {
   try {
-    const { email, password, name, referralCode } = req.body;
+    const { email, password, name, referralCode, acceptTerms, acceptPrivacy } = req.body;
+
+    // 协议合规：注册必须勾选用户协议和隐私政策
+    if (!acceptTerms || !acceptPrivacy) {
+      return res.status(400).json({
+        error: '请阅读并同意《用户服务协议》和《隐私政策》',
+        code: 'CONSENT_REQUIRED',
+      });
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -63,7 +72,29 @@ router.post('/register', authLimiter, validate(registerSchema), async (req: Auth
       ...(referredBy ? { referredBy: referredBy } : {}),
     });
 
-    const jti = require('crypto').randomUUID();
+    // 记录协议同意
+    await ConsentRecord.create([
+      {
+        userId: user._id,
+        consentType: 'terms_of_service',
+        version: 'TOU_v1',
+        accepted: true,
+        ipAddress: req.ip || 'unknown',
+        userAgent: req.headers['user-agent'] || '',
+        channel: 'web',
+      },
+      {
+        userId: user._id,
+        consentType: 'privacy_policy',
+        version: 'PRIVACY_v1',
+        accepted: true,
+        ipAddress: req.ip || 'unknown',
+        userAgent: req.headers['user-agent'] || '',
+        channel: 'web',
+      },
+    ]);
+
+        const jti = require('crypto').randomUUID();
     const refreshToken = generateRefreshToken();
     const tokenHash = hashRefreshToken(refreshToken);
     const deviceFingerprint = generateDeviceFingerprint(req);

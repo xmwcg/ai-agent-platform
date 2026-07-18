@@ -42,7 +42,8 @@ export type AuditAction =
   | "account_export"
   | "account_delete"
   | "data_export"
-  | "admin_action";
+  | "admin_action"
+  | "account_action";
 
 export interface ISecurityAuditLog extends Document {
   userId?: mongoose.Types.ObjectId;
