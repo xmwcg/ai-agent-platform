@@ -1,5 +1,5 @@
 import { route } from '../../gateway/ai-gateway.service';
-import { mediaGenService, listMediaProviders } from '../../services/media-gen.service';
+import { mediaGenService, ensureAgnesLoaded } from '../../services/media-gen.service';
 import type { Skill } from '../types';
 
 /**
@@ -84,8 +84,8 @@ ${research}`,
       let composeResult: any = null;
       if (compose) {
         // 成片优先使用 Agnes 视频模型（agnes-video-v2.0），未配置时回退 MoneyPrinterTurbo
-        const providers = listMediaProviders();
-        const agnesReady = !!providers.find((p) => p.name === 'agnes' && p.configured);
+        // 先确保 Agnes 配置已从 DB 加载（容器重启后 cached 会被重置）
+        const agnesReady = await ensureAgnesLoaded();
         const videoProvider = agnesReady ? 'agnes' : 'moneyprinterturbo';
         composeResult = await mediaGenService.generate({
           type: 'text2video',

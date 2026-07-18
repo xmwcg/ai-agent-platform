@@ -69,8 +69,16 @@ function hasInjectedCredentials(providerName: MediaProviderName, credentials?: M
   return false;
 }
 
+/** 确保 Agnes 媒体配置已从 DB 加载（容器重启/启动期竞态后调用，返回是否已配置）。 */
+export async function ensureAgnesLoaded(): Promise<boolean> {
+  if (!agnesProvider.isConfigured()) {
+    await agnesProvider.reload().catch(() => {});
+  }
+  return agnesProvider.isConfigured();
+}
+
 export function listMediaProviders() {
-  return Object.values(PROVIDERS).map((p) => ({
+  return Object.values(PROVIDERS).filter(Boolean).map((p) => ({
     name: p.name,
     label: p.label,
     supportedTypes: p.supportedTypes,
@@ -116,6 +124,11 @@ class MediaGenService {
   async generate(params: MediaGenParams): Promise<MediaGenResult> {
     if (!params?.prompt?.trim()) throw new Error('提示词不能为空');
     if (params.provider) assertMockAllowed(params.provider);
+    // 惰性加载 Agnes 配置：容器重启后 cached 会被重置，且启动期 DB 可能未就绪导致
+    // 首次 reload 失败。这里在每次生成前若未加载则重试一次，确保 isConfigured() 反映数据库真实状态。
+    if (!agnesProvider.isConfigured()) {
+      await agnesProvider.reload().catch(() => {});
+    }
     const mockMode = !isProduction() && process.env.ENABLE_MOCK_MODE === 'true';
     const provider = mockMode
       ? PROVIDERS.mock

@@ -79,11 +79,11 @@ router.post('/convert', optionalAuth, enforceQuota('file_convert'), async (req: 
 const MEDIA_TYPES: MediaTaskType[] = ['image2image', 'text2video', 'image2video'];
 router.post('/media', optionalAuth, enforceQuota('media_gen'), async (req: AuthRequest, res: Response) => {
   try {
-    const { type, prompt, imageBase64, negativePrompt, duration, size, style } = req.body;
+    const { type, prompt, imageBase64, negativePrompt, duration, size, style, provider } = req.body;
     if (!MEDIA_TYPES.includes(type)) {
       return res.status(400).json({ success: false, error: '不支持的媒体类型' });
     }
-    const result = await mediaGenService.generate({ type, prompt, imageBase64, negativePrompt, duration, size, style });
+    const result = await mediaGenService.generate({ type, prompt, imageBase64, negativePrompt, duration, size, style, provider });
     if (req.user?.id) await quotaIncrement(req.user.id, 'media_gen');
     res.json({ success: true, data: result });
   } catch (err) {
