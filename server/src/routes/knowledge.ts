@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { Types } from 'mongoose';
 import { KnowledgeDocument } from '../models/KnowledgeDocument';
 import { Team } from '../models/Team';
 import { AuthRequest, optionalAuth, requireAuth } from '../middleware/auth';
@@ -163,6 +164,10 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 // 获取单个文档详情（私有文档需鉴权；知识库 v2 接入会员/付费/试看/积分权限）
 router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
+    // 非法 id（非 ObjectId，如探针误打的 /health）直接 404，避免 Mongoose 转换抛 500
+    if (!Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
     const doc = await KnowledgeDocument.findById(req.params.id)
       .populate('author', 'username')
       .populate('relatedDocs', 'title');

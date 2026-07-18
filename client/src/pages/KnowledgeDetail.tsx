@@ -9,7 +9,7 @@ import {
   RobotOutlined, ClockCircleOutlined, UserOutlined, EyeOutlined,
   HeartOutlined, ShareAltOutlined, CrownOutlined, LockOutlined,
 } from '@ant-design/icons';
-import apiClient, { extractApiError } from '@/services/api';
+import apiClient, { extractApiError, toolsAPI } from '@/services/api';
 import FileConverter from '@/components/FileConverter';
 import { repairKnowledgeDocument } from '@/utils/repairMojibake';
 
@@ -279,6 +279,60 @@ export default function KnowledgeDetail() {
     setUnlocking(false);
   };
 
+  // 分享：复制当前文档链接（公开文档可直接访问；私有文档需授权）
+  const handleShare = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: document?.title || 'AIBAK 知识库', url });
+        return;
+      }
+    } catch {
+      /* 用户取消分享则降级为复制链接 */
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      message.success('分享链接已复制到剪贴板');
+    } catch {
+      // 剪贴板不可用时，弹出可手动复制的链接
+      window.prompt('复制以下链接分享：', url);
+    }
+  };
+
+  // 下载/转换：调用后端真实转换接口，拿到产物 id 后触发文件下载
+  const handleConvert = async (sourceFormat: string, targetFormat: string) => {
+    const source = document?.content || document?.htmlContent || shownContent || '';
+    if (!source.trim()) {
+      message.warning('当前文档没有可转换的正文内容');
+      return;
+    }
+    try {
+      const res: any = await toolsAPI.convert({
+        fileName: `${document?.title || 'document'}.${sourceFormat}`,
+        sourceFormat,
+        targetFormat,
+        content: source,
+      });
+      const data = res?.data?.data || res?.data;
+      const outputId = data?.outputId;
+      const outputName = data?.outputName || `${document?.title || 'document'}.${targetFormat}`;
+      if (!outputId) {
+        message.error('转换未返回产物，请重试');
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = `/api/tools/convert/download?id=${encodeURIComponent(outputId)}`;
+      a.download = outputName;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      message.success(`已转换并下载（.${targetFormat}）`);
+    } catch (e) {
+      message.error(extractApiError(e, '转换失败，请重试'));
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
     setLoading(true);
@@ -416,7 +470,7 @@ export default function KnowledgeDetail() {
               >
                 AI 解读
               </Button>
-              <Button size="large" icon={<ShareAltOutlined />}>分享</Button>
+              <Button size="large" icon={<ShareAltOutlined />} onClick={handleShare}>分享</Button>
               <Button size="large" icon={<DownloadOutlined />} onClick={() => setConverterOpen(true)}>下载/转换</Button>
             </Space>
           </div>
@@ -452,8 +506,8 @@ export default function KnowledgeDetail() {
         open={converterOpen}
         onClose={() => setConverterOpen(false)}
         fileName={`${document.title || 'document'}.md`}
-        content={shownContent}
-        onConvert={() => message.info('格式转换功能已在开发中')}
+        content={document?.content || document?.htmlContent || shownContent}
+        onConvert={handleConvert}
       />
 
       <style>{`

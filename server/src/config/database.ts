@@ -244,9 +244,15 @@ async function probeRedisHealth(): Promise<boolean> {
     probeOk = false;
   }
 
-  // 3) Redis 实际可用但主连接僵死（无论 status 是 'ready' 半开还是未连接）时，
-  //    主动断开并重建主连接实现自愈，使限流等依赖真正恢复使用 Redis。
-  if (probeOk && !mainOk) {
+  // 3) Redis 实际可用但主连接僵死时，主动断开并重建主连接实现自愈。
+  //    ⚠️ 关键修正：仅当主连接「确实未就绪」(status 不是 'ready'，即已 end/wait/
+  //    连接失败) 才拆连接重建；若 status 仍为 'ready' 只是单次 ping 超时（网络抖动），
+  //    「绝不」硬拆健康连接——否则每轮探测都把正常连接断开重建，导致队列 brpop 在
+  //    断连窗口反复刷 "Connection is closed"。半开连接交由 ioredis keepAlive +
+  //    命令超时自行检测并重连。
+  const mainStatus = (realRedis as any).status;
+  if (probeOk && !mainOk && mainStatus !== 'ready') {
+    logger.warn('redis', `主连接状态 ${mainStatus} 异常但探测可达，触发自愈重建`);
     (realRedis as any).disconnect?.();
     (realRedis as any).connect?.().catch(() => {});
   }
