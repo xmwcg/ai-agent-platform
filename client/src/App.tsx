@@ -26,13 +26,13 @@ import { NAVIGATION_GROUPS, SITE_FEATURES, visibleSiteFeatures } from '@/config/
 
 // ─── 品牌常量 ───
 const BRAND_NAME = 'AIbak';
-const BRAND_SLOGAN = '打造您的全�?AI 应用平台';
+const BRAND_SLOGAN = '打造您的全栈 AI 应用平台';
 const BRAND_URL = 'https://aibak.site';
 
 const { Header, Content, Sider } = Layout;
 const { Text } = Typography;
 
-// ─── 全站功能注册表驱动菜单、面包屑和搜�?───
+// ─── 全站功能注册表驱动菜单、面包屑和搜索 ───
 const FEATURE_ICONS: Record<string, React.ReactNode> = {
   home: <HomeOutlined />, rocket: <RocketOutlined />, robot: <RobotOutlined />,
   book: <BookOutlined />, code: <CodeOutlined />, experiment: <ExperimentOutlined />,
@@ -63,12 +63,12 @@ const ALL_MENU_FLAT: Record<string, string> = Object.fromEntries(
 );
 
 const PLAN_TAGS: Record<string, { text: string; color: string }> = {
-  free: { text: '免费�?, color: 'default' },
-  pro: { text: '专业�?, color: 'blue' },
-  max: { text: '旗舰�?, color: 'gold' },
+  free: { text: '免费版', color: 'default' },
+  pro: { text: '专业版', color: 'blue' },
+  max: { text: '旗舰版', color: 'gold' },
 };
 
-// ─── 面包屑路径解�?───
+// ─── 面包屑路径解析 ───
 function useBreadcrumbs() {
   const location = useLocation();
   return useMemo(() => {
@@ -84,16 +84,16 @@ function useBreadcrumbs() {
       if (matched) {
         crumbs.push({ label: matched, path: accumulated });
       } else if (i === parts.length - 1) {
-        // 最后一个未匹配�?segment，显示原始�?
+      // 最后一个未匹配的 segment，显示原始值
         const decoded = decodeURIComponent(part);
-        crumbs.push({ label: decoded.length > 16 ? decoded.slice(0, 16) + '�? : decoded, path: accumulated });
+        crumbs.push({ label: decoded.length > 16 ? decoded.slice(0, 16) + "..." : decoded, path: accumulated });
       }
     });
     return crumbs;
   }, [location.pathname]);
 }
 
-// ─── 移动端底�?TabBar ───
+// ─── 移动端底部 TabBar ───
 function BottomTabBar({ onMenuOpen }: { onMenuOpen: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -102,7 +102,7 @@ function BottomTabBar({ onMenuOpen }: { onMenuOpen: () => void }) {
   const tabs = [
     { key: '/', icon: <HomeOutlined />, label: '首页' },
     { key: '/ai-chat', icon: <RobotOutlined />, label: 'AI 对话' },
-    { key: '/knowledge', icon: <BookOutlined />, label: '知识�? },
+    { key: '/knowledge', icon: <BookOutlined />, label: '知识库' },
     { key: '/profile', icon: <UserOutlined />, label: '我的' },
   ];
 
@@ -156,12 +156,15 @@ function RouteScrollRestoration() {
     };
   }, []);
 
-  // 只响�?pathname 变更（页面导航），不响应�?hash 变更（页内锚点）�?  // 避免 hash 锚点定位与强制回到顶部并行执行，导致页面弹到下方�?  useLayoutEffect(() => {
+  // 只响应 pathname 变更（页面导航），不响应 hash 变更（页内锚点），
+  // 避免 hash 锚点定位与强制回到顶部并行执行，导致页面弹到下方。
+  useLayoutEffect(() => {
     let frame = 0;
     let hashAttempts = 0;
 
-    // 立即同步滚动一次：useLayoutEffect �?paint 前同步执行，
-    // 保证浏览器以 scrollY=0 渲染新页面，避免"先看到旧位置再跳"的闪烁�?    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    // 立即同步滚动一次：useLayoutEffect 在 paint 前同步执行，
+    // 保证浏览器以 scrollY=0 渲染新页面，避免先看到旧位置再跳的闪烁。
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 
     const scrollToLocation = () => {
       if (location.hash) {
@@ -169,25 +172,31 @@ function RouteScrollRestoration() {
         try {
           id = decodeURIComponent(id);
         } catch {
-          // 非法 hash 不应阻塞�?        }
+          // 非法 hash 不应阻塞。
+        }
         const element = window.document.getElementById(id);
         if (element) {
           const top = element.getBoundingClientRect().top + window.scrollY - 80;
           window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'auto' });
           return;
         }
-        // 详情正文可能在异步请求后才生成，短暂重试避免深链接落在旧页面位置�?        if (hashAttempts < 8) {
+        // 详情正文可能在异步请求后才生成，短暂重试避免深链接落在旧页面位置。
+        if (hashAttempts < 8) {
           hashAttempts += 1;
           frame = window.requestAnimationFrame(scrollToLocation);
           return;
         }
       }
-      // �?hash �?hash 重试耗尽：保持在顶部（已在同步步骤中完成）�?    };
+      // 无 hash 且 hash 重试耗尽：保持在顶部（已在同步步骤中完成）。
+    };
 
     if (location.hash) {
-      // �?hash 的页面导航：只做 hash 定位，不并行强制回到顶部�?      frame = window.requestAnimationFrame(scrollToLocation);
+      // 有 hash 的页面导航：只做 hash 定位，不并行强制回到顶部。
+      frame = window.requestAnimationFrame(scrollToLocation);
     } else {
-      // �?hash 的普通导航：连续 10 帧保持在顶部�?      // 覆盖异步内容渲染（数据拉取后页面变高）和子页�?useEffect 中的 scrollIntoView�?      let attempts = 0;
+      // 无 hash 的普通导航：连续 10 帧保持在顶部。
+      // 覆盖异步内容渲染（数据拉取后页面变高）和子页面 useEffect 中的 scrollIntoView。
+      let attempts = 0;
       const MAX_TOP_RETRIES = 5;
       const scrollToTopWithRetries = () => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -198,7 +207,8 @@ function RouteScrollRestoration() {
       };
       frame = window.requestAnimationFrame(scrollToTopWithRetries);
 
-      // 兜底：最后一帧后再校正一�?      const timeoutId = window.setTimeout(() => {
+      // 兜底：最后一帧后再校正一次。      
+      const timeoutId = window.setTimeout(() => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
       }, 200);
 
@@ -217,13 +227,13 @@ function RouteScrollRestoration() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  App 主组�?
+//  App 主组件
 // ══════════════════════════════════════════════════════════════
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ─── Zustand 全局状�?───
+  // ─── Zustand 全局状态───
   const user = useAuthStore((s) => s.user);
   const status = useAuthStore((s) => s.status);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
@@ -244,7 +254,7 @@ function App() {
   // 菜单按当前用户角色动态生成（管理员可见「用户管理」）
   const menuGroups = useMemo(() => MENU_GROUPS(user?.role), [user?.role]);
 
-  // ─── 初始�?───
+  // ─── 初始化───
   useEffect(() => {
     if (status === 'idle') fetchProfile();
   }, [status, fetchProfile]);
@@ -257,7 +267,7 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, [handleResize]);
 
-  // ─── 移动端自动折�?───
+  // ─── 移动端自动折叠───
   useEffect(() => {
     if (isMobile && !sidebarCollapsed) setSidebarCollapsed(true);
   }, [isMobile]);
@@ -266,7 +276,7 @@ function App() {
   const selectedKeys = useMemo(() => {
     const path = location.pathname;
     if (path === '/') return ['/'];
-    // 优先最长匹�?
+    // 优先最长匹配
     const candidates = Object.keys(ALL_MENU_FLAT).filter((k) => k !== '/' && path.startsWith(k));
     candidates.sort((a, b) => b.length - a.length);
     return candidates.length > 0 ? [candidates[0]] : ['/'];
@@ -322,7 +332,7 @@ function App() {
     </div>
   );
 
-  // ─── 渲染桌面侧边栏菜�?───
+  // ─── 渲染桌面侧边栏菜单───
   const renderSideMenu = () => (
     <Menu
       mode="inline"
@@ -357,7 +367,7 @@ function App() {
     />
   );
 
-  // ─── 渲染用户�?───
+  // ─── 渲染用户区───
   const renderUserArea = () => {
     if (status === 'loading') return <div style={{ width: 80 }} />;
     if (!user) {
@@ -375,7 +385,7 @@ function App() {
             { key: 'points-center', icon: <GiftOutlined />, label: '积分中心' },
             ...(user.plan && user.plan !== 'free' ? [{ key: 'pricing', icon: <CrownOutlined />, label: '管理订阅' }] : []),
             { type: 'divider' as const },
-            { key: 'logout', icon: <LogoutOutlined />, label: '退出登�?, danger: true },
+            { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true },
           ],
           onClick: ({ key }: any) => {
             if (key === 'logout') handleLogout();
@@ -404,7 +414,7 @@ function App() {
     );
   };
 
-  // ─── 渲染面包�?───
+  // ─── 渲染面包屑───
   const renderBreadcrumb = () => {
     if (isMobile || breadcrumbs.length <= 1) return null;
     return (
@@ -460,10 +470,10 @@ function App() {
     <>
       <RouteScrollRestoration />
       <Layout style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
-      {/* 桌面�?平板侧边�?*/}
+      {/* 桌面 / 平板侧边栏*/}
       {!isMobile && sidebarSider}
 
-      {/* 移动�?Drawer */}
+      {/* 移动端 Drawer */}
       {isMobile && (
         <Drawer
           placement="left"
@@ -478,7 +488,7 @@ function App() {
         </Drawer>
       )}
 
-      {/* 主区�?*/}
+      {/* 主区域*/}
       <Layout style={{ background: 'var(--bg-base)' }}>
         {/* ─── 顶栏 ─── */}
         <Header style={{
@@ -527,7 +537,7 @@ function App() {
               />
             </Tooltip>}
 
-            {/* 系统状�?*/}
+            {/* 系统状态*/}
             {!isMobile && <Tooltip title="系统运行正常">
               <Badge dot status="success" offset={[-2, 2]}>
                 <Button type="text" icon={<DashboardOutlined />}
@@ -539,11 +549,11 @@ function App() {
           </Space>
         </Header>
 
-        {/* ─── 内容�?─── */}
+        {/* ─── 内容区─── */}
         <Content
           style={{
             margin: isMobile ? '8px' : '16px',
-            paddingBottom: isMobile ? 64 : 0, // 为底�?TabBar 留空�?
+            paddingBottom: isMobile ? 64 : 0, // 为底部 TabBar 留空间
           }}
         >
           {!isMobile && breadcrumbs.length > 1 && (
@@ -565,19 +575,19 @@ function App() {
           <AppFooter />
         </Content>
 
-        {/* ─── 移动端底�?TabBar ─── */}
+      {/* ─── 移动端底部 TabBar ─── */}
         {isMobile && (
           <BottomTabBar onMenuOpen={() => setSidebarMobileOpen(true)} />
         )}
       </Layout>
 
-      {/* 全局左侧悬浮入口：免费体�?AI 工具�? 个免费模型） */}
+      {/* 全局左侧悬浮入口：免费体验 AI 工具（ 个免费模型） */}
       <FreeExperienceFab />
 
-      {/* 右下角悬浮工具条：返回顶�?/ 返回首页 / 上下翻页 */}
+      {/* 右下角悬浮工具条：返回顶部 / 返回首页 / 上下翻页 */}
       <ScrollFab />
 
-      {/* 左下角自动客服弹窗（接入云函�?4 模型，售前售后问答） */}
+      {/* 左下角自动客服弹窗（接入云函数 4 模型，售前售后问答） */}
       <CustomerServiceFab />
       </Layout>
     </>

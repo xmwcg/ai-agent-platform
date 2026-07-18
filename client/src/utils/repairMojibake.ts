@@ -8,7 +8,7 @@
 const MOJIBAKE_PATTERN = /(?:Ã|Â|â|ð|[à-ÿ][\u0080-\u00bf]|[äåæçèéêëï][\u0080-\u00bf])/g;
 
 function mojibakeScore(value: string): number {
-  return (value.match(MOJIBAKE_PATTERN) || []).length + (value.match(/�/g) || []).length * 2;
+  return (value.match(MOJIBAKE_PATTERN) || []).length;
 }
 
 function decodeUtf8AsLatin1(value: string): string | null {
