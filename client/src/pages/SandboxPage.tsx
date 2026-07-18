@@ -56,7 +56,7 @@ export default function SandboxPage() {
   const loadStatus = useCallback(async () => {
     try {
       const res = await sandboxAPI.status();
-      const d = (res.data as any)?.data;
+      const d = (res as any)?.data;
       if (!d?.defaultMode) throw new Error('沙盒状态响应无效');
       setModeInfo({ defaultMode: d.defaultMode, supportedLanguages: d.supportedLanguages });
       setStatusError(null);
@@ -79,7 +79,7 @@ export default function SandboxPage() {
     setError(null);
     try {
       const res = await sandboxAPI.run({ language, code });
-      setResult((res.data as any)?.data ?? null);
+      setResult((res as any)?.data ?? null);
     } catch (e: unknown) {
       setError(extractApiError(e, '执行失败'));
     } finally {
