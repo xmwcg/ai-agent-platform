@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends docker.io && \
 
 WORKDIR /app
 
-COPY package.json tsconfig.json ./
+COPY package.json package-lock.json tsconfig.json ./
 COPY src/ ./src/
 
 # 先安装全部依赖（含 typescript / @types），编译后再 prune 掉 dev 依赖，
