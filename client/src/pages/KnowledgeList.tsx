@@ -214,7 +214,7 @@ export default function KnowledgeList() {
             allowClear
             multiple
             treeCheckable
-            treeDefaultExpandAll
+            treeDefaultExpandAll={false}
             style={{ minWidth: 200 }}
             value={searchParams.categoryTree ? searchParams.categoryTree.split(',').filter(Boolean) : []}
             onChange={(v: any) => setSearchParams((p) => ({ ...p, categoryTree: (v || []).join(',') }))}

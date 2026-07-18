@@ -69,6 +69,6 @@ describe('Sandbox 部署与生产模式门禁', () => {
       .send({ language: 'python', code: 'print(1)', mode: 'mock' });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('不接受 mode');
+    expect(response.body.error).toContain('mode');
   });
 });

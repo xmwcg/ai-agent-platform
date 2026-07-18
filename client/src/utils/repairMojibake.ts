@@ -5,7 +5,7 @@
  * 正常中文、英文和合法西文不会被重新编码。待生产数据完成迁移后仍可保留，
  * 用于兼容缓存、搜索索引和旧导入记录。
  */
-const MOJIBAKE_PATTERN = /(?:Ã|Â|â|ð|[à-ÿ][\u0080-\u00bf]|[äåæçèéêëï][\u0080-\u00bf])/g;
+const MOJIBAKE_PATTERN = /[\u00C0-\u00FF][\u0080-\u00BF]/g;
 
 function mojibakeScore(value: string): number {
   return (value.match(MOJIBAKE_PATTERN) || []).length;

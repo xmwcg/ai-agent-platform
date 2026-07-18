@@ -23,6 +23,17 @@ import aiRouter from '../routes/ai';
 import diagnosticsRouter from '../routes/diagnostics';
 import compareRouter from '../routes/compare';
 
+// Mock 数据库健康检查与 WebhookEvent，避免集成测试中尝试真实 MongoDB 连接
+jest.mock('../config/database', () => ({
+  checkDatabaseHealth: jest.fn().mockResolvedValue({ mongodb: true, redis: true }),
+  isUsingMemoryRedis: jest.fn().mockReturnValue(false),
+}));
+jest.mock('../models/WebhookEvent', () => ({
+  WebhookEvent: {
+    countDocuments: jest.fn().mockResolvedValue(0),
+  },
+}));
+
 // 部分 mock subscription：仅放行配额，保留真实 requireAuth（来自模块真实导出）
 jest.mock('../middleware/subscription', () => {
   const actual = jest.requireActual('../middleware/subscription');
@@ -201,6 +212,7 @@ describe('S5 AI 会话删除鉴权', () => {
 });
 
 describe('S6 diagnostics 鉴权', () => {
+
   const app = mount(diagnosticsRouter, '/diagnostics');
 
   it('匿名 GET /diagnostics 必须返回 401', async () => {
@@ -242,3 +254,6 @@ describe('M8 compare 生成接口鉴权', () => {
     expect(res.status).toBe(200);
   });
 });
+
+
+

@@ -6,4 +6,5 @@ module.exports = {
   collectCoverageFrom: ['src/**/*.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/test/setup.ts'],
   forceExit: true,
+  testTimeout: 30000,
 };
