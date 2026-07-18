@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { logger } from './logger';
 
 /**
  * 统一业务错误：对外暴露安全信息，内部细节仅服务端记录。
@@ -15,7 +16,6 @@ export class AppError extends Error {
     this.statusCode = statusCode;
     this.code = code;
     this.safeMessage = safeMessage;
-    // 保留原始调用栈
     if (Error.captureStackTrace) Error.captureStackTrace(this, AppError);
   }
 }
@@ -28,10 +28,15 @@ function shouldExposeDetail(): boolean {
 
 /**
  * 统一错误响应：避免把内部 err.message（可能含 DB 连接串 / 路径 / 密钥）泄露到生产环境。
- * 响应结构保持与既有路由一致：{ success: false, error: <安全信息>, code? }。
+ * 生产环境也必须在日志中记录真实错误，否则排查无从下手。
  */
 export function sendError(res: Response, error: unknown): void {
   if (error instanceof AppError) {
+    if (error.statusCode >= 500) {
+      logger.error('http-error', `AppError(${error.code}) ${error.message}`);
+    } else {
+      logger.warn('http-error', `AppError(${error.code}) ${error.safeMessage}`);
+    }
     res.status(error.statusCode).json({
       success: false,
       error: shouldExposeDetail() ? error.safeMessage : error.safeMessage,
@@ -41,7 +46,7 @@ export function sendError(res: Response, error: unknown): void {
   }
 
   const err = error instanceof Error ? error : new Error(String(error));
-  // 未知错误：生产环境只给通用语，开发/测试环境透传 message 便于排查
+  logger.error('http-error', `未知错误 [${err.name}]: ${err.message}`);
   const exposed = shouldExposeDetail() ? err.message : '服务器内部错误，请稍后重试';
   res.status(500).json({
     success: false,
