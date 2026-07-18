@@ -119,8 +119,8 @@ export const knowledgeGraphAPI = {
 // 实践沙盒 API
 export const sandboxAPI = {
   run: (data: { language: string; code: string; mode?: string }) =>
-    apiClient.post('/sandbox/run', data), { timeout: 60000 },
-  status: () => apiClient.get('/sandbox/status'), { timeout: 15000 }
+    apiClient.post('/sandbox/run', data, { timeout: 60000 }),
+  status: () => apiClient.get('/sandbox/status', { timeout: 15000 })
 };
 
 // AI 聊天 API
