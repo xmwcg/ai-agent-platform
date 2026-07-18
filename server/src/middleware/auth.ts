@@ -78,3 +78,11 @@ export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunctio
   }
   next();
 }
+// 管理员权限中间件（需在 requireAuth 之后）
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (!req.user || req.user.role !== 'admin') {
+    res.status(403).json({ error: '需要管理员权限' });
+    return;
+  }
+  next();
+}

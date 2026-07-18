@@ -11,6 +11,8 @@ import { validate } from '../lib/validation';
 import { logger } from '../lib/logger';
 import { activateSubscription, grantCreditsPack, resolvePaymentProvider, genOrderNo, createOrderSchema } from './billing/logic';
 import webhookRoutes from './billing/webhook.routes';
+import refundRoutes from './billing/refund.routes';
+import reconciliationRoutes from './billing/reconciliation.routes';
 
 const router = Router();
 
@@ -374,5 +376,13 @@ router.get('/orders/history', requireAuth, async (req: AuthRequest, res: Respons
 // 支付 Webhook 子模块（回调验签 + 事件日志），独立维护以降低单文件复杂度
 router.use(webhookRoutes);
 
+// 退款与权益回收子模块
+router.use(refundRoutes);
+
+
+// 对账子模块
+router.use(reconciliationRoutes);
+
 export default router;
+
 

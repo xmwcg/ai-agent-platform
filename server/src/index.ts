@@ -59,6 +59,7 @@ import { requireAdmin } from './middleware/requireAdmin';
 import { requestIdMiddleware } from './middleware/request-id';
 import { reloadCustomProviders } from './gateway/ai-gateway.service';
 import { mediaWorker } from './services/queue.service';
+import { OutboxWorker } from './services/outbox-worker';
 
 // ─── 进程级崩溃兜底（稳定性基线，适配 0→1→100 扩容）───
 // 未捕获异常：记录后退出，交由 Docker restart / healthcheck 自动拉起，避免僵尸进程。
@@ -211,6 +212,7 @@ export interface BootstrapDependencies {
   loadMcp: () => Promise<unknown>;
   reloadProviders: () => Promise<unknown>;
   startMediaWorker: () => Promise<unknown>;
+  startOutboxWorker: () => void;
   startHttpServer: () => Server;
 }
 
@@ -228,6 +230,7 @@ function defaultBootstrapDependencies(): BootstrapDependencies {
     loadMcp: () => mcpService.loadFromDB(),
     reloadProviders: reloadCustomProviders,
     startMediaWorker: () => mediaWorker.start(),
+    startOutboxWorker: () => OutboxWorker.start(),
     startHttpServer: () => app.listen(PORT, () => {
       logger.info('index', `Server running on http://localhost:${PORT}`, {
         env: process.env.NODE_ENV || 'development',
@@ -260,6 +263,7 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Server 
   await startManagedDependency('MCP 配置', dependencies.loadMcp);
   await startManagedDependency('自定义 AI Provider', dependencies.reloadProviders);
   await startManagedDependency('媒体任务 Worker', dependencies.startMediaWorker);
+  await startManagedDependency('Outbox Worker', async () => { dependencies.startOutboxWorker(); });
 
   if (options.listen === false) return undefined;
   return dependencies.startHttpServer();
@@ -273,3 +277,7 @@ if (require.main === module) {
 }
 
 export default app;
+
+
+
+
