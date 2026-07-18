@@ -230,6 +230,8 @@ export class AgnesProvider implements MediaProvider {
           throw new AppError(502, 'Agnes 视频生成任务执行失败', 'MEDIA_TASK_FAILED');
         }
         const completed = status === 'completed' || status === 'success' || status === 'succeeded';
+        const meta = (d.metadata || {}) as Record<string, unknown>;
+        const dataObj = (d.data || {}) as Record<string, unknown>;
         const outputUrl = String(
           d.video_url ||
             d.url ||
@@ -237,6 +239,12 @@ export class AgnesProvider implements MediaProvider {
             d.download_url ||
             d.file_url ||
             d.result_url ||
+            // Agnes 视频完成后 URL 位于 metadata.url（嵌套）
+            meta.url ||
+            meta.video_url ||
+            meta.output_url ||
+            dataObj.url ||
+            dataObj.video_url ||
             ''
         );
         if (completed && !outputUrl) {
