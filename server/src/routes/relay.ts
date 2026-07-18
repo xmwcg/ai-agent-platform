@@ -41,7 +41,8 @@ router.get('/v1/models', async (req: Request, res: Response) => {
 });
 
 // ───────────── 管理后台（需管理员） ─────────────
-router.get('/admin', requireAdmin, (_req: Request, res: Response) => {
+// 页面本身公开可访问（仅 HTML 表单，不含敏感数据）；真正的增删改 API 仍由 requireAdmin 保护。
+router.get('/admin', (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(ADMIN_HTML);
 });
@@ -134,7 +135,13 @@ const ADMIN_HTML = `<!doctype html>
 </head>
 <body>
 <h1>中转站管理后台</h1>
-<div><label>管理员 JWT（从平台登录后获取）：</label><input id="tk" placeholder="粘贴 Bearer 之后的 JWT"></div>
+<div style="border:1px solid #334155;padding:12px;margin-bottom:16px;border-radius:8px">
+  <b>管理员登录</b>（使用平台管理员账号）
+  <div class="row"><input id="email" placeholder="管理员邮箱"><input id="pwd" type="password" placeholder="密码"></div>
+  <button onclick="login()">登录并获取 JWT</button>
+  <div id="login_msg" style="margin-top:6px"></div>
+</div>
+<div><label>管理员 JWT（登录后自动填入，也可手动粘贴）：</label><input id="tk" placeholder="Bearer 之后的 JWT"></div>
 
 <h2>上游渠道（接各家模型）</h2>
 <div class="row"><input id="c_name" placeholder="名称"><input id="c_provider" placeholder="provider(如 deepseek)"></div>
@@ -159,6 +166,12 @@ const ADMIN_HTML = `<!doctype html>
 
 <script>
 const API='/api/relay';
+async function login(){
+  var r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('pwd').value})});
+  var j=await r.json();
+  if(j.success){document.getElementById('tk').value=j.token;document.getElementById('login_msg').textContent='登录成功，JWT 已自动填入';}
+  else{document.getElementById('login_msg').textContent='登录失败：'+(j.error||'未知错误');}
+}
 function auth(){return {Authorization:'Bearer '+document.getElementById('tk').value}}
 async function addChannel(){
   var b={name:c_name.value,provider:c_provider.value,baseURL:c_base.value,apiKey:c_key.value,models:c_models.value,authMode:c_auth.value};
