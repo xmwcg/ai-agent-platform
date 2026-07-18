@@ -40,7 +40,7 @@ export default function PromptOptimizer({ open, onClose, originalPrompt, onApply
         message: `请根据"${OPTIMIZE_DIRECTIONS.find(d => d.value === direction)?.label}"的方向，优化以下提示词。只返回优化后的提示词，不要添加其他解释：
 
 ${originalPrompt}`,
-        model: 'deepseek/deepseek-chat',
+        model: 'agnes/agnes-2.0-flash',
       });
       setOptimized(res?.message || '（优化失败，请重试）');
     } catch (err: any) {

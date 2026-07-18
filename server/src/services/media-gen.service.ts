@@ -7,9 +7,11 @@ import { MockProvider } from './media-providers/mock.provider';
 import { CloudbaseImageProvider } from './media-providers/cloudbase.provider';
 import { HunyuanProvider } from './media-providers/hunyuan.provider';
 import { TongyiProvider } from './media-providers/tongyi.provider';
+import { AgneProvider } from './media-providers/agne.provider';
 import { KelingProvider } from './media-providers/keling.provider';
 import { JimengProvider } from './media-providers/jimeng.provider';
 import { MoneyPrinterTurboProvider } from './media-providers/moneyprinterturbo.provider';
+import { AgneProvider } from './media-providers/agne.provider';
 import { AppError } from '../lib/http-error';
 import type {
   MediaTaskType,
@@ -35,10 +37,12 @@ export {
   KelingProvider,
   JimengProvider,
   TongyiProvider,
+  AgneProvider,
 };
 
 const PROVIDERS: Record<MediaProviderName, MediaProvider> = {
   mock: new MockProvider(),
+  agnes: new AgneProvider(),
   hunyuan: new HunyuanProvider(),
   keling: new KelingProvider(),
   jimeng: new JimengProvider(),
@@ -94,7 +98,7 @@ export function selectMediaProvider(
     }
     if (selected.isConfigured() || hasInjectedCredentials(preferred, credentials)) return selected;
   }
-  for (const name of ['hunyuan', 'keling', 'jimeng', 'moneyprinterturbo', 'tongyi'] as MediaProviderName[]) {
+  for (const name of ['agnes', 'hunyuan', 'keling', 'jimeng', 'moneyprinterturbo', 'tongyi'] as MediaProviderName[]) {
     const p = PROVIDERS[name];
     if (p.isConfigured() && p.supportedTypes.includes(requestedType)) return p;
   }

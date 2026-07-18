@@ -85,7 +85,7 @@ export const useChatStore = create<ChatState>()(
       sessions: [],
       activeSessionId: null,
       mode: 'qa',
-      model: 'deepseek/deepseek-chat',
+      model: 'agnes/agnes-2.0-flash',
       loading: false,
       files: [],
       rightPanelOpen: false,

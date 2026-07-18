@@ -313,7 +313,7 @@ async function seedDefaultRelayChannels(): Promise<void> {
       envKey: 'DEEPSEEK_API_KEY',
       provider: 'deepseek',
       baseURL: 'https://api.deepseek.com/v1',
-      models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
+      models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder', 'deepseek-v4-flash', 'deepseek-v4-pro'],
     },
     {
       name: 'OpenAI 默认渠道（自动播种）',

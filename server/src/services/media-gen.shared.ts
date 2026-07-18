@@ -8,7 +8,7 @@ import { MediaTask } from '../models/MediaTask';
 import { AppError } from '../lib/http-error';
 
 export type MediaTaskType = 'text2img' | 'image2image' | 'text2video' | 'image2video';
-export type MediaProviderName = 'mock' | 'hunyuan' | 'keling' | 'jimeng' | 'moneyprinterturbo' | 'cloudbase-free' | 'tongyi';
+export type MediaProviderName = 'mock' | 'hunyuan' | 'keling' | 'jimeng' | 'moneyprinterturbo' | 'cloudbase-free' | 'tongyi' | 'agnes';
 
 /**
  * BYOK 凭据（用户自带 Key）。随调用注入，绝不污染单例 provider 实例，避免并发竞态。

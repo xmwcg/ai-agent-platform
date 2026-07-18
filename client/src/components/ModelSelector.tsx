@@ -29,6 +29,7 @@ interface ModelSelectorProps {
 
 // 后端不可用时的最小兜底（仅保证 UI 可用，不依赖外部 Key）
 const FALLBACK: GatewayModelGroup[] = [
+  { provider: 'agnes', label: 'Agnes AIHub', models: ['agnes-2.0-flash', 'agnes-image-2.0-flash', 'agnes-image-2.1-flash', 'agnes-video-v2.0'] },
   { provider: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-coder'] },
   { provider: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini'] },
 ];
