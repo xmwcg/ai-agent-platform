@@ -521,8 +521,7 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
     && write_release_state "$CANDIDATE_STATE" "$REMOTE_SHA" \
        "$BUILT_SERVER_IMAGE" "$BUILT_CLIENT_IMAGE" "$BUILT_SERVER_DIGEST" "$BUILT_CLIENT_DIGEST" \
        "$RELEASE_DIR/docker-compose.production.yml" "$RELEASE_DIR/nginx.ssl.runtime.conf" \
-    && { validate_production_configuration "$CANDIDATE_STATE" \
-         || log "生产配置静态校验未通过，以运行时验收(verify_release)为准，不阻断部署"; } \
+    && if validate_production_configuration "$CANDIDATE_STATE"; then true; fi \
     && compose_up "$CANDIDATE_STATE" \
     && verify_release "$CANDIDATE_STATE" internal \
     && verify_release "$CANDIDATE_STATE" public; then
