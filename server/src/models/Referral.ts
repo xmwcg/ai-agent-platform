@@ -31,7 +31,6 @@ const ReferralSchema = new Schema<IReferral>(
 );
 
 ReferralSchema.index({ referrerId: 1, createdAt: -1 });
-ReferralSchema.index({ referredUserId: 1 });
 ReferralSchema.index({ referrerId: 1, level: 1 });
 
 export const Referral = mongoose.model<IReferral>('Referral', ReferralSchema);

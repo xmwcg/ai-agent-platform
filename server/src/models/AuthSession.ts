@@ -38,7 +38,7 @@ const authSessionSchema = new Schema<IAuthSession>(
     userAgent: String,
     ipAddress: String,
     status: { type: String, enum: ["active", "revoked", "expired"], default: "active", index: true },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
     revokedAt: Date,
     revokeReason: { type: String, enum: ["user_logout", "all_logout", "password_change", "admin_revoke", "token_theft"] },
   },
