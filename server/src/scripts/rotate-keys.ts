@@ -28,8 +28,7 @@ function rotateKeys(): void {
   }
 
   let env = fs.readFileSync(envPath, "utf8");
-  const lines = env.split("
-");
+  const lines = env.split(/\r?\n/);
 
   const newJwtSecret = generateKey();
   const newRefreshSecret = generateKey();
@@ -82,8 +81,7 @@ function rotateKeys(): void {
   newLines.push("KEY_LAST_ROTATED=" + rotatedAt);
   newLines.push("KEY_ROTATION_ID=" + crypto.randomBytes(6).toString("hex"));
 
-  fs.writeFileSync(envPath, newLines.join("
-"), "utf8");
+  fs.writeFileSync(envPath, newLines.join("\n"), "utf8");
 
   console.log("✅ 密钥轮换完成！");
   console.log("   JWT_SECRET: " + newJwtSecret.slice(0, 12) + "...");
