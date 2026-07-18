@@ -183,8 +183,14 @@ export default function Login() {
       }
 
       if (isMobile()) {
-        // 移动端：直接跳转到抖音授权页（授权后回调会带 code 重定向回来）
-        window.location.href = authorizeUrl;
+        // 移动端：优先弹窗（保留 opener，回调可 postMessage 回主窗口）；
+        // 若被浏览器拦截则降级为整页跳转（由后端 localStorage 暂存 token + 跳首页回收）
+        const popup = window.open(
+          authorizeUrl, 'douyin_login',
+          'width=420,height=540,menubar=no,toolbar=no,location=no,status=no',
+        );
+        popupRef.current = popup;
+        if (!popup) window.location.href = authorizeUrl;
       } else {
         // PC 端：弹窗扫码
         const popup = window.open(

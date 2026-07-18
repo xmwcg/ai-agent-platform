@@ -313,11 +313,18 @@ router.get('/wechat/callback', async (req: Request, res: Response) => {
     if (format === 'json') {
       return res.json({ success: true, token, user: user.toJSON() });
     }
-    // 前端弹窗扫码：回调页把 token 发给 opener 并关闭
+    // 前端弹窗扫码：回调页把 token 发给 opener 并关闭；移动端整页跳转（无 opener）则暂存 token 由 SPA 回收
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(`<html><body><script>
-      try { window.opener && window.opener.postMessage({ type:'wechat_login', token:'${token}' }, '*'); } catch(e){}
-      window.close();
+      try {
+        if (window.opener) {
+          window.opener.postMessage({ type:'wechat_login', token:'${token}' }, '*');
+          window.close();
+        } else {
+          try { localStorage.setItem('oauth_pending_token', '${token}'); } catch(e){}
+          window.location.replace('/');
+        }
+      } catch(e){ window.location.replace('/'); }
     </script>登录成功，正在返回…</body></html>`);
   } catch (err) {
     sendError(res, err);
@@ -552,11 +559,18 @@ router.get('/douyin/callback', async (req: Request, res: Response) => {
     if (format === 'json') {
       return res.json({ success: true, token, user: user.toJSON() });
     }
-    // 前端弹窗扫码：回调页把 token 发给 opener 并关闭
+    // 前端弹窗扫码：回调页把 token 发给 opener 并关闭；移动端整页跳转（无 opener）则暂存 token 由 SPA 回收
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(`<html><body><script>
-      try { window.opener && window.opener.postMessage({ type:'douyin_login', token:'${token}' }, '*'); } catch(e){}
-      window.close();
+      try {
+        if (window.opener) {
+          window.opener.postMessage({ type:'douyin_login', token:'${token}' }, '*');
+          window.close();
+        } else {
+          try { localStorage.setItem('oauth_pending_token', '${token}'); } catch(e){}
+          window.location.replace('/');
+        }
+      } catch(e){ window.location.replace('/'); }
     </script>登录成功，正在返回…</body></html>`);
   } catch (err) {
     sendError(res, err);

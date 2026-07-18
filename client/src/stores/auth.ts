@@ -45,7 +45,14 @@ export const useAuthStore = create<AuthState>()(
       token: null,
 
       fetchProfile: async () => {
-        const token = localStorage.getItem('token');
+        let token = localStorage.getItem('token');
+        // 回收抖音/微信移动端整页授权后暂存的 token（无 opener 场景）
+        const pending = localStorage.getItem('oauth_pending_token');
+        if (!token && pending) {
+          token = pending;
+          localStorage.setItem('token', token);
+          localStorage.removeItem('oauth_pending_token');
+        }
         if (!token) {
           set({ user: null, status: 'unauthenticated', token: null });
           return;
