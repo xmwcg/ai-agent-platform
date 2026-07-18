@@ -20,6 +20,7 @@ import FreeExperienceFab from '@/components/FreeExperienceFab';
 import ScrollFab from '@/components/ScrollFab';
 import CustomerServiceFab from '@/components/CustomerServiceFab';
 import AppFooter from '@/components/AppFooter';
+import CookieConsentBanner from './components/CookieConsentBanner';
 import GlobalSearch from '@/components/GlobalSearch';
 import SiteQueryMenu from '@/components/SiteQueryMenu';
 import { NAVIGATION_GROUPS, SITE_FEATURES, visibleSiteFeatures } from '@/config/site-features';
@@ -579,6 +580,7 @@ function App() {
         {isMobile && (
           <BottomTabBar onMenuOpen={() => setSidebarMobileOpen(true)} />
         )}
+      <CookieConsentBanner />
       </Layout>
 
       {/* 全局左侧悬浮入口：免费体验 AI 工具（ 个免费模型） */}
@@ -589,6 +591,7 @@ function App() {
 
       {/* 左下角自动客服弹窗（接入云函数 4 模型，售前售后问答） */}
       <CustomerServiceFab />
+      <CookieConsentBanner />
       </Layout>
     </>
   );
