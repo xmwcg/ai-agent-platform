@@ -58,7 +58,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
           const locked = !owned && ((row.requiredPlan && row.requiredPlan !== 'free') || Number(row.creditsCost) > 0 || Number(row.price) > 0);
           return {
             id: String(row._id), type: 'knowledge', title: fixDoubleEncoding(row.title),
-            summary: row.summary ? fixDoubleEncoding(row.summary) : undefined || undefined, path: `/knowledge/${row._id}`, group: '知识内容',
+            summary: row.summary ? fixDoubleEncoding(row.summary) : undefined,
             access: locked ? 'locked' : (owned ? 'authorized' : 'public'), score: score(row.title, q),
           };
         })));
