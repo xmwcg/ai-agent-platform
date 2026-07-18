@@ -15,6 +15,7 @@ import { connectMongoDB, connectRedis, checkDatabaseHealth } from './config/data
 import { validateStartupEnv } from './config/env-check';
 import { RelayChannel } from './models/RelayChannel';
 import { encryptSecret } from './lib/crypto';
+import { seedKnowledgeSamples } from './scripts/seedKnowledge';
 
 // 导入路由
 import aiRoutes from './routes/ai';
@@ -300,33 +301,81 @@ function scheduleDailyReconciliation(): NodeJS.Timeout {
   return timer;
 }
 /**
- * 中转站默认上游渠道播种（幂等）：
- * 仅当数据库中没有任意渠道、且环境变量已配置 DEEPSEEK_API_KEY 时，
- * 自动创建一个指向 DeepSeek 的默认渠道，使中转站开箱即用。
- * 已存在渠道时不重复创建，避免覆盖运营人员的配置。
+ * 中转站默认上游渠道播种（幂等、多渠道）：
+ * 遍历内置厂商清单，仅当对应环境变量存在、且数据库中尚无同名渠道时，
+ * 自动创建该上游渠道，使中转站开箱即用、开箱即有多厂商路由。
+ * 已存在同名渠道时不重复创建，避免覆盖运营人员的配置。
  */
-async function seedDefaultRelayChannel(): Promise<void> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) {
-    logger.warn('index', '未配置 DEEPSEEK_API_KEY，跳过中转站默认渠道播种');
-    return;
+async function seedDefaultRelayChannels(): Promise<void> {
+  const candidates = [
+    {
+      name: 'DeepSeek 默认渠道（自动播种）',
+      envKey: 'DEEPSEEK_API_KEY',
+      provider: 'deepseek',
+      baseURL: 'https://api.deepseek.com/v1',
+      models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
+    },
+    {
+      name: 'OpenAI 默认渠道（自动播种）',
+      envKey: 'OPENAI_API_KEY',
+      provider: 'openai',
+      baseURL: 'https://api.openai.com/v1',
+      models: ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
+    },
+    {
+      name: '通义千问 默认渠道（自动播种）',
+      envKey: 'DASHSCOPE_API_KEY',
+      provider: 'dashscope',
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      models: ['qwen-plus', 'qwen-max', 'qwen-turbo', 'qwen-long'],
+    },
+    {
+      name: '腾讯混元 默认渠道（自动播种）',
+      envKey: 'HUNYUAN_API_KEY',
+      provider: 'hunyuan',
+      baseURL: 'https://api.hunyuan.cloud.tencent.com/v1',
+      models: ['hunyuan-pro', 'hunyuan-standard', 'hunyuan-lite'],
+    },
+    {
+      name: 'Kimi 默认渠道（自动播种）',
+      envKey: 'MOONSHOT_API_KEY',
+      provider: 'moonshot',
+      baseURL: 'https://api.moonshot.cn/v1',
+      models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    },
+    {
+      name: 'Gemini 默认渠道（自动播种）',
+      envKey: 'GEMINI_API_KEY',
+      provider: 'gemini',
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+      models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro'],
+    },
+  ];
+
+  let seeded = 0;
+  for (const c of candidates) {
+    const apiKey = process.env[c.envKey];
+    if (!apiKey) continue; // 未配置该厂商 Key，跳过
+    const exists = await RelayChannel.findOne({ name: c.name });
+    if (exists) continue; // 幂等：同名渠道已存在则不重复创建
+    await RelayChannel.create({
+      name: c.name,
+      provider: c.provider,
+      baseURL: c.baseURL,
+      apiKey: encryptSecret(apiKey),
+      models: c.models,
+      authMode: 'bearer',
+      weight: 1,
+      enabled: true,
+    });
+    seeded++;
+    logger.info('index', `已自动播种中转站渠道：${c.name}`);
   }
-  const count = await RelayChannel.countDocuments();
-  if (count > 0) {
-    logger.info('index', `已存在 ${count} 个中转站渠道，跳过播种`);
-    return;
+  if (seeded === 0) {
+    logger.warn('index', '未检测到任何上游厂商 API Key，跳过中转站渠道播种');
+  } else {
+    logger.info('index', `中转站播种完成，共新增 ${seeded} 个上游渠道`);
   }
-  await RelayChannel.create({
-    name: 'DeepSeek 默认渠道（自动播种）',
-    provider: 'deepseek',
-    baseURL: 'https://api.deepseek.com/v1',
-    apiKey: encryptSecret(apiKey),
-    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
-    authMode: 'bearer',
-    weight: 1,
-    enabled: true,
-  });
-  logger.info('index', '已自动播种默认中转站渠道（DeepSeek）');
 }
 
 function defaultBootstrapDependencies(): BootstrapDependencies {
@@ -338,7 +387,7 @@ function defaultBootstrapDependencies(): BootstrapDependencies {
     reloadProviders: reloadCustomProviders,
     startMediaWorker: () => mediaWorker.start(),
     startOutboxWorker: () => OutboxWorker.start(),
-    seedRelay: seedDefaultRelayChannel,
+    seedRelay: seedDefaultRelayChannels,
     startHttpServer: () => {
       // 启动备份调度和运营指标采集
       startBackupScheduler();
@@ -380,6 +429,7 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Server 
   await startManagedDependency('媒体任务 Worker', dependencies.startMediaWorker);
   await startManagedDependency('Outbox Worker', async () => { dependencies.startOutboxWorker(); });
   await startManagedDependency('中转站默认渠道', async () => { if (dependencies.seedRelay) await dependencies.seedRelay(); });
+  await startManagedDependency('知识库示例文档', async () => { await seedKnowledgeSamples(); });
 
   // 每日对账定时器（每天凌晨 2:00 UTC+8）
   scheduleDailyReconciliation();
