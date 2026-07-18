@@ -195,26 +195,14 @@ function RouteScrollRestoration() {
       // 有 hash 的页面导航：只做 hash 定位，不并行强制回到顶部。
       frame = window.requestAnimationFrame(scrollToLocation);
     } else {
-      // 无 hash 的普通导航：连续 10 帧保持在顶部。
-      // 覆盖异步内容渲染（数据拉取后页面变高）和子页面 useEffect 中的 scrollIntoView。
-      let attempts = 0;
-      const MAX_TOP_RETRIES = 5;
-      const scrollToTopWithRetries = () => {
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-        if (attempts < MAX_TOP_RETRIES) {
-          attempts += 1;
-          frame = window.requestAnimationFrame(scrollToTopWithRetries);
-        }
-      };
-      frame = window.requestAnimationFrame(scrollToTopWithRetries);
-
-      // 兜底：最后一帧后再校正一次。      
+      // 无 hash 的普通导航：仅做一次延迟校正，避免多帧重复滚动导致的页面弹跳。
+      // useLayoutEffect 的同步 scrollTo 已确保首帧在顶部；
+      // 这里只在异步内容渲染完成后（~300ms）校正一次，防止页面抖动。
       const timeoutId = window.setTimeout(() => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      }, 200);
+      }, 300);
 
       return () => {
-        window.cancelAnimationFrame(frame);
         window.clearTimeout(timeoutId);
       };
     }
