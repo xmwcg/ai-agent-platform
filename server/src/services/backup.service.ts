@@ -18,6 +18,7 @@ import { writeFile, mkdir, readdir, stat, unlink } from "fs/promises";
 import { join } from "path";
 import { logger } from "../lib/logger";
 import { writeAuditLogAsync } from "./security-audit.service";
+import { alertBackupFailure } from "./alert.service";
 
 const execAsync = promisify(execFile);
 
@@ -129,6 +130,7 @@ export async function performFullBackup(): Promise<BackupInfo | null> {
     return info;
   } catch (err) {
     logger.error("backup", `全量备份失败: ${(err as Error)?.message}`);
+    alertBackupFailure(`全量备份失败: ${(err as Error)?.message}`).catch(() => {});
     writeAuditLogAsync({ action: "admin_action", resourceType: "backup", resourceId: name, details: { type: "full", error: (err as Error)?.message }, outcome: "failure", severity: "high" });
     return null;
   }
@@ -163,6 +165,7 @@ export async function performIncrementalBackup(): Promise<BackupInfo | null> {
     return info;
   } catch (err) {
     logger.error("backup", `增量备份失败: ${(err as Error)?.message}`);
+    alertBackupFailure(`增量备份失败: ${(err as Error)?.message}`).catch(() => {});
     return null;
   }
 }
@@ -304,3 +307,5 @@ export function startBackupScheduler(): void {
 
   logger.info("backup", "备份调度已启动（每日全量 + 每小时增量）");
 }
+
+

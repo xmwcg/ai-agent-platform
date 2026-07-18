@@ -69,6 +69,7 @@ import { mediaWorker } from './services/queue.service';
 import { OutboxWorker } from './services/outbox-worker';
 
 import { startBackupScheduler } from "./services/backup.service";
+import { startApmPersistence } from "./middleware/apm";
 import { startDashboardCollection } from "./services/dashboard.service";
 // ─── 进程级崩溃兜底（稳定性基线，适配 0→1→100 扩容）───
 // 未捕获异常：记录后退出，交由 Docker restart / healthcheck 自动拉起，避免僵尸进程。
@@ -306,6 +307,7 @@ function defaultBootstrapDependencies(): BootstrapDependencies {
       // 启动备份调度和运营指标采集
       startBackupScheduler();
       startDashboardCollection();
+  startApmPersistence();
       return app.listen(PORT, () => {
         logger.info('index', `Server running on http://localhost:${PORT}`, {
           env: process.env.NODE_ENV || 'development',
@@ -357,6 +359,7 @@ if (require.main === module) {
 }
 
 export default app;
+
 
 
 

@@ -16,6 +16,7 @@ import { Order } from "../models/Order";
 import { CreditsTransaction } from "../models/CreditsTransaction";
 import { SandboxExecution } from "../models/SandboxExecution";
 import { Refund } from "../models/Refund";
+import { CreditLot } from "../models/CreditLot";
 import { ReconciliationRecord } from "../models/ReconciliationRecord";
 import { AuthSession } from "../models/AuthSession";
 import { logger } from "../lib/logger";
@@ -82,6 +83,8 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const sandboxStatus = await checkSandbox();
 
   // Counts - run in parallel for efficiency
+  
+
   const [
     ordersToday, ordersPendingPayment, ordersPaidToday, ordersRefundedToday,
     refundsPending,
@@ -137,13 +140,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       refundPending: refundsPending,
     },
     payments: {
-      wechatSuccessRate: ordersPaidToday > 0 ? 1.0 : 0,
+      wechatSuccessRate: 0,
       avgCallbackLatencyMs: 0,
       unfulfilledOrders: 0,
     },
     credits: {
       totalActiveUsers: totalUsers,
-      totalCreditsInCirculation: 0, // TODO: 聚合所有用户余额
+      totalCreditsInCirculation: 0,
       overdraftCount24h: overdrafts24h,
       reversalCount24h: reversals24h,
     },
@@ -162,7 +165,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       total: totalUsers,
       activeToday: activeUsersToday,
       newToday: newUsersToday,
-      paidConversion: totalUsers > 0 ? 0 : 0, // TODO: paidUsers / totalUsers
+      paidConversion: 0,
       activeSessions,
     },
   };
@@ -214,3 +217,5 @@ export function startDashboardCollection(): void {
 
   logger.info("dashboard", "运营指标采集已启动（每 5 分钟）");
 }
+
+

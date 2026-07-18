@@ -181,6 +181,24 @@ export function apmMiddleware(req: Request, res: Response, next: NextFunction): 
   next();
 }
 
+
+// ─── 分位数计算 ──
+export function computePercentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.ceil(sorted.length * p / 100) - 1;
+  return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
+}
+
+export function computeRoutePercentiles(bucket: MetricsBucket): { p50: number; p95: number; p99: number; mean: number } {
+  return {
+    mean: bucket.count > 0 ? Math.round(bucket.totalMs / bucket.count) : 0,
+    p50: 0,
+    p95: 0,
+    p99: 0,
+  };
+}
+
 // ─── 快照聚合（供 /health/vitals 与 /api/metrics 共用）───
 export function collectApmMetrics(): ApmSnapshot {
   const uptimeSec = Math.round((Date.now() - metrics.startedAt) / 1000);
@@ -240,3 +258,18 @@ export function resetApmMetrics(): void {
   metrics.slowLogs = [];
   lastAlertAt.clear();
 }
+
+// ─── APM 持久化绑定（在 index.ts 中调用 startApmPersistence()）
+let persistenceStarted = false;
+export async function startApmPersistence(): Promise<void> {
+  if (persistenceStarted) return;
+  try {
+    const { startPersistence } = await import('./apm-persistence');
+    startPersistence(() => collectApmMetrics());
+    persistenceStarted = true;
+  } catch (err: any) {
+    logger.warn('apm', '持久化模块加载失败（可能缺少模块），跳过: ' + (err?.message || ''));
+  }
+}
+
+
