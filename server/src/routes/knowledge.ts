@@ -7,6 +7,7 @@ import { resolveKbAccess, applyKbAccess } from '../middleware/kb-access';
 import { KNOWLEDGE_CATEGORY_TREE } from '../config/knowledge-categories';
 import { sendError } from '../lib/http-error';
 import { TeamRole } from '../models/Team';
+import { fixDocEncoding } from '../utils/encoding';
 
 const router = Router();
 
@@ -146,7 +147,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     res.json({
       success: true,
-      data: enriched,
+      data: enriched.map((r: any) => fixDocEncoding(r)),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -228,7 +229,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
       out.requiredPlan = (verdict as any).requiredPlan;
     }
 
-    res.json({ success: true, data: out });
+    res.json({ success: true, data: fixDocEncoding(out) });
   } catch (error) {
     sendError(res, error);
   }

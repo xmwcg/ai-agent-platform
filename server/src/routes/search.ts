@@ -8,6 +8,7 @@ import { ModelEvent } from '../models/ModelEvent';
 import { Team } from '../models/Team';
 import { PROVIDER_CATALOG } from '../config/provider-catalog';
 import { sendError } from '../lib/http-error';
+import { fixDoubleEncoding } from '../utils/encoding';
 
 const router = Router();
 const ALLOWED_TYPES = new Set(['knowledge', 'course', 'skill', 'workflow', 'provider', 'model_event']);
@@ -56,8 +57,8 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
           const owned = userId && (String(row.author) === userId || teamIds.includes(String(row.teamId || '')));
           const locked = !owned && ((row.requiredPlan && row.requiredPlan !== 'free') || Number(row.creditsCost) > 0 || Number(row.price) > 0);
           return {
-            id: String(row._id), type: 'knowledge', title: row.title,
-            summary: row.summary || undefined, path: `/knowledge/${row._id}`, group: '知识内容',
+            id: String(row._id), type: 'knowledge', title: fixDoubleEncoding(row.title),
+            summary: row.summary ? fixDoubleEncoding(row.summary) : undefined || undefined, path: `/knowledge/${row._id}`, group: '知识内容',
             access: locked ? 'locked' : (owned ? 'authorized' : 'public'), score: score(row.title, q),
           };
         })));
@@ -66,7 +67,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       tasks.push(Course.find({ isPublished: true, $or: [{ title: pattern }, { description: pattern }, { tags: pattern }, { category: pattern }] })
         .select('title description').limit(limit).lean()
         .then((rows) => rows.map((row: any) => ({
-          id: String(row._id), type: 'course', title: row.title, summary: row.description,
+          id: String(row._id), type: 'course', title: fixDoubleEncoding(row.title), summary: row.description,
           path: `/courses/${row._id}`, group: '课程', access: 'public', score: score(row.title, q),
         }))));
     }
