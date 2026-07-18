@@ -64,6 +64,8 @@ import { ReconciliationService } from './services/reconciliation.service';
 import { mediaWorker } from './services/queue.service';
 import { OutboxWorker } from './services/outbox-worker';
 
+import { startBackupScheduler } from "./services/backup.service";
+import { startDashboardCollection } from "./services/dashboard.service";
 // ─── 进程级崩溃兜底（稳定性基线，适配 0→1→100 扩容）───
 // 未捕获异常：记录后退出，交由 Docker restart / healthcheck 自动拉起，避免僵尸进程。
 process.on('uncaughtException', (err: Error) => {
@@ -292,14 +294,20 @@ function defaultBootstrapDependencies(): BootstrapDependencies {
     reloadProviders: reloadCustomProviders,
     startMediaWorker: () => mediaWorker.start(),
     startOutboxWorker: () => OutboxWorker.start(),
-    startHttpServer: () => app.listen(PORT, () => {
-      logger.info('index', `Server running on http://localhost:${PORT}`, {
-        env: process.env.NODE_ENV || 'development',
-        revision: process.env.APP_COMMIT_SHA || 'unknown',
+    startHttpServer: () => {
+      // 启动备份调度和运营指标采集
+      startBackupScheduler();
+      startDashboardCollection();
+      return app.listen(PORT, () => {
+        logger.info('index', `Server running on http://localhost:${PORT}`, {
+          env: process.env.NODE_ENV || 'development',
+          revision: process.env.APP_COMMIT_SHA || 'unknown',
+        });
       });
-    }),
+    },
   };
 }
+
 
 async function startManagedDependency(label: string, action: () => Promise<unknown>): Promise<void> {
   try {
