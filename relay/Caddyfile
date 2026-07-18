@@ -1,5 +1,0 @@
-# 把下面的 relay.aibak.site 换成你实际要用的网址（保持和域名后台、金网通里填的一致）
-# Caddy 会自动申请并续期 HTTPS 证书，你什么都不用管。
-relay.aibak.site {
-    reverse_proxy newapi:3000
-}
