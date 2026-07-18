@@ -234,7 +234,7 @@ export default function KnowledgeDetail() {
   const [unlocking, setUnlocking] = useState(false);
 
   // 是否可阅读全文（免费 / 已解锁）
-  const isFull = !doc || doc.access === 'full' || doc.access === undefined;
+  const isFull = !doc || doc?.access === 'full' || doc?.access === undefined;
   // 实际展示正文：全文优先，否则用试看内容
   const shownContent = isFull
     ? (doc?.htmlContent || doc?.content || '')
@@ -408,22 +408,22 @@ export default function KnowledgeDetail() {
           </div>
 
           {/* 标题 */}
-          <Title level={2} style={{ marginBottom: 8 }}>{doc.title}</Title>
+          <Title level={2} style={{ marginBottom: 8 }}>{doc?.title}</Title>
 
           {/* 元信息 */}
           <Space size={20} style={{ marginBottom: 16 }} wrap>
-            <span style={{ color: '#64748b' }}><UserOutlined /> {doc.author?.username}</span>
-            <span style={{ color: '#64748b' }}><ClockCircleOutlined /> {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString('zh-CN')}</span>
-            <span style={{ color: '#64748b' }}><EyeOutlined /> {doc.viewCount} 浏览</span>
+            <span style={{ color: '#64748b' }}><UserOutlined /> {doc?.author?.username}</span>
+            <span style={{ color: '#64748b' }}><ClockCircleOutlined /> {new Date(doc?.updatedAt || doc?.createdAt).toLocaleDateString('zh-CN')}</span>
+            <span style={{ color: '#64748b' }}><EyeOutlined /> {doc?.viewCount} 浏览</span>
             <span style={{ color: '#64748b' }}>
-              <HeartOutlined /> {doc.likeCount} 赞
+              <HeartOutlined /> {doc?.likeCount} 赞
             </span>
           </Space>
 
           {/* 标签 */}
           <div style={{ marginBottom: 20 }}>
-            {doc.tags?.map((tag) => <Tag color="blue" key={tag}>{tag}</Tag>)}
-            {doc.categories?.map((cat) => <Tag color="purple" key={cat}>{cat}</Tag>)}
+            {doc?.tags?.map((tag) => <Tag color="blue" key={tag}>{tag}</Tag>)}
+            {doc?.categories?.map((cat) => <Tag color="purple" key={cat}>{cat}</Tag>)}
           </div>
 
           <Divider style={{ margin: '0 0 20px' }} />
@@ -437,10 +437,10 @@ export default function KnowledgeDetail() {
               style={{ marginBottom: 20, borderRadius: 12 }}
               message={
                 doc?.access === 'plan_locked'
-                  ? `本文档为${doc.requiredPlan === 'max' ? '旗舰' : '专业'}会员专享`
+                  ? `本文档为${doc?.requiredPlan === 'max' ? '旗舰' : '专业'}会员专享`
                   : doc?.access === 'credit_locked'
-                    ? `解锁全文需消耗 ${doc.creditsNeeded ?? doc.creditsCost} 积分（当前 ${doc.creditsHave ?? 0} 积分）`
-                    : `免费试看${document?.freePreviewPages ? ` ${doc.freePreviewPages} 页` : ''}，解锁查看全文`
+                    ? `解锁全文需消耗 ${doc?.creditsNeeded ?? doc?.creditsCost} 积分（当前 ${doc?.creditsHave ?? 0} 积分）`
+                    : `免费试看${doc?.freePreviewPages ? ` ${doc?.freePreviewPages} 页` : ''}，解锁查看全文`
               }
               description={
                 <Space wrap style={{ marginTop: 4 }}>
@@ -465,7 +465,7 @@ export default function KnowledgeDetail() {
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
             <Space size={16}>
               <Button size="large" type="primary" icon={<RobotOutlined />}
-                onClick={() => navigate('/ai-chat', { state: { initialMessage: `请帮我解释以下文档：${doc.title}` } })}
+                onClick={() => navigate('/ai-chat', { state: { initialMessage: `请帮我解释以下文档：${doc?.title}` } })}
                 style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none' }}
               >
                 AI 解读
@@ -481,11 +481,11 @@ export default function KnowledgeDetail() {
           <Card size="small" style={{ marginBottom: 12 }}>
             <Text strong>文档信息</Text>
             <div style={{ marginTop: 8, fontSize: 13 }}>
-              <div>格式: {doc.htmlContent ? '富文本' : 'Markdown'}</div>
+              <div>格式: {doc?.htmlContent ? '富文本' : 'Markdown'}</div>
               <div>字数: ~{shownContent.length || 0}</div>
-              <div>标签: {doc.tags?.length || 0} 个</div>
-              <div>创建: {new Date(doc.createdAt).toLocaleDateString('zh-CN')}</div>
-              <div>更新: {new Date(doc.updatedAt || doc.createdAt).toLocaleDateString('zh-CN')}</div>
+              <div>标签: {doc?.tags?.length || 0} 个</div>
+              <div>创建: {new Date(doc?.createdAt).toLocaleDateString('zh-CN')}</div>
+              <div>更新: {new Date(doc?.updatedAt || doc?.createdAt).toLocaleDateString('zh-CN')}</div>
             </div>
           </Card>
           <Card size="small">
@@ -505,7 +505,7 @@ export default function KnowledgeDetail() {
       <FileConverter
         open={converterOpen}
         onClose={() => setConverterOpen(false)}
-        fileName={`${doc.title || 'document'}.md`}
+        fileName={`${doc?.title || 'document'}.md`}
         content={doc?.content || doc?.htmlContent || shownContent}
         onConvert={handleConvert}
       />
