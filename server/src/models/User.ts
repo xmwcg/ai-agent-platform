@@ -20,6 +20,13 @@ export interface IUser extends Document {
   douyinUnionid?: string;  // 抖音 UnionID（同一开发者下跨应用唯一，可选）
   role: 'user' | 'admin';
   isBanned?: boolean;
+  mfaEnabled?: boolean;
+  mfaSecret?: string;
+  mfaVerifiedAt?: Date;
+  emailVerified?: boolean;
+  emailVerifiedAt?: Date;
+  failedLoginAttempts?: number;
+  lockedUntil?: Date;
   provider: string;
   providerId?: string;
   // 商业变现字段

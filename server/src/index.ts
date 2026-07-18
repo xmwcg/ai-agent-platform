@@ -23,6 +23,9 @@ import courseRoutes from './routes/courses';
 import codeExplanationRoutes from './routes/code-explanation';
 import authRoutes from './routes/auth';
 import authSessionRoutes from './routes/auth-session';
+import authMfaRoutes from './routes/auth-mfa';
+import authVerifyRoutes from './routes/auth-verify';
+import authPasswordRoutes from './routes/auth-password';
 import adminSecurityRoutes from './routes/admin-security';
 import mcpRoutes from './routes/mcp';
 import compareRoutes from './routes/compare';
@@ -140,6 +143,9 @@ app.use('/api/', apiLimiter);
 // 注册路由
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', authSessionRoutes);
+app.use('/api/auth', authMfaRoutes);
+app.use('/api/auth', authVerifyRoutes);
+app.use('/api/auth', authPasswordRoutes);
 app.use('/api', adminSecurityRoutes);
 app.use('/api/compare', compareRoutes);
 app.use('/api/ai', aiLimiter(), aiRoutes);           // AI 端点：按用户级别限流

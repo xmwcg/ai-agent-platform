@@ -1,29 +1,31 @@
 // server/src/middleware/requireAdmin.ts
-//
-// Global admin-only guard for operations routes.
-//
-// Context: User.role is 'user' | 'admin' (server/src/models/User.ts:19) but is
-// NOT enforced by any route today. This middleware closes that gap.
-//
-// Must run AFTER requireAuth (which populates req.user from the JWT).
-// Style mirrors server/src/middleware/auth.ts -> requireAuth (res.status + json).
-//
-// Usage:
-//   import { requireAuth, AuthRequest } from '../middleware/auth';
-//   import { requireAdmin } from '../middleware/requireAdmin';
-//   router.use(requireAuth);
-//   router.get('/snapshot', requireAdmin, handler);
-
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from './auth';
+import { User } from '../models/User';
 
-export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
+export async function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   if (!req.user) {
     res.status(401).json({ error: '未授权，缺少登录信息' });
     return;
   }
   if (req.user.role !== 'admin') {
     res.status(403).json({ error: '需要管理员权限', yourRole: req.user.role });
+    return;
+  }
+  // MFA 检查：管理员必须已启用 MFA
+  try {
+    const user = await User.findById(req.user.id).select('mfaEnabled').lean();
+    if (user && !user.mfaEnabled) {
+      res.status(403).json({
+        error: '管理员必须启用多因素认证(MFA)才能执行此操作',
+        code: 'MFA_REQUIRED',
+        action: '请在 我的 → 安全设置 → 多因素认证 中启用 MFA',
+      });
+      return;
+    }
+  } catch {
+    // DB 查询失败时保守拒绝
+    res.status(503).json({ error: '无法验证管理员 MFA 状态，请稍后重试' });
     return;
   }
   next();

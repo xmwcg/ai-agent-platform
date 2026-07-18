@@ -94,7 +94,7 @@ router.post('/register', authLimiter, validate(registerSchema), async (req: Auth
       },
     ]);
 
-        const jti = require('crypto').randomUUID();
+        const jti = crypto.randomUUID();
     const refreshToken = generateRefreshToken();
     const tokenHash = hashRefreshToken(refreshToken);
     const deviceFingerprint = generateDeviceFingerprint(req);

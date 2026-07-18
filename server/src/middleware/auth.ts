@@ -100,8 +100,6 @@ const FALLBACK_JWT_SECRETS: string[] = process.env.JWT_FALLBACK_SECRETS
 
 function verifyWithFallback(token: string): { id: string; email: string; role: string; jti?: string; sessionId?: string } | null {
   // 先尝试验证主密钥
-  const decoded = jwt.decode(token);
-  // 如果有 jti 且 sessionId，用主密钥验证
   let result = verifyToken(token);
   if (result) return result;
 
@@ -109,15 +107,23 @@ function verifyWithFallback(token: string): { id: string; email: string; role: s
   for (const secret of FALLBACK_JWT_SECRETS) {
     try {
       const decoded = jwt.verify(token, secret) as { id: string; email: string; role: string; jti?: string };
-      result = decoded;
-      return result;
+      return decoded;
     } catch { /* continue */ }
   }
   return null;
 }
 
+var _AuthSession = null;
+function getAuthSession() { if (!_AuthSession) { try { _AuthSession = require("../models/AuthSession").AuthSession; } catch (e) { return null; } } return _AuthSession; }
+
+async function isSessionActive(jti) {
+  if (!jti) return true;
+  var Model = getAuthSession(); if (!Model) return true;
+  try { return !!(await Model.findOne({ accessTokenJti: jti, status: "active" }).lean()); } catch (e) { return true; }
+}
+
 // 认证中间件（必需登录）
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ error: "未授权，缺少 Token" });
@@ -128,6 +134,11 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   const decoded = verifyWithFallback(token);
   if (!decoded) {
     res.status(401).json({ error: "Token 无效或已过期" });
+    return;
+  }
+
+  if (decoded.jti && !(await isSessionActive(decoded.jti))) {
+    res.status(401).json({ error: "会话已被撤销，请重新登录", code: "SESSION_REVOKED" });
     return;
   }
 
