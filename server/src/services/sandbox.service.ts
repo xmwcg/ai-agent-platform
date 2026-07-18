@@ -12,11 +12,13 @@
  * - 所有可测试逻辑（语言归一化、命令构建、危险模式检测、模式选择）均为纯函数，便于单测。
  */
 import { execFile } from 'child_process';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { writeFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import axios from 'axios';
+import { SandboxExecution } from '../models/SandboxExecution';
+import { realRedis } from '../config/database';
 
 // local 仅供非生产开发调试；生产始终强制 remote。
 
@@ -438,6 +440,47 @@ export const sandboxService = {
     }
     const mode = selectSandboxMode(req.mode);
     return PROVIDERS[mode].run({ ...req, language }, process.env);
+    },
+
+  /**
+   * 用户级限流检查（Redis 优先，降级为内存宽松）
+   */
+  async checkRateLimit(userId: string): Promise<{ allowed: boolean; reason?: string; retryAfterMs?: number }> {
+    const now = Date.now();
+    const minuteKey = `sandbox:ratelimit:${userId}:minute`; const dayKey = `sandbox:ratelimit:${userId}:day`; const concurrentKey = `sandbox:ratelimit:${userId}:concurrent`; const circuitKey = `sandbox:ratelimit:${userId}:circuit-breaker`;
+
+    try {
+      const circuitUntil = await realRedis.get(circuitKey);
+      if (circuitUntil) { const until = parseInt(circuitUntil, 10); if (until > now) { return { allowed: false, reason: '执行频率过高，请稍后再试（熔断保护）', retryAfterMs: until - now }; } await realRedis.del(circuitKey); }
+
+      const pipeline = realRedis.pipeline(); pipeline.incr(concurrentKey); pipeline.expire(concurrentKey, 30);
+      const concurrentResults = await pipeline.exec(); const currentConcurrent = concurrentResults?.[0]?.[1] as number | undefined;
+      if (currentConcurrent !== undefined && currentConcurrent > 3) { await realRedis.decr(concurrentKey); return { allowed: false, reason: '并发执行数已达上限（3），请等待当前任务完成' }; }
+
+      const minuteCount = await realRedis.incr(minuteKey); if (minuteCount === 1) await realRedis.expire(minuteKey, 60);
+      if (minuteCount > 10) { await realRedis.decr(concurrentKey); return { allowed: false, reason: '每分钟最多 10 次执行', retryAfterMs: 60000 }; }
+
+      const dayCount = await realRedis.incr(dayKey);
+      if (dayCount === 1) { const s = Math.ceil((new Date().setHours(24, 0, 0, 0) - now) / 1000); await realRedis.expire(dayKey, s); }
+      if (dayCount > 200) { await realRedis.decr(concurrentKey); await realRedis.decr(minuteKey); return { allowed: false, reason: '每日最多 200 次执行', retryAfterMs: 86400000 }; }
+
+      return { allowed: true };
+    } catch (redisErr) { return { allowed: true }; }
+  },
+
+  async releaseConcurrentSlot(userId: string): Promise<void> { try { await realRedis.decr(`sandbox:ratelimit:${userId}:concurrent`); } catch { /* ignore */ } },
+
+  async recordFailure(userId: string): Promise<void> {
+    try { const key = `sandbox:ratelimit:${userId}:failures:24h`; const count = await realRedis.incr(key); if (count === 1) await realRedis.expire(key, 86400); if (count >= 20) { await realRedis.set(`sandbox:ratelimit:${userId}:circuit-breaker`, String(Date.now() + 300000), 'EX', 300); } } catch { /* ignore */ }
+  },
+
+  async persistExecution(userId: string, result: SandboxResult, code: string): Promise<void> {
+    try {
+      const codeHash = createHash('sha256').update(code, 'utf8').digest('hex');
+      await SandboxExecution.create({ executionId: result.executionId, userId, language: result.language, codeHash, codeLength: Buffer.byteLength(code, 'utf8'), mode: result.mode, status: result.status, stdout: result.stdout?.slice(0, 4096), stderr: result.stderr?.slice(0, 4096), exitCode: result.exitCode, durationMs: result.durationMs, deniedPatterns: result.deniedPatterns, resourceUsage: (result as any).resourceUsage, securityEvents: (result as any).securityEvents });
+      if (result.status !== 'success') { await this.recordFailure(userId); }
+      await this.releaseConcurrentSlot(userId);
+    } catch (err) { console.error('sandbox persistExecution error:', (err as Error)?.message || err); }
   },
 };
 

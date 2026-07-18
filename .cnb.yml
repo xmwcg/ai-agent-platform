@@ -221,6 +221,30 @@ main:
             EOF
             cat .release/image-metadata.env
 
+
+        - name: build-sandbox-executor-image
+          image: docker:27-cli
+          script: |
+            set -eu
+            test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
+            echo "$CNB_TOKEN" | docker login "$CNB_DOCKER_REGISTRY" \
+              --username "$CNB_TOKEN_USER_NAME" --password-stdin
+
+            sandbox_tag="$IMAGE_REPOSITORY/sandbox-executor:$CNB_COMMIT"
+            export DOCKER_BUILDKIT=1
+
+            cd sandbox-executor
+            docker build \
+              --progress=plain \
+              --tag "$sandbox_tag" \
+              .
+            docker push "$sandbox_tag"
+
+            sandbox_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$sandbox_tag" || echo "")
+            echo "SANDBOX_IMAGE=$sandbox_tag" >> ../.release/image-metadata.env
+            echo "SANDBOX_IMAGE_DIGEST=$sandbox_digest" >> ../.release/image-metadata.env
+            echo "sandbox-executor image: $sandbox_tag"
+
         - name: image-security-scan
           image: docker:27-cli
           script: |
