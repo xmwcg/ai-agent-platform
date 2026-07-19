@@ -209,13 +209,15 @@ function RouteScrollRestoration() {
     } else {
       // 无 hash 的普通导航：仅做一次延迟校正，避免多帧重复滚动导致的页面弹跳。
       // useLayoutEffect 的同步 scrollTo 已确保首帧在顶部；
-      // 这里只在异步内容渲染完成后（~300ms）校正一次，防止页面抖动。
-      const timeoutId = window.setTimeout(() => {
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      }, 300);
+      // 无 hash 导航：多次校正确保始终回到顶部，防止异步加载内容导致页面弹跳
+      const t1 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }), 100);
+      const t2 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }), 500);
+      const t3 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }), 1000);
 
       return () => {
-        window.clearTimeout(timeoutId);
+        window.clearTimeout(t1);
+        window.clearTimeout(t2);
+        window.clearTimeout(t3);
       };
     }
 
