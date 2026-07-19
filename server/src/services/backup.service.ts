@@ -22,7 +22,7 @@ import { alertBackupFailure } from "./alert.service";
 
 const execAsync = promisify(execFile);
 
-const BACKUP_DIR = process.env.BACKUP_DIR || join(process.cwd(), "backups");
+const BACKUP_DIR = process.env.BACKUP_DIR || join(process.cwd(), "uploads", "backups");
 const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/ai-agent-platform";
 const DB_NAME = MONGO_URI.split("/").pop()?.split("?")[0] || "ai-agent-platform";
 const BACKUP_RETENTION_DAYS = 30;
