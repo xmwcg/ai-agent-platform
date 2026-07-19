@@ -61,10 +61,10 @@ export default function AiChat() {
   const chatMountedRef = useRef(false);
   useEffect(() => {
     if (!chatMountedRef.current) { chatMountedRef.current = true; return; }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 仅滚动聊天消息容器，不滚动页面
+    const container = messagesContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages, loading]);
-
-  // 如果没有活跃会话，自动创建
   useEffect(() => {
     if (!activeSessionId && sessions.length === 0) {
       createSession();
