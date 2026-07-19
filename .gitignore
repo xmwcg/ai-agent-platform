@@ -27,3 +27,4 @@ _cli*.txt
 _cli_log.zip
 _fullci*.txt
 ai-agent-platform-*.html
+server/.cache/
