@@ -6,7 +6,7 @@
  */
 import { execFile } from 'child_process';
 import { randomBytes } from 'crypto';
-import { writeFile, unlink } from 'fs/promises';
+import { writeFile, unlink, mkdir } from 'fs/promises';
 const SANDBOX_TMP = process.env.SANDBOX_TMPDIR || '/tmp';
 import { join } from 'path';
 
@@ -115,6 +115,8 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
   const tmpFilePath = join(SANDBOX_TMP, fileName);
 
   try {
+    // 确保临时目录存在
+    await mkdir(SANDBOX_TMP, { recursive: true }).catch(() => {});
     // 写入代码到临时文件
     await writeFile(tmpFilePath, code, 'utf8');
 

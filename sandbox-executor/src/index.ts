@@ -18,6 +18,7 @@
  * - 容器执行后自动删除（--rm）
  */
 import express from 'express';
+import { mkdir } from 'fs/promises';
 import { execDockerSandbox, SandboxExecRequest } from './executor';
 
 const PORT = parseInt(process.env.SANDBOX_PORT || '4090', 10);
