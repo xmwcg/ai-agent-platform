@@ -305,6 +305,7 @@ export default function AiChat() {
         open={optimizerOpen}
         onClose={() => setOptimizerOpen(false)}
         originalPrompt={optimizerPrompt}
+        currentModel={model}
         onApply={(optimized) => {
           setOptimizerOpen(false);
           handleSend(optimized);

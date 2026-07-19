@@ -186,7 +186,7 @@ app.use('/api/text2img', text2imgRoutes);
 app.use('/api/media-keys', mediaByokRoutes); // 媒体生成 BYOK（用户自带 Key）管理
 app.use('/api/referral', referralRoutes);            // 推荐/分销体系
 app.use('/api/points', pointsRoutes);                // 积分签到/任务体系
-app.use('/api/marketplace', marketplaceRevenueRoutes); // 市场收益/提现
+app.use('/api/marketplace-revenue', marketplaceRevenueRoutes); // 市场收益/提现
 app.use('/api/ops', opsRoutes);                         // 运营看板 / 北极星指标
 app.use('/api/relay', relayRoutes);                     // 中转站：整合进平台的模型聚合网关
 app.use('/api', accountRoutes);                         // 账户管理 / 数据导出 / 账号注销 / 协议同意

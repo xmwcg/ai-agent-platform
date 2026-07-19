@@ -97,8 +97,8 @@ class OpenAICompatibleProvider implements GatewayProvider {
   constructor(
     public name: GatewayProviderName,
     public label: string,
-    private baseURL: string,
-    private apiKey: string,
+    public baseURL: string,
+    public apiKey: string,
     private modelPrefix: string,
     private modelList: string[] = []
   ) {}
@@ -297,13 +297,37 @@ export function listGatewayProviders() {
   return allProviders().map((p) => ({ name: p.name, label: p.label, configured: p.isConfigured() }));
 }
 
-/** 列出全部可选模型（内置 + 第三方自定义），供前端模型选择器 */
+/** 列出全部可选模型（内置 + 第三方自定义），供前端模型选择器
+ *  如果自定义 provider 与内置 provider 指向同一 API（同 baseURL + apiKey），
+ *  则内置 provider 的模型列表会以自定义 provider 为主，避免重复。 */
 export function listGatewayModels() {
   const out: { provider: string; label: string; models: string[]; custom?: boolean }[] = [];
+  
+  // 收集自定义 provider 的 baseURL 和 apiKey 用于去重
+  const customDedup = new Map<string, string[]>();
+  for (const p of CUSTOM_PROVIDERS) {
+    if (p instanceof OpenAICompatibleProvider) {
+      const key = p.baseURL + '|' + p.apiKey;
+      customDedup.set(key, p.models());
+    }
+  }
+  
   for (const p of PROVIDERS) {
     if (p.name === 'mock') continue;
-    out.push({ provider: p.name, label: p.label, models: p.models ? p.models() : [] });
+    const models = p.models ? p.models() : [];
+    
+    // 检查是否与自定义 provider 重复（同 baseURL + apiKey）
+    if (p instanceof OpenAICompatibleProvider) {
+      const key = p.baseURL + '|' + p.apiKey;
+      if (customDedup.has(key)) {
+        // 跳过：自定义 provider 已覆盖此 API
+        continue;
+      }
+    }
+    
+    out.push({ provider: p.name, label: p.label, models });
   }
+  
   for (const p of CUSTOM_PROVIDERS) {
     out.push({ provider: p.name, label: p.label, models: p.models ? p.models() : [], custom: true });
   }
