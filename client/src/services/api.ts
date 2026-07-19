@@ -157,7 +157,7 @@ export const billingAPI = {
   getPlans: () => apiClient.get('/billing/plans'),
   getSubscription: () => apiClient.get('/billing/subscription'),
   getCreditsPackages: () => apiClient.get('/billing/credits-packages'),
-  createOrder: (data: { plan: 'free' | 'pro' | 'max' | 'team'; period: 'monthly' | 'yearly'; provider?: PaymentProvider }) =>
+  createOrder: (data: Record<string, any>) =>
     apiClient.post('/billing/orders', data),
   createCreditsOrder: (data: { packageId: string; provider?: PaymentProvider }) =>
     apiClient.post('/billing/credits-packages/order', data),
@@ -559,3 +559,4 @@ export const workflowAPI = {
       responseType: download ? 'blob' : 'json',
     }),
 };
+

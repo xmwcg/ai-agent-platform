@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { Typography, Tabs, Card, Tag, Button, Space, Row, Col, Statistic } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { Typography, Tabs, Card, Tag, Button, Space, Row, Col, message, Modal } from 'antd';
 import {
   ShopOutlined, ScanOutlined, WifiOutlined, PrinterOutlined,
   FileProtectOutlined, SafetyOutlined, DownloadOutlined, ApiOutlined,
   CloudServerOutlined, ClusterOutlined, AppstoreOutlined, ToolOutlined,
+  CrownOutlined,
 } from '@ant-design/icons';
+import { billingAPI, extractApiError } from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -20,9 +24,9 @@ const features = [
 ];
 
 const versions = [
-  { name: '免费试用版', price: '0', period: '15天', features: ['完整硬件扫描', '网络体检(只读)', 'C盘清理(手动确认)', '单机使用'], tag: '推荐试用', tagColor: 'blue' },
-  { name: '专业版', price: '299', period: '永久', features: ['免费版全部功能', '资产报表+价格对比', '打印机一键共享', '文件共享配置', '权限自动修复', '3台设备授权'], tag: '性价比之选', tagColor: 'green' },
-  { name: '旗舰版', price: '599', period: '永久', features: ['专业版全部功能', '集中Web控制台', '批量任务下发', '上网行为管控', '审计日志追踪', '不限设备数'], tag: '企业推荐', tagColor: 'orange' },
+  { id: 'free', name: '免费试用版', price: '0', period: '15天', packageId: '', features: ['完整硬件扫描', '网络体检(只读)', 'C盘清理(手动确认)', '单机使用'], tag: '推荐试用', tagColor: 'blue', isFree: true },
+  { id: 'ent-standard', name: '专业版', price: '299', period: '永久', packageId: 'ent-standard', features: ['免费版全部功能', '资产报表+价格对比', '打印机一键共享', '文件共享配置', '权限自动修复', '3台设备授权'], tag: '性价比之选', tagColor: 'green' },
+  { id: 'ent-pro', name: '旗舰版', price: '599', period: '永久', packageId: 'ent-pro', features: ['专业版全部功能', '集中Web控制台', '批量任务下发', '上网行为管控', '审计日志追踪', '不限设备数'], tag: '企业推荐', tagColor: 'orange' },
 ];
 
 const installSteps = [
@@ -34,6 +38,56 @@ const installSteps = [
 
 const JinWangTongPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('intro');
+  const [buyLoading, setBuyLoading] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+
+  const handleBuy = async (pkgId: string, pkgName: string) => {
+    if (!user) {
+      Modal.confirm({
+        title: '请先登录',
+        content: '购买金网通需要登录 AIbak 账号。',
+        okText: '去登录',
+        cancelText: '取消',
+        onOk: () => navigate('/login'),
+      });
+      return;
+    }
+    setBuyLoading(pkgId);
+    try {
+      const res: any = await billingAPI.createPrivateLicenseOrder({
+        packageId: pkgId,
+        provider: 'wechat' as any,
+      });
+      const payUrl = (res as any)?.data?.payParams?.code_url || (res as any)?.data?.payUrl;
+      if (payUrl) {
+        Modal.info({
+          title: '请扫码支付',
+          content: (
+            <div style={{ textAlign: 'center' }}>
+              <Paragraph>请使用微信扫描下方二维码完成支付</Paragraph>
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payUrl)}`} alt="支付二维码" style={{ width: 200, height: 200 }} />
+              <Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>
+                支付完成后 License 将自动签发到您的账号
+              </Paragraph>
+            </div>
+          ),
+          width: 360,
+        });
+      } else {
+        message.success(`已创建 ${pkgName} 订单，请在订单管理中完成支付`);
+        navigate('/profile?tab=orders');
+      }
+    } catch (err) {
+      message.error(extractApiError(err, '创建订单失败，请稍后重试'));
+    } finally {
+      setBuyLoading(null);
+    }
+  };
+
+  const handleFreeDownload = () => {
+    window.open('https://cnb.cool/aibak.site/enterprise-network-hub/-/archive/main/enterprise-network-hub-main.zip', '_blank');
+  };
 
   const tabItems = [
     {
@@ -87,10 +141,10 @@ const JinWangTongPage: React.FC = () => {
         <div>
           <Row gutter={[16, 16]}>
             {versions.map(v => (
-              <Col xs={24} md={8} key={v.name}>
+              <Col xs={24} md={8} key={v.id}>
                 <Card
                   hoverable
-                  style={{ borderRadius: 10, border: v.price === '599' ? '2px solid #FF5C1A' : '1px solid #eef1f5', height: '100%' }}
+                  style={{ borderRadius: 10, border: v.id === 'ent-pro' ? '2px solid #FF5C1A' : '1px solid #eef1f5', height: '100%' }}
                   title={<Space><Text strong>{v.name}</Text><Tag color={v.tagColor}>{v.tag}</Tag></Space>}
                 >
                   <div style={{ textAlign: 'center', padding: '16px 0' }}>
@@ -104,15 +158,28 @@ const JinWangTongPage: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                  <Button type={v.price === '599' ? 'primary' : 'default'} block size="large" style={{ borderRadius: 8 }}>
-                    {v.price === '0' ? '免费下载' : '立即购买'}
-                  </Button>
+                  {v.isFree ? (
+                    <Button type="default" block size="large" style={{ borderRadius: 8 }} icon={<DownloadOutlined />} onClick={handleFreeDownload}>
+                      免费下载试用
+                    </Button>
+                  ) : (
+                    <Button
+                      type={v.id === 'ent-pro' ? 'primary' : 'default'}
+                      block size="large"
+                      style={{ borderRadius: 8 }}
+                      icon={<CrownOutlined />}
+                      loading={buyLoading === v.packageId}
+                      onClick={() => handleBuy(v.packageId, v.name)}
+                    >
+                      立即购买
+                    </Button>
+                  )}
                 </Card>
               </Col>
             ))}
           </Row>
           <Paragraph type="secondary" style={{ textAlign: 'center', marginTop: 16 }}>
-            购买后自动签发 License · 永久授权 · 支持对公转账/微信支付 · 联系客服获取发票
+            购买后自动签发 License &bull; 永久授权 &bull; 支持微信支付/对公转账 &bull; 联系客服获取发票
           </Paragraph>
         </div>
       ),
@@ -172,7 +239,7 @@ const JinWangTongPage: React.FC = () => {
 
           <div style={{ marginTop: 24, textAlign: 'center' }}>
             <Button type="primary" size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8, height: 44 }}
-                onClick={() => window.open('https://cnb.cool/aibak.site/enterprise-network-hub/-/archive/main/enterprise-network-hub-main.zip', '_blank')}>
+                onClick={handleFreeDownload}>
               下载脚本包 (ZIP)
             </Button>
             <Paragraph type="secondary" style={{ marginTop: 8 }}>
@@ -184,46 +251,27 @@ const JinWangTongPage: React.FC = () => {
     },
     {
       key: 'dashboard',
-
       label: '使用说明',
-
       children: (
-
         <div style={{ textAlign: 'center', padding: '40px 0' }}>
-
           <Title level={4}>金网通控制台（本地运行）</Title>
-
           <Paragraph type="secondary" style={{ maxWidth: 600, margin: '16px auto' }}>
-
             金网通是一款本地PowerShell脚本工具，需在Windows电脑上下载运行。
-
             下载后在管理机以管理员运行 <code>console.ps1</code> 即可打开Web控制台（默认 http://localhost:8080）。
-
           </Paragraph>
-
           <Space size={12} style={{ marginTop: 16 }}>
-
             <Button type="primary" size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }}
               onClick={() => window.open('https://cnb.cool/aibak.site/enterprise-network-hub/-/archive/main/enterprise-network-hub-main.zip', '_blank')}>
               下载脚本包
-
             </Button>
-
             <Button size="large" icon={<ApiOutlined />} style={{ borderRadius: 8 }}
-
               onClick={() => window.open('https://cnb.cool/aibak.site/enterprise-network-hub', '_blank')}>
-
               查看源码
-
             </Button>
-
           </Space>
-
         </div>
-
       ),
-
-      },
+    },
   ];
 
   return (
@@ -240,3 +288,4 @@ const JinWangTongPage: React.FC = () => {
 };
 
 export default JinWangTongPage;
+
