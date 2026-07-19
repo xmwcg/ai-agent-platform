@@ -106,7 +106,7 @@ class OpenAICompatibleProvider implements GatewayProvider {
     return !!this.apiKey;
   }
   owns(model: string) {
-    return model.startsWith(this.modelPrefix + '/') || model === this.modelPrefix;
+    return model.startsWith(this.modelPrefix + "/") || model === this.modelPrefix || this.modelList.includes(model);
   }
   models() {
     return this.modelList;
