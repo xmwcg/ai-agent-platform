@@ -1,6 +1,7 @@
 import { useState } from 'react';
 /** 清理模型名称：去掉 mc_<providerId>/ 前缀，保留可读名称 */
 function cleanModelName(model: string): string {
+  if (!model) return "";
   // 去掉 mc_<mongodbId>/ 前缀
   let cleaned = model.replace(/^mc_[a-f0-9]+\//, "");
   // 如果还包含 provider/model 格式，只显示模型部分

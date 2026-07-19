@@ -112,7 +112,7 @@ export default function ModelSelector(props: ModelSelectorProps) {
   // 首次加载且父组件未指定值时，自动选中第一个可用模型
   useEffect(() => {
     if (!defaultToFirst || loading) return;
-    const first = groups.find((g) => (g.models || []).length > 0 && !g.provider.startsWith('mc_'));
+    const first = groups.find((g) => (g.models || []).length > 0 && g.provider !== 'mc_' && !g.provider.startsWith('mc_'));
     const chosen = first || groups.find((g) => (g.models || []).length > 0);
     if (chosen && chosen.models[0]) {
       onChange?.(`${chosen.provider}/${chosen.models[0]}`);

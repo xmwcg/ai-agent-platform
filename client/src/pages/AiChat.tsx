@@ -261,7 +261,7 @@ export default function AiChat() {
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
             <div>
               <Text type="secondary" style={{ fontSize: 12 }}>当前模型</Text>
-              <div className="panel-value">{model ? model.replace(/^mc_[^/]+\//, '') : '未选择'}</div>
+              <div className="panel-value">{model ? model.replace(/^mc_[a-f0-9]+\//, '').split("/").pop() || model : '未选择'}</div>
             </div>
 
             <div>

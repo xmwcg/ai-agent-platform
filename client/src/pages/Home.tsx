@@ -249,13 +249,13 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 4 个免费大模型额度徽章（真实可调用，消耗小程序成长计划免费额度） */}
+          {/* 4 个免费大模型额度徽章（Agnes 免费模型展示） */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginTop: 6 }}>
             {[
-              { n: 'hy3', t: '文本大模型', c: '#10b981' },
-              { n: 'hy3-preview', t: '文本大模型', c: '#06b6d4' },
-              { n: 'HY-Image-3.0-Plus', t: '文生图', c: '#8b5cf6' },
-              { n: 'HY-Image-v3.0-I2I', t: '图生图', c: '#f59e0b' },
+              { n: 'agnes-2.0-flash', t: '文本模型', c: '#10b981' },
+              { n: 'agnes-image-2.1-flash', t: '文生图', c: '#06b6d4' },
+              { n: 'agnes-image-2.0-flash', t: '文生图', c: '#8b5cf6' },
+              { n: 'agnes-video-v2.0', t: '视频模型', c: '#f59e0b' },
             ].map((m) => (
               <span key={m.n} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.08)', border: `1px solid ${m.c}66`, borderRadius: 999, padding: '5px 12px', fontSize: 12, color: '#e2e8f0' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: m.c, boxShadow: `0 0 8px ${m.c}` }} />
