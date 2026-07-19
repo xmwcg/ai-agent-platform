@@ -135,8 +135,11 @@ router.post('/servers/:id/connect', requireAuth, enforceQuota('mcp_create'), asy
     await mcpService.connect(req.params.id);
     const server = mcpService.getServer(req.params.id);
     res.json({ success: true, data: server });
-  } catch (err) {
-    sendError(res, err);
+  } catch (err: any) {
+    // 透传 MCP 连接的操作性错误（如启动失败/超时），避免笼统的「服务器内部错误」掩盖真实原因
+    const status = err?.status && Number.isInteger(err.status) ? err.status : 500;
+    const message = err?.message || 'MCP 连接失败，请稍后重试';
+    res.status(status).json({ success: false, error: message, code: 'MCP_CONNECT_FAILED' });
   }
 });
 

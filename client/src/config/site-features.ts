@@ -36,7 +36,7 @@ export const SITE_FEATURES: SiteFeature[] = [
   { id: 'model-config', title: '模型配置', description: '配置模型厂商、API Key 和默认模型', path: '/model-config', group: '平台与生态', keywords: ['API Key', 'Base URL', 'OpenAI', 'Claude', 'Gemini', 'DeepSeek', '通义千问', 'Kimi'], aliases: ['模型接入', 'provider'], authRequired: true, icon: 'api' },
   { id: 'marketplace', title: 'API 市场', description: '发现和使用平台 API', path: '/marketplace', group: '平台与生态', keywords: ['接口', '市场', 'API'], aliases: ['marketplace'], authRequired: false, icon: 'shop' },
   { id: 'skills', title: '技能市场', description: '发现和管理 AI 技能', path: '/skills', group: '平台与生态', keywords: ['技能', '插件', '能力'], aliases: ['skills'], authRequired: false, icon: 'apps' },
-  { id: 'plugins', title: '插件管理', description: '管理平台扩展插件', path: '/plugins', group: '平台与生态', keywords: ['插件', '扩展'], aliases: ['plugins'], authRequired: true, icon: 'setting' },
+  { id: 'plugins', title: 'MCP插件', description: '管理 MCP 扩展插件', path: '/plugins', group: '平台与生态', keywords: ['MCP', '插件', '扩展'], aliases: ['plugins', 'mcp'], authRequired: true, icon: 'setting' },
   { id: 'customer-service', title: '智能客服', description: '创建和管理智能客服', path: '/customer-service', group: '平台与生态', keywords: ['客服', '机器人', '客户服务'], aliases: ['customer service'], authRequired: true, icon: 'service' },
   { id: 'team', title: '团队权限', description: '团队成员与授权管理', path: '/team', group: '管理与账户', keywords: ['团队', '成员', '权限'], aliases: ['team'], authRequired: true, icon: 'team' },
   { id: 'diagnostics', title: '部署自检', description: '查看系统运行与部署诊断', path: '/diagnostics', group: '管理与账户', keywords: ['健康检查', '状态', '部署'], aliases: ['diagnostics'], authRequired: true, icon: 'dashboard' },

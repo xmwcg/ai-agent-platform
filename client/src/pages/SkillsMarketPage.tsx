@@ -231,7 +231,7 @@ const SkillsMarketPage: React.FC = () => {
       if (res.ok) {
         message.success(res.message || '安装成功');
         if (res.type === 'skill') { setActiveTab('mine'); setTimeout(loadMine, 300); }
-        if (res.type === 'mcp') { message.info('已加入 MCP，请到「插件管理」补全密钥后连接'); }
+        if (res.type === 'mcp') { message.info('已加入 MCP，请到「MCP插件」补全密钥后连接'); }
       } else message.error(res.error || '安装失败');
     } catch (e) { message.error(extractApiError(e, '安装失败')); }
     setInstalling(null);

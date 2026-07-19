@@ -167,7 +167,7 @@ export default function CreativeWorkshop() {
             <Title level={5}><PictureOutlined /> 文生图</Title>
             <Paragraph type="secondary" style={{ fontSize: 13 }}>
               文生图依赖图像生成 Provider（如混元 / DALLE）。
-              未配置 Key 时返回占位图，可在「插件管理」中配置对应 Provider。
+              未配置 Key 时返回占位图，可在「MCP插件」中配置对应 Provider。
             </Paragraph>
           </Col>
           <Col span={8}>

@@ -2,6 +2,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { EventEmitter } from 'events';
+import fs from 'fs';
+import path from 'path';
 import { MCPServer } from '../models/MCPServer';
 import { logger } from '../lib/logger';
 
@@ -17,6 +19,24 @@ function isAllowedStdioCommand(command?: string): boolean {
   if (!command) return false;
   const base = command.split(/[\\/]/).pop() || command; // 取 basename，防止通过绝对路径绕过
   return ALLOWED_STDIO_COMMANDS.includes(base);
+}
+
+// P0 止血 + 可连性修复：把 `npx -y @modelcontextprotocol/server-xxx` 这类命令，
+// 在「对应包已预装进镜像」时规范化为 `node node_modules/<pkg>/dist/index.js`。
+// 这样运行时无需 npx/npm（Dockerfile 已将其移除以缩小攻击面），离线即可拉起 MCP 子进程。
+// 若包未预装，则保持原命令（错误信息会清晰提示，而非笼统的「网络错误」）。
+function normalizeStdioCommand(
+  command?: string,
+  args?: string[]
+): { command?: string; args?: string[] } {
+  if (command !== 'npx' || !args || args.length === 0) return { command, args };
+  const hasFlag = args[0] === '-y' || args[0] === '--yes';
+  const pkg = hasFlag ? args[1] : args[0];
+  if (!pkg || !pkg.startsWith('@modelcontextprotocol/server-')) return { command, args };
+  const entry = path.join(process.cwd(), 'node_modules', pkg, 'dist', 'index.js');
+  if (!fs.existsSync(entry)) return { command, args };
+  const rest = hasFlag ? args.slice(2) : args.slice(1);
+  return { command: 'node', args: [entry, ...rest] };
 }
 
 export interface MCPServerConfig {
@@ -62,7 +82,7 @@ class MCPService extends EventEmitter {
     try {
       const docs = await MCPServer.find().lean();
       for (const doc of docs) {
-        this.servers.set(doc.id, {
+        const config: MCPServerConfig = {
           id: doc.id,
           name: doc.name,
           description: doc.description,
@@ -73,7 +93,18 @@ class MCPService extends EventEmitter {
           env: doc.env,
           enabled: doc.enabled,
           status: 'disconnected',
-        });
+        };
+        // 规范化 stdio 命令（npx -> node，仅当包已预装）；变更后写回 DB，保证持久一致
+        const norm = normalizeStdioCommand(config.command, config.args);
+        if (norm.command !== config.command || norm.args !== config.args) {
+          logger.info('mcp', `规范化为 node 命令: ${config.name} (${config.command} -> node)`);
+          config.command = norm.command;
+          config.args = norm.args;
+          this.servers.set(config.id, config);
+          await this.persist(config.id);
+        } else {
+          this.servers.set(config.id, config);
+        }
       }
       logger.info('mcp', `Loaded ${docs.length} MCP server config(s) from database`);
     } catch (err: any) {
@@ -193,8 +224,11 @@ class MCPService extends EventEmitter {
     } catch (err: any) {
       config.status = 'error';
       this.servers.set(id, config);
-      logger.error('mcp', `MCP connect failed: ${config.name}`, err.message);
-      throw err;
+      const detail = err?.code === 'ENOENT'
+        ? `命令 "${config.command}" 无法执行（${err.message}）。该 MCP 服务可能未安装或在当前运行环境中不可用。`
+        : (err?.message || String(err));
+      logger.error('mcp', `MCP connect failed: ${config.name}`, err?.message);
+      throw new Error(`MCP 连接失败（${config.name}）：${detail}`);
     }
   }
 
