@@ -69,6 +69,23 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
 
 // ── 工作流 CRUD ──────────────────────────────────────
 
+/** 兼容 /list 别名（避免被 /:id 匹配为 ObjectId） */
+router.get('/list', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { category, page = 1, limit = 20 } = req.query;
+    const filter: any = { owner: req.user!.id };
+    if (category) filter.category = category;
+    const total = await Workflow.countDocuments(filter);
+    const items = await Workflow.find(filter)
+      .sort({ updatedAt: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .select('-nodes.__v')
+      .lean();
+    res.json({ success: true, data: { items, total, page: Number(page), limit: Number(limit) } });
+  } catch (err) { sendError(res, err); }
+});
+
 /** 获取当前用户的工作流列表 */
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {

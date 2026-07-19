@@ -1,0 +1,1 @@
+{"version":3,"file":"RelayConfig.d.ts","sourceRoot":"","sources":["../../src/models/RelayConfig.ts"],"names":[],"mappings":"AAAA,OAAO,QAAQ,EAAE,EAAU,QAAQ,EAAE,MAAM,UAAU,CAAC;AAEtD,uCAAuC;AACvC,MAAM,WAAW,YAAa,SAAQ,QAAQ;IAC5C,GAAG,EAAE,MAAM,CAAC;IACZ,KAAK,EAAE,MAAM,CAAC;CACf;AAOD,eAAO,MAAM,WAAW;;;;OAAiE,CAAC"}

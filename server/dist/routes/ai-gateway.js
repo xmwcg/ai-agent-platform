@@ -1,0 +1,48 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * AI 网关路由（OmniRoute 风格统一入口）
+ *   GET  /api/gateway/providers   列出网关 provider 及配置状态
+ *   POST /api/gateway/chat        统一对话入口（前缀寻址 + fallback）
+ */
+const express_1 = require("express");
+const logger_1 = require("../lib/logger");
+const http_error_1 = require("../lib/http-error");
+const ai_gateway_service_1 = require("../gateway/ai-gateway.service");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+router.get("/", (_req, res) => {
+    res.json({
+        success: true,
+        data: {
+            capabilities: [
+                { type: "chat", label: "AI对话", path: "/api/gateway/chat", method: "POST", desc: "调用已配置的AI模型进行对话" },
+                { type: "models", label: "模型列表", path: "/api/gateway/models", desc: "获取所有可用模型" },
+                { type: "providers", label: "厂商列表", path: "/api/gateway/providers", desc: "获取已配置的AI厂商" },
+            ],
+        },
+    });
+});
+router.get('/providers', (req, res) => {
+    res.json({ ok: true, providers: (0, ai_gateway_service_1.listGatewayProviders)() });
+});
+/** 全部可选模型（内置 + 第三方自定义），供前端模型选择器 */
+router.get('/models', (req, res) => {
+    res.json({ ok: true, data: (0, ai_gateway_service_1.listGatewayModels)() });
+});
+router.post('/chat', auth_1.optionalAuth, async (req, res) => {
+    try {
+        const { model, messages, temperature, maxTokens, provider } = req.body || {};
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({ ok: false, error: 'messages 不能为空' });
+        }
+        const result = await (0, ai_gateway_service_1.route)({ model, messages, temperature, maxTokens, provider });
+        res.json({ ok: true, ...result });
+    }
+    catch (e) {
+        logger_1.logger.error('ai-gateway', '聊天请求失败: ' + (e instanceof Error ? e.message : String(e)));
+        (0, http_error_1.sendError)(res, e);
+    }
+});
+exports.default = router;
+//# sourceMappingURL=ai-gateway.js.map

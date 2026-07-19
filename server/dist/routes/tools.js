@@ -1,0 +1,147 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const translation_service_1 = require("../services/translation.service");
+const plan_generator_service_1 = require("../services/plan-generator.service");
+const file_convert_service_1 = require("../services/file-convert.service");
+const media_gen_service_1 = require("../services/media-gen.service");
+const auth_1 = require("../middleware/auth");
+const subscription_1 = require("../middleware/subscription");
+const http_error_1 = require("../lib/http-error");
+const router = (0, express_1.Router)();
+// ─── 根路由：返回工具箱能力和入口 ───
+router.get('/', (_req, res) => {
+    res.json({
+        success: true,
+        data: {
+            capabilities: [
+                { type: 'translate', label: '翻译', path: '/api/tools/translate', desc: '支持多语言翻译与语言检测' },
+                { type: 'plan', label: '方案生成', path: '/api/tools/plan', desc: '根据主题和需求生成专业方案' },
+                { type: 'convert', label: '文件转换', path: '/api/tools/convert', desc: '多格式文件转换（文本/代码/表格）' },
+                { type: 'media', label: '媒体生成', path: '/api/tools/media', desc: '文生图、图生图、文生视频、图生视频' },
+            ],
+        },
+    });
+});
+// ============ 翻译 ============
+router.get('/translate/languages', (req, res) => {
+    res.json({ success: true, data: translation_service_1.translationService.getSupportedLanguages() });
+});
+router.post('/translate', auth_1.optionalAuth, (0, subscription_1.enforceQuota)('translate'), async (req, res) => {
+    try {
+        const { text, targetLang, sourceLang } = req.body;
+        if (!text || !targetLang) {
+            return res.status(400).json({ success: false, error: '文本与目标语言必填' });
+        }
+        const result = await translation_service_1.translationService.translate(text, targetLang, sourceLang);
+        if (req.user?.id)
+            await (0, subscription_1.quotaIncrement)(req.user.id, 'translate');
+        res.json({ success: true, data: result });
+    }
+    catch (err) {
+        (0, http_error_1.sendError)(res, err);
+    }
+});
+// ============ 方案生成 ============
+router.post('/plan', auth_1.optionalAuth, (0, subscription_1.enforceQuota)('plan_generate'), async (req, res) => {
+    try {
+        const { topic, type, audience, length, requirements } = req.body;
+        if (!topic)
+            return res.status(400).json({ success: false, error: '方案主题必填' });
+        const result = await plan_generator_service_1.planGeneratorService.generate({ topic, type, audience, length, requirements });
+        if (req.user?.id)
+            await (0, subscription_1.quotaIncrement)(req.user.id, 'plan_generate');
+        res.json({ success: true, data: result });
+    }
+    catch (err) {
+        (0, http_error_1.sendError)(res, err);
+    }
+});
+// ============ 文件转换 ============
+router.get('/convert/formats', (req, res) => {
+    res.json({ success: true, data: (0, file_convert_service_1.getSupportedConversionList)() });
+});
+router.post('/convert', auth_1.optionalAuth, (0, subscription_1.enforceQuota)('file_convert'), async (req, res) => {
+    try {
+        const { fileName, sourceFormat, targetFormat, content } = req.body;
+        if (!fileName || !sourceFormat || !targetFormat) {
+            return res.status(400).json({ success: false, error: '缺少必要字段' });
+        }
+        const result = await file_convert_service_1.fileConvertService.convert(fileName, sourceFormat, targetFormat, content);
+        if (req.user?.id)
+            await (0, subscription_1.quotaIncrement)(req.user.id, 'file_convert');
+        res.json({ success: true, data: result });
+    }
+    catch (err) {
+        (0, http_error_1.sendError)(res, err);
+    }
+});
+// ============ 媒体生成（图生图 / 文生视频 / 图生视频） ============
+const MEDIA_TYPES = ['image2image', 'text2video', 'image2video'];
+router.post('/media', auth_1.optionalAuth, (0, subscription_1.enforceQuota)('media_gen'), async (req, res) => {
+    try {
+        const { type, prompt, imageBase64, negativePrompt, duration, size, style, provider } = req.body;
+        if (!MEDIA_TYPES.includes(type)) {
+            return res.status(400).json({ success: false, error: '不支持的媒体类型' });
+        }
+        const result = await media_gen_service_1.mediaGenService.generate({ type, prompt, imageBase64, negativePrompt, duration, size, style, provider });
+        if (req.user?.id)
+            await (0, subscription_1.quotaIncrement)(req.user.id, 'media_gen');
+        res.json({ success: true, data: result });
+    }
+    catch (err) {
+        (0, http_error_1.sendError)(res, err);
+    }
+});
+router.get('/media/types', (req, res) => {
+    res.json({
+        success: true,
+        data: [
+            { type: 'text2img', label: '文生图', desc: '根据文本描述生成图像（HY-Image 免费额度）' },
+            { type: 'image2image', label: '图生图', desc: '基于参考图生成风格化图像（HY-Image 免费额度）' },
+            { type: 'text2video', label: '文生视频', desc: '根据文本描述生成短视频' },
+            { type: 'image2video', label: '图生视频', desc: '将静态图转化为动态视频' },
+        ],
+    });
+});
+// 厂商配置状态（前端据此提示用户配置密钥）
+router.get('/media/providers', (_req, res) => {
+    res.json({ success: true, data: (0, media_gen_service_1.listMediaProviders)() });
+});
+// 异步任务状态轮询（视频/图像生成提交后调用）
+router.get('/media/task/:provider/:taskId', auth_1.optionalAuth, async (req, res) => {
+    try {
+        const provider = req.params.provider;
+        const { taskId } = req.params;
+        if (!['mock', 'hunyuan', 'keling', 'jimeng', 'moneyprinterturbo', 'agnes'].includes(provider)) {
+            return res.status(400).json({ success: false, error: '不支持的厂商' });
+        }
+        if (process.env.NODE_ENV === 'production' && provider === 'mock') {
+            return res.status(400).json({
+                success: false,
+                error: '生产环境禁止查询 Mock 媒体任务',
+                code: 'MEDIA_MOCK_DISABLED',
+            });
+        }
+        const result = await media_gen_service_1.mediaGenService.queryTask(provider, taskId);
+        res.json({ success: true, data: result });
+    }
+    catch (err) {
+        (0, http_error_1.sendError)(res, err);
+    }
+});
+// ============ 下载真实转换产物 ============
+router.get('/convert/download', async (req, res) => {
+    const id = req.query.id;
+    const fallbackName = req.query.name || 'result';
+    const item = id ? await (0, file_convert_service_1.getStoredConversion)(id) : undefined;
+    if (!item) {
+        return res.status(404).json({ success: false, error: '转换产物不存在或已过期（10 分钟有效期）' });
+    }
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(item.name)}"`);
+    res.setHeader('Content-Type', item.ctype || 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(Buffer.from(item.content, 'utf8'));
+});
+exports.default = router;
+//# sourceMappingURL=tools.js.map

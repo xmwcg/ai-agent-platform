@@ -1,0 +1,374 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+/**
+ * 技能路由（agency-agents 名册的可发现入口 + 用户技能/外部市场扩展）
+ * ----------------------------------------------------------------
+ *  GET /api/skills                 列出全部内置技能（含 manifest）
+ *  GET /api/skills/market          列出可上架开放 API 市场的技能
+ *  GET /api/skills/mine            列出当前用户上传/安装的技能（需登录）
+ *  GET /api/skills/catalog         外部技能市场「精选目录」（公开）
+ *  POST /api/skills/import         导入声明式技能包（JSON，需登录）
+ *  POST /api/skills/catalog/:id/install  一键安装外部目录条目（需登录）
+ *  GET /api/skills/export/:id      导出技能为 JSON 包（?download=1 下载）
+ *  GET /api/skills/:id             技能详情（内置或用户技能）
+ *  POST /api/skills/:id/invoke     调用技能（经配额网关 + 团队 RBAC 守卫）
+ *  DELETE /api/skills/:id          删除自己的用户技能（需登录）
+ */
+const express_1 = require("express");
+const http_error_1 = require("../lib/http-error");
+const registry_1 = require("../skills/registry");
+const subscription_1 = require("../middleware/subscription");
+const auth_1 = require("../middleware/auth");
+const UserSkill_1 = require("../models/UserSkill");
+const mcp_service_1 = require("../services/mcp.service");
+const workflow_engine_service_1 = require("../services/workflow-engine.service");
+const ai_gateway_service_1 = require("../gateway/ai-gateway.service");
+const external_market_1 = require("../skills/external-market");
+const package_types_1 = require("../skills/package-types");
+const router = (0, express_1.Router)();
+// ── 工具函数 ────────────────────────────────────────────
+/** 把 {{var}} 占位符用调用入参替换；无模板时退化为取常见字段 */
+function render(tpl, input) {
+    if (!tpl) {
+        const v = input?.text ?? input?.input ?? input?.query ?? input?.message;
+        if (v !== undefined)
+            return String(v);
+        return typeof input === 'object' ? JSON.stringify(input) : String(input ?? '');
+    }
+    return tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => {
+        const v = input?.[key];
+        return v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v);
+    });
+}
+/** 渲染 MCP 工具入参模板（仅对字符串值做占位符替换） */
+function renderArgs(tpl, input) {
+    if (!tpl)
+        return { ...input };
+    const out = {};
+    for (const [k, v] of Object.entries(tpl)) {
+        out[k] = typeof v === 'string' ? render(v, input) : v;
+    }
+    return out;
+}
+/** 用户技能 → 前端 manifest（附带 kind/source 标记） */
+function toManifest(us) {
+    return {
+        id: us.skillId,
+        name: us.name,
+        description: us.description,
+        division: us.division,
+        color: us.color,
+        coreMission: us.coreMission,
+        criticalRules: us.criticalRules,
+        successMetrics: us.successMetrics,
+        minRole: us.minRole,
+        requireAuth: us.requireAuth,
+        marketable: us.marketable,
+        kind: us.kind,
+        source: 'user',
+        tags: us.tags || [],
+    };
+}
+/** 执行用户技能（prompt 走 AI 网关 / mcp 委托 MCP 服务 / workflow 委托工作流引擎） */
+async function runUserSkill(us, ctx) {
+    if (us.kind === 'prompt') {
+        const userMsg = render(us.prompt?.userTemplate, ctx.input);
+        const r = await (0, ai_gateway_service_1.route)({
+            messages: [
+                { role: 'system', content: us.prompt?.system || '' },
+                { role: 'user', content: userMsg },
+            ],
+            maxTokens: us.prompt?.maxTokens ?? 800,
+            temperature: us.prompt?.temperature ?? 0.5,
+        });
+        return { ok: true, data: { reply: r.reply } };
+    }
+    if (us.kind === 'mcp') {
+        const srv = mcp_service_1.mcpService.getServer(us.mcp.serverId);
+        if (!srv)
+            return { ok: false, error: `引用的 MCP 服务器不存在：${us.mcp.serverId}` };
+        if (srv.status !== 'connected') {
+            try {
+                await mcp_service_1.mcpService.connect(us.mcp.serverId);
+            }
+            catch (e) {
+                return { ok: false, error: `MCP 连接失败：${e.message}` };
+            }
+        }
+        const args = renderArgs(us.mcp.argsTemplate, ctx.input);
+        const res = await mcp_service_1.mcpService.callTool(us.mcp.serverId, us.mcp.tool, args);
+        return { ok: true, data: res };
+    }
+    if (us.kind === 'workflow') {
+        const result = await workflow_engine_service_1.workflowEngine.execute(us.workflow.workflowId, ctx.input, ctx.userId);
+        return { ok: true, data: result };
+    }
+    return { ok: false, error: '未知技能类型' };
+}
+/** 配额中间件包裹为 Promise（超限时写入响应并 headersSent，便于提前返回） */
+function guardQuota(q, req, res) {
+    return new Promise((resolve) => (0, subscription_1.enforceQuota)(q)(req, res, () => resolve()));
+}
+// ── 路由（注意顺序：固定路径须位于 /:id 之前） ──────────
+router.get('/', (_req, res) => {
+    res.json({
+        ok: true,
+        count: (0, registry_1.listSkills)().length,
+        divisions: Array.from(new Set((0, registry_1.listSkills)().map((s) => s.manifest.division))),
+        skills: (0, registry_1.listSkills)().map((s) => s.manifest),
+    });
+});
+router.get('/market', (_req, res) => {
+    res.json({ ok: true, skills: (0, registry_1.listMarketableSkills)().map((s) => s.manifest) });
+});
+// 当前用户上传/安装的技能
+router.get('/mine', auth_1.requireAuth, async (req, res) => {
+    const list = await UserSkill_1.UserSkill.find({ owner: req.user.id });
+    res.json({ ok: true, skills: list.map(toManifest) });
+});
+// 外部技能市场精选目录（公开）
+router.get('/catalog', (_req, res) => {
+    const catalog = (0, external_market_1.getCatalog)().map((e) => ({
+        id: e.id,
+        name: e.name,
+        source: e.source,
+        kind: e.kind,
+        category: e.category,
+        description: e.description,
+        officialUrl: e.officialUrl,
+        installHint: e.installHint,
+    }));
+    res.json({ ok: true, catalog });
+});
+// 导入声明式技能包
+router.post('/import', auth_1.requireAuth, async (req, res) => {
+    try {
+        const b = req.body;
+        let pkgs = [];
+        if (Array.isArray(b))
+            pkgs = b;
+        else if (Array.isArray(b?.skills))
+            pkgs = b.skills;
+        else if (Array.isArray(b?.packages))
+            pkgs = b.packages;
+        else if (b && b.manifest)
+            pkgs = [b];
+        if (pkgs.length === 0) {
+            return res.status(400).json({ ok: false, error: '未识别到技能包（需要 { schema, manifest } 对象或数组）' });
+        }
+        const imported = [];
+        for (const pkg of pkgs) {
+            const m = pkg?.manifest;
+            if (!m?.id || !m?.name) {
+                return res.status(400).json({ ok: false, error: '技能包缺少 manifest.id 或 manifest.name' });
+            }
+            const skillId = (0, package_types_1.sanitizeSkillId)(m.id);
+            await UserSkill_1.UserSkill.updateOne({ skillId, owner: req.user.id }, {
+                skillId,
+                owner: req.user.id,
+                name: m.name,
+                description: m.description || '',
+                division: m.division || 'productivity',
+                color: m.color || '#6366f1',
+                coreMission: m.coreMission || '',
+                criticalRules: m.criticalRules || [],
+                successMetrics: m.successMetrics || [],
+                minRole: m.minRole || 'none',
+                requireAuth: m.requireAuth ?? true,
+                marketable: m.marketable ?? false,
+                tags: m.tags || [],
+                isPublic: m.isPublic ?? false,
+                kind: pkg.kind || 'prompt',
+                prompt: pkg.prompt,
+                mcp: pkg.mcp,
+                workflow: pkg.workflow,
+            }, { upsert: true });
+            imported.push({ id: skillId, name: m.name });
+        }
+        res.json({ ok: true, imported: imported.length, skills: imported });
+    }
+    catch (e) {
+        (0, http_error_1.sendError)(res, e);
+    }
+});
+// 一键安装外部目录条目
+router.post('/catalog/:id/install', auth_1.requireAuth, async (req, res) => {
+    const entry = (0, external_market_1.getCatalogEntry)(req.params.id);
+    if (!entry)
+        return res.status(404).json({ ok: false, error: '目录条目不存在' });
+    try {
+        if (entry.kind === 'link') {
+            return res.json({ ok: true, type: 'link', message: '已打开外部市场链接', url: entry.officialUrl });
+        }
+        if (entry.kind === 'mcp' && entry.mcpConfig) {
+            await mcp_service_1.mcpService.registerServer(entry.mcpConfig);
+            return res.json({
+                ok: true,
+                type: 'mcp',
+                message: `已安装 MCP 服务器：${entry.name}`,
+                data: entry.mcpConfig,
+                hint: entry.installHint,
+            });
+        }
+        if (entry.kind === 'skill' && entry.skillPackage) {
+            const pkg = entry.skillPackage;
+            pkg.manifest.id = (0, package_types_1.sanitizeSkillId)(pkg.manifest.id);
+            const m = pkg.manifest;
+            await UserSkill_1.UserSkill.updateOne({ skillId: pkg.manifest.id, owner: req.user.id }, {
+                skillId: pkg.manifest.id,
+                owner: req.user.id,
+                name: m.name,
+                description: m.description || '',
+                division: m.division || 'productivity',
+                color: m.color || '#6366f1',
+                coreMission: m.coreMission || '',
+                criticalRules: m.criticalRules || [],
+                successMetrics: m.successMetrics || [],
+                minRole: m.minRole || 'none',
+                requireAuth: m.requireAuth ?? true,
+                marketable: m.marketable ?? false,
+                tags: m.tags || [],
+                isPublic: m.isPublic ?? false,
+                kind: pkg.kind || 'prompt',
+                prompt: pkg.prompt,
+                mcp: pkg.mcp,
+                workflow: pkg.workflow,
+            }, { upsert: true });
+            return res.json({ ok: true, type: 'skill', message: `已安装技能：${entry.name}`, id: pkg.manifest.id });
+        }
+        return res.status(400).json({ ok: false, error: '该条目暂不支持一键安装' });
+    }
+    catch (e) {
+        (0, http_error_1.sendError)(res, e);
+    }
+});
+// 导出技能为 JSON 包
+router.get('/export/:id', auth_1.optionalAuth, async (req, res) => {
+    const id = req.params.id;
+    let pkg = null;
+    const builtin = (0, registry_1.getSkill)(id);
+    if (builtin) {
+        const m = builtin.manifest;
+        pkg = { schema: 'reasonix.skill/1.0', manifest: { ...m }, kind: 'prompt' };
+    }
+    else {
+        const us = await UserSkill_1.UserSkill.findOne({ skillId: id });
+        if (!us)
+            return res.status(404).json({ ok: false, error: '技能不存在' });
+        if (!us.isPublic && (!req.user || req.user.id !== us.owner)) {
+            return res.status(403).json({ ok: false, error: '无权限导出该技能' });
+        }
+        pkg = {
+            schema: 'reasonix.skill/1.0',
+            manifest: {
+                id: us.skillId,
+                name: us.name,
+                description: us.description,
+                division: us.division,
+                color: us.color,
+                coreMission: us.coreMission,
+                criticalRules: us.criticalRules,
+                successMetrics: us.successMetrics,
+                minRole: us.minRole,
+                requireAuth: us.requireAuth,
+                marketable: us.marketable,
+                tags: us.tags,
+                isPublic: us.isPublic,
+            },
+            kind: us.kind,
+            prompt: us.prompt,
+            mcp: us.mcp,
+            workflow: us.workflow,
+        };
+    }
+    if (req.query.download === '1') {
+        res.setHeader('Content-Disposition', `attachment; filename="${id}.json"`);
+        res.setHeader('Content-Type', 'application/json');
+        return res.send(JSON.stringify(pkg, null, 2));
+    }
+    res.json({ ok: true, package: pkg });
+});
+// 技能详情（内置或用户技能）
+router.get('/:id', async (req, res) => {
+    const builtin = (0, registry_1.getSkill)(req.params.id);
+    if (builtin)
+        return res.json({ ok: true, skill: builtin.manifest });
+    const us = await UserSkill_1.UserSkill.findOne({ skillId: req.params.id });
+    if (!us)
+        return res.status(404).json({ ok: false, error: '技能不存在' });
+    res.json({
+        ok: true,
+        skill: toManifest(us),
+        detail: { kind: us.kind, prompt: us.prompt, mcp: us.mcp, workflow: us.workflow },
+    });
+});
+// 调用技能
+router.post('/:id/invoke', auth_1.optionalAuth, async (req, res) => {
+    try {
+        const builtin = (0, registry_1.getSkill)(req.params.id);
+        if (builtin) {
+            if (builtin.manifest.invokable === false) {
+                return res.status(501).json({
+                    ok: false,
+                    code: 'SKILL_NOT_INVOKABLE',
+                    error: '该能力仅通过专用业务接口提供，通用技能调用入口未开放',
+                });
+            }
+            if (builtin.manifest.requireAuth && !req.user) {
+                return res.status(401).json({ ok: false, error: '该技能需要登录' });
+            }
+            if (builtin.manifest.quotaResource) {
+                await guardQuota(builtin.manifest.quotaResource, req, res);
+                if (res.headersSent)
+                    return;
+            }
+            const result = await builtin.invoke({
+                userId: req.user?.id,
+                teamId: req.body?.teamId,
+                role: req.body?.role,
+                input: req.body || {},
+            });
+            if (!result.ok) {
+                return res.status(result.status || 422).json({
+                    ok: false,
+                    code: result.code || 'SKILL_INVOCATION_FAILED',
+                    error: result.error || '技能执行失败',
+                });
+            }
+            return res.json({ ok: true, result });
+        }
+        const us = await UserSkill_1.UserSkill.findOne({ skillId: req.params.id });
+        if (!us)
+            return res.status(404).json({ ok: false, error: '技能不存在' });
+        if (us.requireAuth && !req.user) {
+            return res.status(401).json({ ok: false, error: '该技能需要登录' });
+        }
+        if (us.kind === 'prompt') {
+            await guardQuota('ai_chat', req, res);
+            if (res.headersSent)
+                return;
+        }
+        else if (us.kind === 'mcp') {
+            await guardQuota('mcp_call', req, res);
+            if (res.headersSent)
+                return;
+        }
+        const result = await runUserSkill(us, { userId: req.user?.id, input: req.body || {} });
+        res.json({ ok: true, result });
+    }
+    catch (e) {
+        (0, http_error_1.sendError)(res, e);
+    }
+});
+// 删除自己的用户技能
+router.delete('/:id', auth_1.requireAuth, async (req, res) => {
+    const us = await UserSkill_1.UserSkill.findOne({ skillId: req.params.id });
+    if (!us)
+        return res.status(404).json({ ok: false, error: '技能不存在或不可删除（内置技能不可删除）' });
+    if (us.owner !== req.user.id)
+        return res.status(403).json({ ok: false, error: '只能删除自己上传的技能' });
+    await UserSkill_1.UserSkill.deleteOne({ skillId: req.params.id });
+    res.json({ ok: true, message: '已删除' });
+});
+exports.default = router;
+//# sourceMappingURL=skills.js.map
