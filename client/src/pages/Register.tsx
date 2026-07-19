@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Card, Form, Input, Button, Typography, message, Divider } from 'antd';
+import { Card, Form, Input, Button, Typography, message, Divider, Checkbox } from 'antd';
 import { MailOutlined, LockOutlined, UserOutlined } from '@ant-design/icons';
 import apiClient, { extractApiError } from '@/services/api';
 
-const { Title, Text } = Typography;
+const { Title, Text, Link: TextLink } = Typography;
 
 interface RegisterForm {
   email: string;
   password: string;
   confirm: string;
   name: string;
+  agreement: boolean;
 }
 
 export default function Register() {
@@ -23,7 +24,9 @@ export default function Register() {
       const res: any = await apiClient.post('/auth/register', {
         email: values.email,
         password: values.password,
-        name: values.name
+        name: values.name,
+        acceptTerms: true,
+        acceptPrivacy: true,
       });
       if (res.token) {
         localStorage.setItem('token', res.token);
@@ -49,7 +52,7 @@ export default function Register() {
       <Card style={{ width: 420, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <Title level={2} style={{ marginBottom: 4 }}>创建账号</Title>
-          <Text type="secondary">注册 AI Agent Platform</Text>
+          <Text type="secondary">注册 AIbak · 打造您的全栈 AI 应用平台</Text>
         </div>
 
         <Form
@@ -57,6 +60,7 @@ export default function Register() {
           onFinish={onFinish}
           layout="vertical"
           size="large"
+          initialValues={{ agreement: false }}
         >
           <Form.Item
             name="name"
@@ -79,10 +83,14 @@ export default function Register() {
             name="password"
             rules={[
               { required: true, message: '请输入密码' },
-              { min: 6, message: '密码至少 6 位' }
+              { min: 10, message: '密码至少 10 位，建议包含大小写字母和数字' },
+              {
+                pattern: /^(?=.*[a-zA-Z])(?=.*\d)/,
+                message: '密码必须包含至少一个字母和一个数字',
+              }
             ]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+            <Input.Password prefix={<LockOutlined />} placeholder="密码（至少10位，含字母和数字）" />
           </Form.Item>
 
           <Form.Item
@@ -101,6 +109,24 @@ export default function Register() {
             ]}
           >
             <Input.Password prefix={<LockOutlined />} placeholder="确认密码" />
+          </Form.Item>
+
+          <Form.Item
+            name="agreement"
+            valuePropName="checked"
+            rules={[
+              {
+                validator: (_, value) =>
+                  value ? Promise.resolve() : Promise.reject(new Error('请阅读并同意服务协议和隐私政策')),
+              },
+            ]}
+          >
+            <Checkbox>
+              我已阅读并同意{' '}
+              <TextLink href="/terms" target="_blank">《服务条款》</TextLink>
+              {' '}和{' '}
+              <TextLink href="/privacy" target="_blank">《隐私政策》</TextLink>
+            </Checkbox>
           </Form.Item>
 
           <Form.Item>
