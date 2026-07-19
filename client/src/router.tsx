@@ -116,6 +116,7 @@ const router = createBrowserRouter([
       { path: "contact", element: <ContactPage /> },
       { path: "partners", element: <JoinPage /> },
       { path: "relay-admin", element: <RelayAdminPage /> },
+      { path: "jinwangtong", element: <JinWangTongPage /> },
       { path: "metrics", element: <PublicMetricsPage /> },
       { path: "*", element: <div>404 - 页面未找到</div> }
     ]
