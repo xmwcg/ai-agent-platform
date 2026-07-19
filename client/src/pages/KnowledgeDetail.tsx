@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import apiClient, { extractApiError, toolsAPI } from '@/services/api';
 import FileConverter from '@/components/FileConverter';
+import KnowledgeAiInterpret from '@/pages/KnowledgeAiInterpret';
 import { repairKnowledgeDocument } from '@/utils/repairMojibake';
 
 const { Title, Text } = Typography;
@@ -464,12 +465,7 @@ export default function KnowledgeDetail() {
           <Divider />
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
             <Space size={16}>
-              <Button size="large" type="primary" icon={<RobotOutlined />}
-                onClick={() => navigate('/ai-chat', { state: { initialMessage: `请帮我解释以下文档：${doc?.title}` } })}
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none' }}
-              >
-                AI 解读
-              </Button>
+              {doc?.title && doc?.content && <KnowledgeAiInterpret title={doc.title} content={doc.content} />}
               <Button size="large" icon={<ShareAltOutlined />} onClick={handleShare}>分享</Button>
               <Button size="large" icon={<DownloadOutlined />} onClick={() => setConverterOpen(true)}>下载/转换</Button>
             </Space>
