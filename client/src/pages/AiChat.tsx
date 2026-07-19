@@ -57,14 +57,25 @@ export default function AiChat() {
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const messages = activeSession?.messages || [];
 
-  // 自动滚动到底部（首次挂载跳过，避免覆盖路由级回顶）
-  const chatMountedRef = useRef(false);
+  // 自动滚动到底部（用户手动上滚时暂停自动跟随）
+  const userScrolledUpRef = useRef(false);
   useEffect(() => {
-    if (!chatMountedRef.current) { chatMountedRef.current = true; return; }
-    // 仅滚动聊天消息容器，不滚动页面
     const container = messagesContainerRef.current;
-    if (container) container.scrollTop = container.scrollHeight;
+    if (!container) return;
+    if (userScrolledUpRef.current) return;
+    container.scrollTop = container.scrollHeight;
   }, [messages, loading]);
+  // 监听用户手动滚动
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const t = container;
+      userScrolledUpRef.current = (t.scrollHeight - t.scrollTop - t.clientHeight) > 80;
+    };
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
   useEffect(() => {
     if (!activeSessionId && sessions.length === 0) {
       createSession();
