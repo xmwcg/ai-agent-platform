@@ -212,6 +212,9 @@ export const useChatStore = create<ChatState>()(
         if (!persisted || persisted.version === 2) return persisted;
         const cleanModel = (m: string) => {
           if (!m) return m;
+          // Remove mc_<mongodbId>/ prefix from old format
+          m = m.replace(/^mc_[a-f0-9]+\//, "");
+          // Replace deprecated model names
           m = m.replace(/deepseek-chat/g, "deepseek-v4-flash");
           m = m.replace(/deepseek-coder/g, "deepseek-v4-flash");
           return m;
