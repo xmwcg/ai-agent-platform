@@ -29,20 +29,6 @@ COPY --chown=node:node package.json package-lock.json ./
 COPY --from=build --chown=node:node /usr/src/app/node_modules ./node_modules
 COPY --from=build --chown=node:node /usr/src/app/dist ./dist
 
-# Install mongodb tools for backup/restore
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends gnupg curl \
-  && curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg \
-  && echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] http://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends mongodb-database-tools \
-  && apt-get purge -y gnupg curl \
-  && apt-get autoremove -y \
-  && rm -rf /var/lib/apt/lists/*
-
-# The production process only needs the Node runtime. Removing npm/npx also removes
-# npm's bundled dependency tree from the attack surface (including packages that
-# are irrelevant to the application but still reported by image scanners).
 RUN mkdir -p /usr/src/app/.cache/assets \
   && mkdir -p /usr/src/app/uploads \
   && rm -rf /usr/local/lib/node_modules/npm \
