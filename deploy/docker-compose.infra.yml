@@ -1,0 +1,89 @@
+#!/bin/bash
+# AIbak 生产 compose 增强版：包含基础设施容器配置
+# 
+# 使用方式（仅 watcher/部署脚本使用）：
+# APP_COMMIT_SHA=xxx SERVER_IMAGE=xxx CLIENT_IMAGE=xxx \
+# PRODUCTION_ENV_FILE=/etc/aibak/server.env \
+# NGINX_RUNTIME_CONFIG=/opt/ai-agent-platform/deploy/nginx-runtime.conf \
+# docker compose -f docker-compose.production.yml -f docker-compose.infra.yml up -d
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: ai-platform-mongodb
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - ai-platform-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-platform-redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-platform-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  sandbox-executor:
+    image: aibak-sandbox-executor:latest
+    container_name: sandbox-executor
+    restart: always
+    environment:
+      SANDBOX_AUTH_TOKEN: sandbox-secret-token-aibak-2026
+      SANDBOX_PORT: "4090"
+      MAX_TIMEOUT_MS: "10000"
+      MAX_MEMORY_MB: "256"
+      MAX_CPU_SHARES: "0.5"
+      MAX_PIDS: "64"
+      MAX_OUTPUT_BYTES: "65536"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox_tmp:/opt/sandbox-executor/tmp
+    networks:
+      - ai-platform-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "const h=require('http');h.get('http://127.0.0.1:4090/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+networks:
+  ai-platform-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:
+  sandbox_tmp:
+  server_uploads:
