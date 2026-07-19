@@ -74,7 +74,7 @@ export default function ChatMessageBubble({ msg }: Props) {
           </Text>
           {msg.model && (
             <Text type="secondary" style={{ fontSize: 11 }}>
-              {msg.model}
+              {msg.model.replace(/^mc_[^/]+\//, "")}
             </Text>
           )}
           {!isUser && (
