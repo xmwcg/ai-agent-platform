@@ -30,9 +30,6 @@ services:
       timeout: 4s
       retries: 3
       start_period: 10s
-networks:
-      - ai-platform-network
-    # 安全加固：不对外暴露端口，仅 docker 内网可访问
 
   redis:
     image: redis:7-alpine
