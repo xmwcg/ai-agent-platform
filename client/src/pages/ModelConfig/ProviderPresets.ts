@@ -74,7 +74,7 @@ export const PROVIDER_PRESETS: ModelProvider[] = [
     id: 'deepseek', name: 'DeepSeek', category: 'domestic',
     apiBaseUrl: 'https://api.deepseek.com/v1',
     apiKeyPlaceholder: 'sk-...',
-    models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     description: '国产开源旗舰，代码与推理能力领先',
     capabilities: { reasoning: true, vision: false, image: false },
     supportsAutoFetch: true,

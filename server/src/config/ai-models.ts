@@ -92,8 +92,8 @@ export class AIModelManager {
         name: 'OpenAI',
         baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
         apiKey: process.env.OPENAI_API_KEY,
-        models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-        defaultModel: 'gpt-4o',
+        models: ['gpt-4.1', 'gpt-4.1-mini', 'o4-mini'],
+        defaultModel: 'gpt-4.1',
         enabled: true
       });
     }

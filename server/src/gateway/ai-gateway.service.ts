@@ -33,7 +33,7 @@ export type GatewayProviderName =
   | 'agnes';
 
 export interface ChatRouteRequest {
-  /** 支持前缀寻址，如 "hunyuan/hunyuan-pro" 或 "deepseek/deepseek-chat"；缺省走策略选择 */
+  /** 支持前缀寻址，如 "hunyuan/hunyuan-pro" 或 "deepseek/deepseek-v4-flash"；缺省走策略选择 */
   model?: string;
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
   temperature?: number;
@@ -328,7 +328,7 @@ export async function route(req: ChatRouteRequest): Promise<ChatRouteResult> {
     target = ALL.find((p) => p.name === req.provider && p.isConfigured());
   }
 
-  // 2. 前缀寻址（如 "deepseek/deepseek-chat" 或 "mc_abc/glm-4"）
+  // 2. 前缀寻址（如 "deepseek/deepseek-v4-flash" 或 "mc_abc/glm-4"）
   if (!target && req.model) {
     target = ALL.find((p) => p.isConfigured() && p.owns(req.model!));
   }

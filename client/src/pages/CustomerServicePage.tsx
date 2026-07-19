@@ -74,12 +74,12 @@ const CustomerServicePage: React.FC = () => {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
-    form.setFieldsValue({ model: 'deepseek/deepseek-chat', enabled: true });
+    form.setFieldsValue({ model: 'deepseek/deepseek-v4-flash', enabled: true });
     setModalOpen(true);
   };
   const openEdit = (rec: CSBot) => {
     setEditing(rec);
-    // csModel 现存储完整网关模型串（如 deepseek/deepseek-chat 或 mc_<id>/glm-4）
+    // csModel 现存储完整网关模型串（如 deepseek/deepseek-v4-flash 或 mc_<id>/glm-4）
     const full = rec.csModel?.includes('/') ? rec.csModel : `${rec.provider}/${rec.csModel}`;
     form.setFieldsValue({ ...rec, model: full });
     setModalOpen(true);
