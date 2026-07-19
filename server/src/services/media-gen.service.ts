@@ -7,7 +7,6 @@ import { MockProvider } from './media-providers/mock.provider';
 import { CloudbaseImageProvider } from './media-providers/cloudbase.provider';
 import { HunyuanProvider } from './media-providers/hunyuan.provider';
 import { TongyiProvider } from './media-providers/tongyi.provider';
-import { AgneProvider } from './media-providers/agne.provider';
 import { KelingProvider } from './media-providers/keling.provider';
 import { JimengProvider } from './media-providers/jimeng.provider';
 import { MoneyPrinterTurboProvider } from './media-providers/moneyprinterturbo.provider';
@@ -37,7 +36,6 @@ export {
   KelingProvider,
   JimengProvider,
   TongyiProvider,
-  AgneProvider,
 };
 
 const PROVIDERS: Record<MediaProviderName, MediaProvider> = {
