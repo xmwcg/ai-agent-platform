@@ -12,9 +12,9 @@ import {
 
 /**
  * 对接 harry0703/MoneyPrinterTurbo（FastAPI 服务，默认 http://127.0.0.1:8080）。
- * 真实 API 契约（已对照 app/controllers/v1/video.py 与 app/models/const.py 核对）：
- *  - POST /videos  → 请求体为 VideoParams；响应信封 {status,message,data:{task_id}}
- *  - GET  /tasks/{task_id} → 响应信封 {status,message,data:{task_id,state,videos:[...],...}}
+ * 真实 API 契约（已对照 app/controllers/v1/video.py 与 app/models/const.py 核对，MPT v1.3.2）：
+ *  - POST /api/v1/videos  → 请求体为 VideoParams；响应信封 {status,message,data:{task_id}}
+ *  - GET  /api/v1/tasks/{task_id} → 响应信封 {status,message,data:{task_id,state,videos:[...],...}}
  *    state 为整数：1=完成, -1=失败, 其余(含 4=处理中)视为进行中
  *    videos 为成片 URI 数组；若 MPT 配置了 endpoint 则为绝对 URL，否则为 /tasks/... 相对路径
  * 注：MPT 默认关闭鉴权（verify_token 已注释），调用方只需能访问其地址；
@@ -73,8 +73,8 @@ class MoneyPrinterTurboProvider implements MediaProvider {
         body.voice_name = params.style;
       }
 
-      // MoneyPrinterTurbo 真实端点：POST /videos
-      const resp = await axios.post(`${this.baseURL}/videos`, body, { timeout: 15000 });
+      // MoneyPrinterTurbo 真实端点：POST /api/v1/videos
+      const resp = await axios.post(`${this.baseURL}/api/v1/videos`, body, { timeout: 15000 });
       const jobId = String(resp.data?.data?.task_id || taskId);
       const result: MediaGenResult = {
         type: 'text2video',
@@ -114,9 +114,9 @@ class MoneyPrinterTurboProvider implements MediaProvider {
   }
   async queryTask(taskId: string): Promise<MediaGenResult> {
     try {
-      // MoneyPrinterTurbo 真实端点：GET /tasks/{task_id}
+      // MoneyPrinterTurbo 真实端点：GET /api/v1/tasks/{task_id}
       const resp = await axios.get(
-        `${this.baseURL}/tasks/${encodeURIComponent(taskId)}`,
+        `${this.baseURL}/api/v1/tasks/${encodeURIComponent(taskId)}`,
         { timeout: 10000 }
       );
       const d = resp.data?.data || {};

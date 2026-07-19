@@ -17,6 +17,9 @@ lint-run*.log
 !.env.example
 !.env.production.example
 
+# MoneyPrinterTurbo 生产密钥（含真实 API key，禁止提交；仅留模板）
+deploy/mpt/config.toml
+
 # 系统
 .DS_Store
 Thumbs.db
