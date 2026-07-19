@@ -59,11 +59,17 @@ export default function AiChat() {
 
   // 自动滚动到底部（用户手动上滚时暂停自动跟随）
   const userScrolledUpRef = useRef(false);
+  const prevMsgCountRef = useRef(0);
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    if (userScrolledUpRef.current) return;
-    container.scrollTop = container.scrollHeight;
+    const currentCount = messages.length;
+    if (currentCount > prevMsgCountRef.current || loading) {
+      if (!userScrolledUpRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+    prevMsgCountRef.current = currentCount;
   }, [messages, loading]);
   // 监听用户手动滚动
   useEffect(() => {
@@ -80,6 +86,8 @@ export default function AiChat() {
     if (!activeSessionId && sessions.length === 0) {
       createSession();
     }
+    userScrolledUpRef.current = true;
+    prevMsgCountRef.current = 0;
   }, [activeSessionId, sessions.length, createSession]);
 
   // 发送消息

@@ -33,7 +33,7 @@ const DiagnosticsPage: React.FC = () => {
   const [media, setMedia] = useState<MediaP[]>([]);
   const [mockMode, setMockMode] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [paymentStatus, setPaymentStatus] = useState<any>(null);
+  const [paymentStatus, setPaymentStatus] = useState<any>({ wechat: {}, stripe: {}, alipay: {} });
   const [webhookEvents, setWebhookEvents] = useState<WebhookEvent[]>([]);
   const [webhookSummary, setWebhookSummary] = useState<any>(null);
   const [webhookLoading, setWebhookLoading] = useState(false);
@@ -55,7 +55,7 @@ const DiagnosticsPage: React.FC = () => {
         ps.alipay = ps.alipay && typeof ps.alipay === "object" ? ps.alipay : {};
       }
       setPaymentStatus(ps);
-    } catch { /* ignore */ }
+    } catch { setPaymentStatus({ wechat: {}, stripe: {}, alipay: {} }); }
     setLoading(false);
   };
 
@@ -65,7 +65,7 @@ const DiagnosticsPage: React.FC = () => {
       const res: any = await billingAPI.getWebhookEvents({ limit: 50 });
       setWebhookEvents(res?.data?.list || []);
       setWebhookSummary(res?.data?.summary || null);
-    } catch { /* ignore */ }
+    } catch { setPaymentStatus({ wechat: {}, stripe: {}, alipay: {} }); }
     setWebhookLoading(false);
   };
 

@@ -69,7 +69,11 @@ const AibakChat: React.FC = () => {
   const chatMountedRef = useRef(false);
   const scrollToBottom = useCallback(() => {
     if (chatMountedRef.current) { chatMountedRef.current = false; return; }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // use container scrollTop instead of scrollIntoView to prevent page jump
+    if (!chatMountedRef.current) {
+      const container = messagesEndRef.current?.closest(".chat-messages");
+      if (container) container.scrollTop = container.scrollHeight;
+    }
   }, []);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);

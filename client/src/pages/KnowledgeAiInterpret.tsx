@@ -138,7 +138,7 @@ export default function KnowledgeAiInterpret({ title, content }: Props) {
   const sessionIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!chatMountedRef.current) { chatMountedRef.current = true; return; }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // scroll handled by container scrollTop instead of scrollIntoView to prevent page jump
   }, [messages, loading]);
 
   // ── 文本解读：把整篇文档作为系统上下文，经 CloudBase 云函数调用免费文本模型 ──

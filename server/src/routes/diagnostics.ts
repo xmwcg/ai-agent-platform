@@ -3,7 +3,7 @@ import { checkDatabaseHealth, isUsingMemoryRedis } from '../config/database';
 import { PLANS } from '../config/billing';
 import { listMediaProviders } from '../services/media-gen.service';
 import { WebhookEvent } from '../models/WebhookEvent';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, optionalAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -35,7 +35,8 @@ router.get('/runtime-safety', (_req: Request, res: Response) => {
 });
 
 /** 环境自检：返回各项集成状态（绝不泄露密钥明文），用于部署向导/健康看板；需登录，避免暴露部署指纹 */
-router.get('/', requireAuth, async (_req: Request, res: Response) => {
+router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const isAuthenticated = !!(req.user && req.user.id);
   const health = await checkDatabaseHealth().catch(() => ({ mongodb: false, redis: false }));
   const checks = [
     { key: 'mongodb', label: 'MongoDB 数据库', ok: !!health.mongodb, tip: health.mongodb ? '' : '检查托管 MongoDB 连接和 MONGODB_URI' },
@@ -65,6 +66,8 @@ router.get('/', requireAuth, async (_req: Request, res: Response) => {
     webhookStats = null; // MongoDB 不可用时忽略
   }
 
+  // 未登录用户只返回基本健康状态（不含支付详情和Webhook统计）
+  const isAuth = !!(req.user && req.user.id);
   // 支付渠道详细状态
   const defaultProvider = process.env.DEFAULT_PAY_PROVIDER || (process.env.NODE_ENV === 'production' ? 'wechat' : 'mock');
   const mask = (s: string | undefined) => {
