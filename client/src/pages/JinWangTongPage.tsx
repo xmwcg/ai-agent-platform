@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Typography, Tabs, Card, Tag, Button, Space, Row, Col, Statistic } from 'antd';
 import {
   ShopOutlined, ScanOutlined, WifiOutlined, PrinterOutlined,
