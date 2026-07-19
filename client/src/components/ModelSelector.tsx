@@ -1,4 +1,12 @@
 import { useEffect, useState } from 'react';
+/** 清理模型显示名称（去除 mc_* 前缀） */
+function cleanModelDisplay(provider: string, model?: string): string {
+  if (!provider.startsWith('mc_')) return provider;
+  // 自定义 provider：只显示模型名
+  if (model) return model;
+  // 去掉 mc_<id> 前缀
+  return provider.replace(/^mc_[a-f0-9]+$/, '自定义模型');
+}
 import { Select, Spin } from 'antd';
 import { gatewayAPI } from '@/services/api';
 

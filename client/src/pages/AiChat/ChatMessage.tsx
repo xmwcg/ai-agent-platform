@@ -1,4 +1,15 @@
 import { useState } from 'react';
+/** 清理模型名称：去掉 mc_<providerId>/ 前缀，保留可读名称 */
+function cleanModelName(model: string): string {
+  // 去掉 mc_<mongodbId>/ 前缀
+  let cleaned = model.replace(/^mc_[a-f0-9]+\//, "");
+  // 如果还包含 provider/model 格式，只显示模型部分
+  const idx = cleaned.lastIndexOf("/");
+  if (idx >= 0 && idx < cleaned.length - 1) {
+    cleaned = cleaned.slice(idx + 1);
+  }
+  return cleaned;
+}
 import { Avatar, Typography, Button, Space, message } from 'antd';
 import { RobotOutlined, UserOutlined, CopyOutlined, DownOutlined, RightOutlined } from '@ant-design/icons';
 import { ChatMessage as ChatMessageType } from '@/stores/chat';
@@ -74,7 +85,7 @@ export default function ChatMessageBubble({ msg }: Props) {
           </Text>
           {msg.model && (
             <Text type="secondary" style={{ fontSize: 11 }}>
-              {msg.model.replace(/^mc_[^/]+\//, "")}
+              {cleanModelName(msg.model)}
             </Text>
           )}
           {!isUser && (
