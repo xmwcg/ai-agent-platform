@@ -113,7 +113,10 @@ class OpenAICompatibleProvider implements GatewayProvider {
   }
   async chat(req: ChatRouteRequest, model: string): Promise<ChatRouteResult> {
     const client = new OpenAI({ apiKey: this.apiKey, baseURL: this.baseURL });
-    const resolved = model.includes('/') ? model.split('/').slice(1).join('/') : model;
+    const rawModel = model.includes('/') ? model.split('/').slice(1).join('/') : model;
+    // Map display model names to actual API model names
+    const MODEL_MAP: Record<string, string> = { 'deepseek-v4-pro': 'deepseek-reasoner', 'deepseek-v4-flash': 'deepseek-chat' };
+    const resolved = MODEL_MAP[rawModel] || rawModel;
     const completion = await client.chat.completions.create({
       model: resolved,
       messages: req.messages as any,
@@ -123,7 +126,7 @@ class OpenAICompatibleProvider implements GatewayProvider {
     return {
       reply: completion.choices[0]?.message?.content || '',
       provider: this.name,
-      model: resolved,
+      model: resolved, // display name (not api model)
       usage: completion.usage,
     };
   }
@@ -225,7 +228,7 @@ function buildProviders(): GatewayProvider[] {
   if (process.env.ANTHROPIC_API_KEY)
     list.push(new OpenAICompatibleProvider('anthropic', 'Anthropic', 'https://api.anthropic.com/v1', process.env.ANTHROPIC_API_KEY, 'anthropic', ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']));
   if (process.env.DEEPSEEK_API_KEY)
-    list.push(new OpenAICompatibleProvider('deepseek', 'DeepSeek', 'https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY, 'deepseek', ['deepseek-v4-pro', 'deepseek-v4-flash']));
+    list.push(new OpenAICompatibleProvider('deepseek', 'DeepSeek', 'https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY, 'deepseek', ['deepseek-v4-pro', 'deepseek-v4-flash'], { 'deepseek-v4-pro': 'deepseek-reasoner', 'deepseek-v4-flash': 'deepseek-chat' }));
   // 智谱 GLM（OpenAI 兼容）
   if (process.env.ZHIPU_API_KEY)
     list.push(new OpenAICompatibleProvider('zhipu', '智谱 GLM', 'https://open.bigmodel.cn/api/paas/v4', process.env.ZHIPU_API_KEY, 'zhipu', ['glm-4-plus', 'glm-4-air', 'glm-4-flash', 'glm-4-long']));
