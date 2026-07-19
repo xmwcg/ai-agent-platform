@@ -5,6 +5,8 @@ services:
     image: mongo:7
     container_name: ai-platform-mongodb
     restart: unless-stopped
+    networks:
+      - ai-platform-network
     environment:
       MONGO_INITDB_DATABASE: ai-agent-platform
     volumes:
