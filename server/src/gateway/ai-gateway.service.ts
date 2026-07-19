@@ -114,9 +114,8 @@ class OpenAICompatibleProvider implements GatewayProvider {
   async chat(req: ChatRouteRequest, model: string): Promise<ChatRouteResult> {
     const client = new OpenAI({ apiKey: this.apiKey, baseURL: this.baseURL });
     const rawModel = model.includes('/') ? model.split('/').slice(1).join('/') : model;
-    // Map display model names to actual API model names
-    const MODEL_MAP: Record<string, string> = { 'deepseek-v4-pro': 'deepseek-reasoner', 'deepseek-v4-flash': 'deepseek-chat' };
-    const resolved = MODEL_MAP[rawModel] || rawModel;
+    // Model names are passed through directly (DeepSeek API now supports v4-flash/v4-pro natively)
+    const resolved = rawModel;
     const completion = await client.chat.completions.create({
       model: resolved,
       messages: req.messages as any,

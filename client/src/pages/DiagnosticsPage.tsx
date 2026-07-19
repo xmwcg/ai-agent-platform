@@ -42,7 +42,8 @@ const DiagnosticsPage: React.FC = () => {
     setLoading(true);
     try {
       const res: any = await diagnosticsAPI.check();
-      const d = (res && res.data) || res || {};
+      const body = (res && res.data) || {};
+      const d = (body && body.data && typeof body.data === "object" && !Array.isArray(body.data)) ? body.data : body;
       setChecks(Array.isArray(d.checks) ? d.checks : []);
       setMedia(Array.isArray(d.mediaProviders) ? d.mediaProviders.filter(Boolean) : []);
       setMockMode(!!d.mockMode);
