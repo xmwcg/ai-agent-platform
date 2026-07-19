@@ -46,7 +46,8 @@ export default function PromptOptimizer({ open, onClose, originalPrompt, onApply
 ${originalPrompt}`,
         model: modelToUse,
       });
-      setOptimized(res?.message || '（优化失败，请重试）');
+      const reply = res?.message || res?.text || res?.data?.message || res?.data?.text;
+      setOptimized(reply || '（优化失败，请重试）');
     } catch (err: any) {
       const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || '优化失败，请检查网络和API配置';
       setError(errMsg);
