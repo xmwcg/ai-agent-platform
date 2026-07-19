@@ -42,6 +42,32 @@ function ThemedApp() {
   );
 }
 
+
+// ─── 浏览器缓存清理：清除旧版模型名和 mc_ 前缀残留 ───
+(function cleanupLegacyCache() {
+  try {
+    // 清理 zustand persist 中的旧模型名
+    var chatStorage = localStorage.getItem('ai-chat-storage');
+    if (chatStorage) {
+      var changed = false;
+      var cleaned = chatStorage
+        .replace(/"deepseek-chat"/g, '"deepseek-v4-flash"')
+        .replace(/"deepseek-coder"/g, '"deepseek-v4-flash"');
+      if (cleaned !== chatStorage) {
+        localStorage.setItem('ai-chat-storage', cleaned);
+        changed = true;
+      }
+      if (changed) console.log('[cleanup] 已清理 localStorage 中的旧模型名');
+    }
+    // 清除 Service Worker 缓存（如果有）
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(reg) { reg.unregister(); });
+      });
+    }
+  } catch(e) { /* ignore */ }
+})();
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>

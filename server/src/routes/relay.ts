@@ -14,6 +14,21 @@ import {
 
 const router = Router();
 
+// ───────────── 中转站状态 ─────────────
+router.get('/', (req, res) => {
+  res.json({
+    ok: true,
+    name: 'AIbak 中转站',
+    description: '大模型 API 聚合中转服务',
+    version: '1.0.0',
+    endpoints: {
+      chat: '/api/relay/v1/chat/completions',
+      models: '/api/relay/v1/models',
+      admin: '/api/relay/admin'
+    }
+  });
+});
+
 function bearer(req: Request): string | null {
   const h = req.headers.authorization;
   if (!h || !h.startsWith('Bearer ')) return null;

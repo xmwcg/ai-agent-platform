@@ -72,6 +72,18 @@ const PLAN_TAGS: Record<string, { text: string; color: string }> = {
 // ─── 面包屑路径解析 ───
 function useBreadcrumbs() {
   const location = useLocation();
+
+  // ─── 路由切换时滚动到顶部 ───
+  useEffect(() => {
+    // 延迟执行以确保页面 DOM 已更新
+    var timer = setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      // 也处理可滚动的容器元素
+      var mainContent = document.querySelector('.ant-layout-content');
+      if (mainContent) mainContent.scrollTop = 0;
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
   return useMemo(() => {
     const parts = location.pathname.split('/').filter(Boolean);
     if (!parts.length) return [{ label: '首页', path: '/' }];
