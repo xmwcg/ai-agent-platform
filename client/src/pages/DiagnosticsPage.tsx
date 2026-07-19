@@ -42,7 +42,7 @@ const DiagnosticsPage: React.FC = () => {
     setLoading(true);
     try {
       const res: any = await diagnosticsAPI.check();
-      const d = res.data || {};
+      const d = res.data?.data || res.data || {};
       setChecks(d.checks || []);
       setMedia(d.mediaProviders || []);
       setMockMode(!!d.mockMode);
