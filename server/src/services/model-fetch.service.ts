@@ -141,7 +141,7 @@ export async function fetchCatalogProviderModels(input: FetchCatalogModelsInput)
     const status = Number(error?.response?.status);
     if (status) throw new Error(`厂商接口返回 HTTP ${status}`);
     if (error instanceof Error && /目标地址|未知厂商|仅允许|模型列表/.test(error.message)) throw error;
-    throw new Error('无法安全连接厂商接口');
+    throw new Error('无法安全连接厂商接口: ' + ((error instanceof Error) ? error.message.slice(0, 200) : String(error).slice(0, 200)));
   } finally {
     agent.destroy();
   }
