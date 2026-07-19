@@ -15,15 +15,15 @@ const router = Router();
 
 
 // ─── 根路由：返回工作流能力和入口 ───
-router.get('/', (_req, res) => {
+router.get('/capabilities', (_req, res) => {
   res.json({
     success: true,
     data: {
       capabilities: [
-        { type: 'workflow_list', label: '我的工作流', path: '/api/wf/list', desc: '查看已创建的工作流' },
-        { type: 'node_types', label: '节点类型', path: '/api/wf/node-types', desc: '查看可用节点类型' },
+        { type: 'workflow_list', label: '我的工作流', path: '/api/workflows/list', desc: '查看已创建的工作流' },
+        { type: 'node_types', label: '节点类型', path: '/api/workflows/node-types', desc: '查看可用节点类型' },
         { type: 'create', label: '创建工作流', path: '/api/wf', desc: '创建新的工作流' },
-        { type: 'import', label: '导入工作流包', path: '/api/wf/import', desc: '导入Agent工具流包' },
+        { type: 'import', label: '导入工作流包', path: '/api/workflows/import', desc: '导入Agent工具流包' },
       ],
     },
   });

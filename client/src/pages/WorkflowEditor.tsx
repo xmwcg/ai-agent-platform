@@ -139,7 +139,7 @@ export default function WorkflowEditor() {
   // ── 加载节点类型 ─────────────────────────────────
 
   useEffect(() => {
-    apiClient.get('/api/wf/node-types')
+    apiClient.get('/api/workflows/node-types')
       .then(res => setNodeTypesList(res.data.data || []))
       .catch(() => {
         // 默认类型
@@ -171,7 +171,7 @@ export default function WorkflowEditor() {
   useEffect(() => {
     if (id) {
       setLoading(true);
-      apiClient.get(`/api/wf/${id}`)
+      apiClient.get(`/api/workflows/${id}`)
         .then(res => {
           const wf = res.data.data;
           setWorkflowName(wf.name);
@@ -277,7 +277,7 @@ export default function WorkflowEditor() {
 
       let saved;
       if (id) {
-        saved = await apiClient.put(`/api/wf/${id}`, payload);
+        saved = await apiClient.put(`/api/workflows/${id}`, payload);
       } else {
         saved = await apiClient.post('/api/wf', payload);
       }
@@ -303,7 +303,7 @@ export default function WorkflowEditor() {
     setExecuting(true);
     setExecResult(null);
     try {
-      const res = await apiClient.post(`/api/wf/${id}/execute`, {
+      const res = await apiClient.post(`/api/workflows/${id}/execute`, {
         input: { userInput: testInput || 'Hello' },
       });
       setExecResult(res.data.data);
@@ -355,7 +355,7 @@ export default function WorkflowEditor() {
   const handlePublish = async () => {
     if (!id) { message.warning('请先保存工作流'); return; }
     try {
-      const res = await apiClient.post(`/api/wf/${id}/publish`);
+      const res = await apiClient.post(`/api/workflows/${id}/publish`);
       const { apiKey, endpoint } = res.data.data;
       Modal.success({
         title: '发布成功！',
