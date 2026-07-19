@@ -12,12 +12,34 @@ import {
 
 /**
  * 对接 harry0703/MoneyPrinterTurbo（FastAPI 服务，默认 http://127.0.0.1:8080）。
- * 它补齐了「文生视频」从文案→素材→配音→字幕→合成成片的完整链路，
- * 与本项目单帧/单任务式媒体生成形成互补。本项目作为编排方调用其 HTTP API。
- * 仅支持 text2video（整片生成），image2image / image2video 仍走原有厂商。
+ * 真实 API 契约（已对照 app/controllers/v1/video.py 与 app/models/const.py 核对）：
+ *  - POST /videos  → 请求体为 VideoParams；响应信封 {status,message,data:{task_id}}
+ *  - GET  /tasks/{task_id} → 响应信封 {status,message,data:{task_id,state,videos:[...],...}}
+ *    state 为整数：1=完成, -1=失败, 其余(含 4=处理中)视为进行中
+ *    videos 为成片 URI 数组；若 MPT 配置了 endpoint 则为绝对 URL，否则为 /tasks/... 相对路径
+ * 注：MPT 默认关闭鉴权（verify_token 已注释），调用方只需能访问其地址；
+ *     MPT 自身的 LLM / Pexels Key 仅存于 MPT worker 的 config.toml，不会暴露给本平台前端。
  */
+
+// MPT 任务状态码（与 app/models/const.py 保持一致）
+const MPT_STATE_COMPLETE = 1;
+const MPT_STATE_FAILED = -1;
+
 function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
+}
+
+/** 判断 prompt 更像「完整口播脚本」而非「简短主题」，从而直接作为 video_script 透传 */
+function looksLikeScript(text: string): boolean {
+  const trimmed = (text || '').trim();
+  if (trimmed.length < 40) return false;
+  const sentences = trimmed.split(/[。！？!?\n]/).filter((s) => s.trim().length > 0);
+  return sentences.length >= 3;
+}
+
+/** style 字段若形如语音 ID（含 Neural / V1 / V2 等），视为配音音色并透传 */
+function looksLikeVoiceId(style: string): boolean {
+  return /Neural|V1|V2|male|female/i.test(style);
 }
 
 class MoneyPrinterTurboProvider implements MediaProvider {
@@ -34,17 +56,26 @@ class MoneyPrinterTurboProvider implements MediaProvider {
   async generate(params: MediaGenParams): Promise<MediaGenResult> {
     const taskId = genTaskId();
     try {
-      // MoneyPrinterTurbo 的 /api/start_video_generation 接受 video_subject 等字段
-      const resp = await axios.post(
-        `${this.baseURL}/api/start_video_generation`,
-        {
-          video_subject: params.prompt,
-          ...(params.duration ? { video_duration: params.duration } : {}),
-          ...(params.style ? { voice_name: params.style } : {}),
-        },
-        { timeout: 8000 }
-      );
-      const jobId = String(resp.data?.task_id || resp.data?.video_id || taskId);
+      // 构造合法的 VideoParams 请求体（仅使用 MPT 真实存在的字段，避免 422）
+      const body: Record<string, unknown> = {
+        video_subject: params.prompt,
+        video_language: 'zh', // 中文文案（与已验证可用的配置一致）
+        video_source: 'pexels', // 素材来源（需 MPT 侧配置 pexels key）
+        video_aspect: '9:16', // 竖屏，适配抖音/视频号
+        voice_name: 'zh-CN-XiaoxiaoNeural-Female', // 中文晓晓，默认中文配音
+      };
+      // 若 prompt 已是一段完整脚本，直接作为口播文案，避免 AI 再自由发挥导致内容跑偏
+      if (looksLikeScript(params.prompt)) {
+        body.video_script = params.prompt;
+      }
+      // style 字段若形如语音 ID，则覆盖默认音色
+      if (params.style && looksLikeVoiceId(params.style)) {
+        body.voice_name = params.style;
+      }
+
+      // MoneyPrinterTurbo 真实端点：POST /videos
+      const resp = await axios.post(`${this.baseURL}/videos`, body, { timeout: 15000 });
+      const jobId = String(resp.data?.data?.task_id || taskId);
       const result: MediaGenResult = {
         type: 'text2video',
         taskId: jobId,
@@ -83,14 +114,23 @@ class MoneyPrinterTurboProvider implements MediaProvider {
   }
   async queryTask(taskId: string): Promise<MediaGenResult> {
     try {
-      const resp = await axios.get(`${this.baseURL}/api/video_status/${taskId}`, { timeout: 8000 });
-      const d = resp.data || {};
-      const status = String(d.status || d.state || '').toLowerCase();
-      if (['failed', 'error', 'cancelled', 'canceled'].includes(status)) {
+      // MoneyPrinterTurbo 真实端点：GET /tasks/{task_id}
+      const resp = await axios.get(
+        `${this.baseURL}/tasks/${encodeURIComponent(taskId)}`,
+        { timeout: 10000 }
+      );
+      const d = resp.data?.data || {};
+      const state = Number(d.state);
+      if (state === MPT_STATE_FAILED) {
         throw new AppError(502, '视频生成任务执行失败', 'MEDIA_TASK_FAILED');
       }
-      const completed = status === 'completed' || status === 'success' || status === 'succeeded';
-      const outputUrl = completed ? String(d.video_url || d.file_path || '') : '';
+      const completed = state === MPT_STATE_COMPLETE;
+      // videos 为成片 URI 数组；相对路径需拼接 baseURL 才能访问
+      const videos: string[] = Array.isArray(d.videos) ? d.videos : [];
+      let outputUrl = completed && videos.length > 0 ? String(videos[0]) : '';
+      if (outputUrl && !/^https?:\/\//i.test(outputUrl)) {
+        outputUrl = `${this.baseURL}${outputUrl.startsWith('/') ? '' : '/'}${outputUrl}`;
+      }
       if (completed && !outputUrl) {
         throw new AppError(502, '视频生成服务返回了无效结果', 'MEDIA_PROVIDER_INVALID_RESPONSE');
       }
