@@ -171,7 +171,8 @@ const JinWangTongPage: React.FC = () => {
           </Card>
 
           <div style={{ marginTop: 24, textAlign: 'center' }}>
-            <Button type="primary" size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8, height: 44 }}>
+            <Button type="primary" size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8, height: 44 }}
+                onClick={() => window.open('https://cnb.cool/aibak.site/enterprise-network-hub/-/archive/main/enterprise-network-hub-main.zip', '_blank')}>
               下载脚本包 (ZIP)
             </Button>
             <Paragraph type="secondary" style={{ marginTop: 8 }}>
@@ -202,8 +203,8 @@ const JinWangTongPage: React.FC = () => {
 
           <Space size={12} style={{ marginTop: 16 }}>
 
-            <Button type="primary" size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }}>
-
+            <Button type="primary" size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }}
+              onClick={() => window.open('https://cnb.cool/aibak.site/enterprise-network-hub/-/archive/main/enterprise-network-hub-main.zip', '_blank')}>
               下载脚本包
 
             </Button>
