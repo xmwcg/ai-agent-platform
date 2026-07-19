@@ -20,7 +20,7 @@ router.get('/capabilities', (_req, res) => {
     success: true,
     data: {
       capabilities: [
-        { type: 'workflow_list', label: '我的工作流', path: '/api/workflows/list', desc: '查看已创建的工作流' },
+        { type: 'workflow_list', label: '我的工作流', path: '/api/workflows', desc: '查看已创建的工作流' },
         { type: 'node_types', label: '节点类型', path: '/api/workflows/node-types', desc: '查看可用节点类型' },
         { type: 'create', label: '创建工作流', path: '/api/wf', desc: '创建新的工作流' },
         { type: 'import', label: '导入工作流包', path: '/api/workflows/import', desc: '导入Agent工具流包' },
