@@ -12,6 +12,10 @@ import { CREDITS_PACKAGES } from '../config/credits-pricing';
 import { sendError } from '../lib/http-error';
 
 const router = Router();
+router.get('/', (_req: Request, res: Response) => {
+  res.json({ success: true, data: { endpoints: ['/providers', '/providers/:providerId/models', '/account-summary', '/usage'] } });
+});
+
 
 router.get('/providers', (_req: Request, res: Response) => {
   res.json({ success: true, data: publicProviderCatalog() });
