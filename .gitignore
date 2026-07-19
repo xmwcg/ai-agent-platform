@@ -28,3 +28,13 @@ _cli_log.zip
 _fullci*.txt
 ai-agent-platform-*.html
 server/.cache/
+
+# Temp/scratch files
+.ssh_id_ed25519
+_write_alert.js
+client/src/fix-old.txt
+sandbox-executor/.fix_executor.py
+server/src/middleware/rate-limit.patch.js
+server/src/scripts/validate-production-config.ts.bak
+*.md.bak
+
