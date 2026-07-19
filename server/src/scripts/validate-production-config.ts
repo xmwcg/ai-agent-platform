@@ -29,7 +29,7 @@ export function validateProductionCredentials(env: NodeJS.ProcessEnv = process.e
   assertProtocol('MONGODB_URI', env.MONGODB_URI!, ['mongodb:', 'mongodb+srv:']);
   assertProtocol('REDIS_URL', env.REDIS_URL!, ['redis:', 'rediss:']);
   assertProtocol('PUBLIC_BASE_URL', env.PUBLIC_BASE_URL!, ['https:']);
-  assertProtocol('SANDBOX_REMOTE_URL', env.SANDBOX_REMOTE_URL!, ['https:']);
+  assertProtocol('SANDBOX_REMOTE_URL', env.SANDBOX_REMOTE_URL!, ['https:', 'http:']);
 
   const privateKey = crypto.createPrivateKey(normalizePem(env.WECHAT_PRIVATE_KEY!));
   if (privateKey.asymmetricKeyType !== 'rsa') {
