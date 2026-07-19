@@ -42,12 +42,19 @@ const DiagnosticsPage: React.FC = () => {
     setLoading(true);
     try {
       const res: any = await diagnosticsAPI.check();
-      const body = (res && res.data) || {};
-      const d = (body && body.data && typeof body.data === "object" && !Array.isArray(body.data)) ? body.data : body;
+      const body = (res && res.data) || {}; // res 已经是拦截器提取后的 { success, data: {...} }
+      const d: any = (body && body.data && typeof body.data === "object" && !Array.isArray(body.data)) ? body.data : (body || {});
       setChecks(Array.isArray(d.checks) ? d.checks : []);
       setMedia(Array.isArray(d.mediaProviders) ? d.mediaProviders.filter(Boolean) : []);
       setMockMode(!!d.mockMode);
-      setPaymentStatus(d.paymentStatus && typeof d.paymentStatus === "object" ? d.paymentStatus : null);
+      // 防御：确保 paymentStatus 所有嵌套对象都有默认值，防止 Cannot read properties of undefined
+      const ps = d.paymentStatus && typeof d.paymentStatus === "object" && !Array.isArray(d.paymentStatus) ? { ...d.paymentStatus } : null;
+      if (ps) {
+        ps.wechat = ps.wechat && typeof ps.wechat === "object" ? ps.wechat : {};
+        ps.stripe = ps.stripe && typeof ps.stripe === "object" ? ps.stripe : {};
+        ps.alipay = ps.alipay && typeof ps.alipay === "object" ? ps.alipay : {};
+      }
+      setPaymentStatus(ps);
     } catch { /* ignore */ }
     setLoading(false);
   };

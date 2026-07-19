@@ -539,6 +539,19 @@ export const aibakAPI = {
 };
 
 // 工作流（Agent 工具流）导入导出 API
+
+// 账户管理（数据导出、注销）
+export const accountAPI = {
+  requestDataExport: () => apiClient.post('/account/export-data'),
+  getDataExportLink: (token: string) => apiClient.get(`/account/export-data/${token}`),
+  requestDeletion: () => apiClient.post('/account/delete'),
+  cancelDeletion: () => apiClient.post('/account/cancel-delete'),
+  confirmDeletion: (token: string) => apiClient.delete(`/account/confirm-delete/${token}`),
+  getConsents: () => apiClient.get('/account/consents'),
+  recordConsent: (data: { consentType: string; version: string; accepted: boolean; channel?: string }) =>
+    apiClient.post('/account/consent', data),
+};
+
 export const workflowAPI = {
   importPackage: (pkg: any) => apiClient.post('/wf/import', pkg),
   exportPackage: (id: string, download = false) =>

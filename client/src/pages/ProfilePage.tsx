@@ -14,7 +14,7 @@ import {
   SettingOutlined, BellOutlined, LockOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { billingAPI, profileAPI, referralAPI, marketplaceAPI, byokAPI, authAPI, extractApiError, MediaByokKey } from '@/services/api';
+import { billingAPI, profileAPI, referralAPI, marketplaceAPI, byokAPI, authAPI, accountAPI, extractApiError, MediaByokKey } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 import { usePaymentStore } from '@/stores/payment';
 import { useUIStore } from '@/stores/ui';
@@ -537,6 +537,166 @@ export default function ProfilePage() {
     </Card>
   );
 
+
+  const [exportLoading, setExportLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteRequested, setDeleteRequested] = useState(false);
+
+  const handleExportData = async () => {
+    Modal.confirm({
+      title: '申请个人数据导出',
+      content: '系统将收集您的个人资料、订单记录、积分流水、额度批次、协议同意记录和退款记录，生成一份完整的 JSON 数据文件。导出链接将通过页面返回。是否继续？',
+      onOk: async () => {
+        setExportLoading(true);
+        try {
+          const res: any = await accountAPI.requestDataExport();
+          const token = res?.data?.token || res?.token;
+          if (token) {
+            // 构建下载链接
+            const downloadUrl = `/api/account/export-data/${token}`;
+            message.success('数据导出申请成功！');
+            Modal.info({
+              title: '数据导出就绪',
+              content: (
+                <div>
+                  <Paragraph>您的数据导出文件已生成。点击下方链接下载：</Paragraph>
+                  <Button type="primary" href={downloadUrl} target="_blank" icon={<ExportOutlined />}>
+                    下载数据导出文件
+                  </Button>
+                  <Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>
+                    下载链接 24 小时内有效。请妥善保管此文件，包含个人敏感信息。
+                  </Paragraph>
+                </div>
+              ),
+              width: 480,
+            });
+          } else {
+            message.error('导出失败，请稍后重试');
+          }
+        } catch (err) {
+          message.error(extractApiError(err, '导出申请失败'));
+        } finally {
+          setExportLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleRequestDeletion = async () => {
+    Modal.confirm({
+      title: '申请账号注销',
+      content: (
+        <div>
+          <Paragraph type="danger" strong>注销账号为不可逆操作，请仔细阅读以下说明：</Paragraph>
+          <Paragraph>
+            1. 提交申请后进入 <Text strong>7 天冷静期</Text>，期间您可以随时撤销注销申请。
+          </Paragraph>
+          <Paragraph>
+            2. 冷静期结束后，您需要通过确认链接完成最终注销。
+          </Paragraph>
+          <Paragraph>
+            3. 注销后您的个人信息将被匿名化处理，支付和审计记录将依法保留。
+          </Paragraph>
+          <Paragraph type="secondary">
+            4. 如有未完成订单或未消费积分，请先处理后再申请注销。
+          </Paragraph>
+        </div>
+      ),
+      okText: '确认申请注销',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setDeleteLoading(true);
+        try {
+          await accountAPI.requestDeletion();
+          setDeleteRequested(true);
+          message.success('注销申请已提交。您有 7 天冷静期，期间可以随时撤销。');
+        } catch (err) {
+          message.error(extractApiError(err, '注销申请失败'));
+        } finally {
+          setDeleteLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleCancelDeletion = async () => {
+    Modal.confirm({
+      title: '撤销注销申请',
+      content: '确认撤销注销申请？您的账号将恢复正常。',
+      onOk: async () => {
+        try {
+          await accountAPI.cancelDeletion();
+          setDeleteRequested(false);
+          message.success('注销申请已撤销，您的账号已恢复正常。');
+        } catch (err) {
+          message.error(extractApiError(err, '撤销失败'));
+        }
+      },
+    });
+  };
+
+  const renderAccount = () => (
+    <Row gutter={[16, 16]}>
+      <Col span={24}>
+        <Card title={<span><ExportOutlined /> 个人数据导出</span>}>
+          <Paragraph>
+            根据个人信息保护法，您有权获取个人数据的副本。导出文件为 JSON 格式，包含您的个人资料、订单、积分流水、额度批次和协议记录。
+          </Paragraph>
+          <Button
+            type="primary"
+            icon={<ExportOutlined />}
+            loading={exportLoading}
+            onClick={handleExportData}
+          >
+            申请导出个人数据
+          </Button>
+          <Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>
+            下载链接 24 小时内有效，请及时下载并妥善保管。
+          </Paragraph>
+        </Card>
+      </Col>
+      <Col span={24}>
+        <Card
+          title={<span style={{ color: 'var(--color-danger, #ff4d4f)' }}><DeleteOutlined /> 账号注销</span>}
+          style={{ borderColor: 'var(--color-danger-border, #ffa39e)' }}
+        >
+          {deleteRequested ? (
+            <>
+              <Alert
+                type="warning"
+                showIcon
+                message="注销申请已提交"
+                description="您的注销申请正在 7 天冷静期中。在此期间您可以随时撤销注销申请。冷静期结束后，您将收到确认邮件，完成最终注销。"
+                style={{ marginBottom: 16 }}
+              />
+              <Button danger onClick={handleCancelDeletion}>
+                撤销注销申请
+              </Button>
+            </>
+          ) : (
+            <>
+              <Paragraph type="danger">
+                注销账号将匿名化您的个人信息，并禁用账号。支付、退款和安全审计记录将依法保留。
+              </Paragraph>
+              <Paragraph>
+                · 注销有 <Text strong>7 天冷静期</Text>，期间可撤销<br />
+                · 有未完成订单时无法完成注销<br />
+                · 注销后无法恢复，请谨慎操作
+              </Paragraph>
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                loading={deleteLoading}
+                onClick={handleRequestDeletion}
+              >
+                申请注销账号
+              </Button>
+            </>
+          )}
+        </Card>
+      </Col>
+    </Row>
+  );
   const tabContentMap: Record<string, React.ReactNode> = {
     overview: renderOverview(),
     security: renderSecurity(),
@@ -545,6 +705,7 @@ export default function ProfilePage() {
     referral: renderReferral(),
     byok: renderByok(),
     orders: renderOrders(),
+    account: renderAccount(),
   };
 
   return (
