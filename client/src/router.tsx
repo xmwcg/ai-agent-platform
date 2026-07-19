@@ -48,6 +48,8 @@ import AboutPage from "@/pages/AboutPage";
 import ContactPage from "@/pages/ContactPage";
 import JoinPage from "@/pages/JoinPage";
 import CookiesPage from "@/pages/CookiesPage";
+import JinWangTongPage from '@/pages/JinWangTongPage';
+import RelayAdminPage from "@/pages/RelayAdminPage";
 import QueryCenterPage from "@/pages/QueryCenterPage";
 
 const router = createBrowserRouter([
@@ -113,6 +115,7 @@ const router = createBrowserRouter([
       { path: "about", element: <AboutPage /> },
       { path: "contact", element: <ContactPage /> },
       { path: "partners", element: <JoinPage /> },
+      { path: "relay-admin", element: <RelayAdminPage /> },
       { path: "metrics", element: <PublicMetricsPage /> },
       { path: "*", element: <div>404 - 页面未找到</div> }
     ]

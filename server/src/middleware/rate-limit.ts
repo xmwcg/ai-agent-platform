@@ -227,8 +227,8 @@ const sensitiveMemoryCounters = new Map<string, { count: number; expiresAt: numb
 
 async function ensureSensitiveRedisReady(): Promise<boolean> {
   if (isUsingMemoryRedis()) return false;
-  if (redisHealthy) return true;
-  const ok = await pingWithTimeout(1000);
+  // Always fresh ping to recover from transient Redis failures
+  const ok = await pingWithTimeout(2000);
   redisHealthy = ok;
   return ok;
 }
@@ -267,20 +267,12 @@ export async function modelFetchLimiter(req: Request, res: Response, next: NextF
 
   try {
     const redisReady = await ensureSensitiveRedisReady();
-    if (production && !redisReady) {
-      res.status(503).json({
-        success: false,
-        error: '限流服务暂不可用，请稍后重试',
-        code: 'RATE_LIMIT_STORAGE_UNAVAILABLE',
-      });
-      return;
-    }
-
+    // Fall back to memory counter if Redis temporarily unavailable
     const [minuteCount, dayCount] = redisReady
       ? await Promise.all([
         redisCounterIncrement(minuteKey, 120),
         redisCounterIncrement(dayKey, 2 * 86400),
-      ])
+      ]).catch(() => [memoryCounterIncrement(minuteKey, 120), memoryCounterIncrement(dayKey, 2 * 86400)])
       : [memoryCounterIncrement(minuteKey, 120), memoryCounterIncrement(dayKey, 2 * 86400)];
 
     if (minuteCount > 5 || dayCount > 30) {
@@ -294,7 +286,8 @@ export async function modelFetchLimiter(req: Request, res: Response, next: NextF
     next();
   } catch {
     redisHealthy = false;
-    if (production) {
+    // Fall through to memory counter instead of blocking the request
+    if (false) {
       res.status(503).json({
         success: false,
         error: '限流服务暂不可用，请稍后重试',

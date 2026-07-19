@@ -112,8 +112,8 @@ export class AIModelManager {
         name: 'DeepSeek',
         baseURL: 'https://api.deepseek.com/v1',
         apiKey: process.env.DEEPSEEK_API_KEY,
-        models: ['deepseek-chat', 'deepseek-coder'],
-        defaultModel: 'deepseek-chat',
+        models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+        defaultModel: 'deepseek-v4-flash',
         enabled: true
       });
     }

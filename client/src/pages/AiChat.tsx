@@ -50,6 +50,8 @@ export default function AiChat() {
     }
   }, [createSession, model, agentForm]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
@@ -170,13 +172,7 @@ export default function AiChat() {
 
           <Space size={8}>
             <Text type="secondary" style={{ fontSize: 13 }}>🤖 模型</Text>
-            <ModelSelector
-              value={model}
-              onChange={setModel}
-              style={{ width: 200 }}
-              size="small"
-              placeholder="选择模型"
-            />
+            <ModelSelector value={model} onChange={setModel} style={{ width: 200 }} size="small" placeholder="选择模型" mode="chat" />
 
             <Tooltip title="清空对话">
               <Button type="text" icon={<ClearOutlined />} onClick={clearMessages} disabled={messages.length === 0} />
@@ -194,7 +190,7 @@ export default function AiChat() {
         </div>
 
         {/* 消息列表 */}
-        <div className="chat-messages">
+        <div className="chat-messages" ref={messagesContainerRef}>
           {messages.length === 0 ? (
             <div className="chat-empty">
               <div className="empty-icon">
@@ -265,7 +261,7 @@ export default function AiChat() {
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
             <div>
               <Text type="secondary" style={{ fontSize: 12 }}>当前模型</Text>
-              <div className="panel-value">{model || '未选择'}</div>
+              <div className="panel-value">{model ? model.replace(/^mc_[^/]+\//, '') : '未选择'}</div>
             </div>
 
             <div>
@@ -328,7 +324,7 @@ export default function AiChat() {
             <Input placeholder="如：擅长讲解 Python 并给出示例" maxLength={80} />
           </Form.Item>
           <Form.Item name="model" label="模型" initialValue={model}>
-            <ModelSelector style={{ width: '100%' }} />
+            <ModelSelector style={{ width: "100%" }} mode="chat" />
           </Form.Item>
           <Form.Item name="mode" label="对话模式" initialValue="qa">
             <Select options={[
@@ -438,3 +434,7 @@ export default function AiChat() {
     </div>
   );
 }
+
+
+
+

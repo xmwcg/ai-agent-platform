@@ -172,6 +172,7 @@ app.use('/api/diagnostics', diagnosticsRoutes);
 app.use('/api/quickstart', quickstartRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/wf', workflowRoutes);
+app.use('/api/workflows', workflowRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/gateway', aiGatewayRoutes);
 app.use('/api/knowledge-graph', knowledgeGraphRoutes);

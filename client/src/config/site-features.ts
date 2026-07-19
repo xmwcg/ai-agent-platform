@@ -46,13 +46,15 @@ export const SITE_FEATURES: SiteFeature[] = [
   { id: 'points-center', title: '积分中心', description: '查看积分余额与流水', path: '/points-center', group: '管理与账户', keywords: ['积分', '免费额度', '付费额度', '余额'], aliases: ['credits', 'points'], authRequired: true, icon: 'gift' },
   { id: 'distribution', title: '分销中心', description: '查看推荐与分销数据', path: '/distribution', group: '管理与账户', keywords: ['推荐', '佣金', '推广'], aliases: ['referral'], authRequired: true, icon: 'share' },
   { id: 'profile', title: '个人中心', description: '管理个人资料和账户', path: '/profile', group: '管理与账户', keywords: ['账户', '个人资料', '安全'], aliases: ['profile'], authRequired: true, icon: 'profile' },
+  { id: 'relay-admin', title: '中转站', description: '金网通AI大模型聚合中转管理', path: '/relay-admin', group: '平台与生态', keywords: ['中转站', '大模型', '聚合', '金网通', 'Relay', 'API中转'], aliases: ['relay', '中转站管理'], authRequired: true, roles: ['admin'], icon: 'api' },
+  { id: 'jinwangtong', title: '金网通', description: '企业局域网互联互通授权购买与管理', path: '/jinwangtong', group: '平台与生态', keywords: ['金网通', '企业', '局域网', '授权', '购买', 'License'], aliases: ['jwt', '金网通购买'], authRequired: false, icon: 'shop' },
 ];
 
 export const NAVIGATION_GROUPS: NavigationGroup[] = [
   { key: 'core', label: '核心功能', defaultOpen: true, featureIds: ['home', 'quickstart', 'ai-chat', 'knowledge', 'sandbox'] },
   { key: 'create', label: '创作与学习', featureIds: ['courses', 'learning-path', 'creative', 'code'] },
   { key: 'tools', label: '工具与分析', featureIds: ['tools', 'compare', 'calendar', 'workflows'] },
-  { key: 'platform', label: '平台与生态', featureIds: ['query-center', 'model-config', 'marketplace', 'skills', 'plugins', 'customer-service'] },
+  { key: 'platform', label: '平台与生态', featureIds: ['query-center', 'model-config', 'marketplace', 'skills', 'plugins', 'customer-service', 'relay-admin', 'jinwangtong'] },
   { key: 'manage', label: '管理与账户', featureIds: ['team', 'diagnostics', 'ops-dashboard', 'admin-users', 'pricing', 'points-center', 'distribution', 'profile'] },
 ];
 
@@ -70,3 +72,5 @@ export function featureByPath(pathname: string): SiteFeature | undefined {
     .sort((a, b) => b.path.length - a.path.length)
     .find((feature) => feature.path === '/' ? pathname === '/' : pathname.startsWith(feature.path));
 }
+
+

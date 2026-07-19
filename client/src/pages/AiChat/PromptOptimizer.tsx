@@ -11,6 +11,7 @@ interface Props {
   onClose: () => void;
   originalPrompt: string;
   onApply: (optimized: string) => void;
+  currentModel?: string;
 }
 
 const OPTIMIZE_DIRECTIONS = [
@@ -22,7 +23,7 @@ const OPTIMIZE_DIRECTIONS = [
   { value: 'role_based', label: '角色扮演', desc: '赋予AI特定角色视角' },
 ];
 
-export default function PromptOptimizer({ open, onClose, originalPrompt, onApply }: Props) {
+export default function PromptOptimizer({ open, onClose, originalPrompt, onApply, currentModel }: Props) {
   const [direction, setDirection] = useState('detailed');
   const [optimized, setOptimized] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,7 +41,7 @@ export default function PromptOptimizer({ open, onClose, originalPrompt, onApply
         message: `请根据"${OPTIMIZE_DIRECTIONS.find(d => d.value === direction)?.label}"的方向，优化以下提示词。只返回优化后的提示词，不要添加其他解释：
 
 ${originalPrompt}`,
-        model: 'deepseek/deepseek-chat',
+        model: currentModel || 'deepseek/deepseek-v4-flash',
       });
       setOptimized(res?.message || '（优化失败，请重试）');
     } catch (err: any) {

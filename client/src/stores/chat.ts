@@ -85,7 +85,7 @@ export const useChatStore = create<ChatState>()(
       sessions: [],
       activeSessionId: null,
       mode: 'qa',
-      model: 'deepseek/deepseek-chat',
+      model: 'deepseek/deepseek-v4-flash',
       loading: false,
       files: [],
       rightPanelOpen: false,

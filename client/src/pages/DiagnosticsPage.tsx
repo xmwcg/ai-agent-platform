@@ -123,7 +123,7 @@ const DiagnosticsPage: React.FC = () => {
                 </Card>
                 <Card title="媒体生成厂商" style={{ marginTop: 16 }}>
                   <Space wrap>
-                    {media.map((m) => (
+                    {(media||[]).filter(Boolean).map((m) => (
                       <Tag key={m.name} color={m.configured ? 'blue' : 'default'}>
                         {m.label} {m.configured ? '· 已接入' : '· 未接入(走Mock)'}
                       </Tag>
@@ -144,42 +144,42 @@ const DiagnosticsPage: React.FC = () => {
                 <Card title="支付渠道配置" style={{ marginBottom: 16 }}>
                   <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small">
                     <Descriptions.Item label="默认支付渠道">
-                      <Tag color={paymentStatus.isReal ? 'blue' : 'orange'}>
-                        {paymentStatus.defaultProvider === 'wechat' ? '微信支付' :
-                         paymentStatus.defaultProvider === 'stripe' ? 'Stripe' : 'Mock 模式'}
+                      <Tag color={(paymentStatus?.isReal ?? false) ? 'blue' : 'orange'}>
+                        {(paymentStatus?.defaultProvider ?? "mock") === 'wechat' ? '微信支付' :
+                         (paymentStatus?.defaultProvider ?? "mock") === 'stripe' ? 'Stripe' : 'Mock 模式'}
                       </Tag>
-                      {!paymentStatus.isReal && (
+                      {!(paymentStatus?.isReal ?? false) && (
                         <Tooltip title="Mock 模式下所有支付均直接成功，无需真实凭证">
                           <WarningOutlined style={{ color: '#faad14', marginLeft: 8 }} />
                         </Tooltip>
                       )}
                     </Descriptions.Item>
                     <Descriptions.Item label="回调地址">
-                      <Text code>{paymentStatus.notifyUrl}</Text>
+                      <Text code>{(paymentStatus?.notifyUrl ?? "")}</Text>
                     </Descriptions.Item>
                   </Descriptions>
                 </Card>
 
                 {/* 微信支付 */}
                 <Card title="微信支付" extra={
-                  <Tag color={paymentStatus.wechat.configured ? 'success' : 'default'}>
-                    {paymentStatus.wechat.configured ? '已配置' : '未配置'}
+                  <Tag color={(paymentStatus?.wechat?.configured ?? false) ? 'success' : 'default'}>
+                    {(paymentStatus?.wechat?.configured ?? false) ? '已配置' : '未配置'}
                   </Tag>
                 } style={{ marginBottom: 16 }}>
                   <Descriptions bordered column={{ xs: 1, sm: 3 }} size="small">
-                    <Descriptions.Item label="商户号">{paymentStatus.wechat.mchId || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="AppID">{paymentStatus.wechat.appId || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="商户号">{(paymentStatus?.wechat?.mchId ?? "-") || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="AppID">{(paymentStatus?.wechat?.appId ?? "-") || '-'}</Descriptions.Item>
                     <Descriptions.Item label="APIv3 密钥">
-                      {paymentStatus.wechat.hasApiKey ? <Tag color="success">已设置</Tag> : <Tag color="error">未设置</Tag>}
+                      {(paymentStatus?.wechat?.hasApiKey ?? false) ? <Tag color="success">已设置</Tag> : <Tag color="error">未设置</Tag>}
                     </Descriptions.Item>
                     <Descriptions.Item label="平台证书（验签）">
-                      {paymentStatus.wechat.hasPlatformCert ? <Tag color="success">已设置</Tag> : <Tag color="warning">未设置</Tag>}
+                      {(paymentStatus?.wechat?.hasPlatformCert ?? false) ? <Tag color="success">已设置</Tag> : <Tag color="warning">未设置</Tag>}
                     </Descriptions.Item>
                     <Descriptions.Item label="商户私钥">
-                      {paymentStatus.wechat.hasPrivateKey ? <Tag color="success">已设置</Tag> : <Tag color="error">未设置</Tag>}
+                      {(paymentStatus?.wechat?.hasPrivateKey ?? false) ? <Tag color="success">已设置</Tag> : <Tag color="error">未设置</Tag>}
                     </Descriptions.Item>
                     <Descriptions.Item label="状态">
-                      {paymentStatus.wechat.configured
+                      {(paymentStatus?.wechat?.configured ?? false)
                         ? <Tag color="success">可投产</Tag>
                         : <Text type="secondary">请配置 WECHAT_MCH_ID / WECHAT_API_V3_KEY / WECHAT_PRIVATE_KEY</Text>}
                     </Descriptions.Item>
@@ -188,16 +188,16 @@ const DiagnosticsPage: React.FC = () => {
 
                 {/* Stripe */}
                 <Card title="Stripe" extra={
-                  <Tag color={paymentStatus.stripe.configured ? 'success' : 'default'}>
-                    {paymentStatus.stripe.configured ? '已配置' : '未配置'}
+                  <Tag color={(paymentStatus?.stripe?.configured ?? false) ? 'success' : 'default'}>
+                    {(paymentStatus?.stripe?.configured ?? false) ? '已配置' : '未配置'}
                   </Tag>
                 } style={{ marginBottom: 16 }}>
                   <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small">
                     <Descriptions.Item label="Secret Key">
-                      {paymentStatus.stripe.hasSecretKey ? <Tag color="success">已设置</Tag> : <Tag color="error">未设置</Tag>}
+                      {(paymentStatus?.stripe?.hasSecretKey ?? false) ? <Tag color="success">已设置</Tag> : <Tag color="error">未设置</Tag>}
                     </Descriptions.Item>
                     <Descriptions.Item label="Webhook Secret">
-                      {paymentStatus.stripe.hasWebhookSecret ? <Tag color="success">已设置</Tag> : <Tag color="error">未设置</Tag>}
+                      {(paymentStatus?.stripe?.hasWebhookSecret ?? false) ? <Tag color="success">已设置</Tag> : <Tag color="error">未设置</Tag>}
                     </Descriptions.Item>
                   </Descriptions>
                 </Card>
@@ -329,3 +329,4 @@ const DiagnosticsPage: React.FC = () => {
 };
 
 export default DiagnosticsPage;
+

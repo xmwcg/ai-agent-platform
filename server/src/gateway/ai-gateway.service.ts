@@ -212,7 +212,7 @@ function buildProviders(): GatewayProvider[] {
   if (process.env.ANTHROPIC_API_KEY)
     list.push(new OpenAICompatibleProvider('anthropic', 'Anthropic', 'https://api.anthropic.com/v1', process.env.ANTHROPIC_API_KEY, 'anthropic', ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']));
   if (process.env.DEEPSEEK_API_KEY)
-    list.push(new OpenAICompatibleProvider('deepseek', 'DeepSeek', 'https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY, 'deepseek', ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-coder']));
+    list.push(new OpenAICompatibleProvider('deepseek', 'DeepSeek', 'https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY, 'deepseek', ['deepseek-v4-pro', 'deepseek-v4-flash']));
   // 智谱 GLM（OpenAI 兼容）
   if (process.env.ZHIPU_API_KEY)
     list.push(new OpenAICompatibleProvider('zhipu', '智谱 GLM', 'https://open.bigmodel.cn/api/paas/v4', process.env.ZHIPU_API_KEY, 'zhipu', ['glm-4-plus', 'glm-4-air', 'glm-4-flash', 'glm-4-long']));
@@ -335,7 +335,7 @@ export async function route(req: ChatRouteRequest): Promise<ChatRouteResult> {
   let lastErr: any;
   for (const p of order) {
     try {
-      return await p.chat(req, req.model || '');
+      const fallbackModel = p.owns(req.model || '') ? (req.model || '') : (p.models()?.[0] || ''); return await p.chat(req, fallbackModel);
     } catch (e) {
       lastErr = e;
       logger.warn('ai-gateway', `provider ${p.name} 失败，尝试降级：${(e as Error).message}`);
