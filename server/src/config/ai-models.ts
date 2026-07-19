@@ -23,6 +23,9 @@ export const BAICHUAN_API_KEY = process.env.BAICHUAN_API_KEY || '';
 export const YI_API_KEY = process.env.YI_API_KEY || process.env.LINGYIWANWU_API_KEY || '';
 export const STEPFUN_API_KEY = process.env.STEPFUN_API_KEY || '';
 export const IFlyTEK_API_KEY = process.env.IFLYTEK_API_KEY || process.env.SPARK_API_KEY || '';
+// Agnes AIHub 免费模型网关（apihub.agnes-ai.com，OpenAI 兼容：文本/图像/视频）
+export const AGNES_API_KEY = process.env.AGNES_API_KEY || '';
+export const AGNES_BASE_URL = process.env.AGNES_BASE_URL || 'https://apihub.agnes-ai.com/v1';
 
 // AI Provider 类型定义
 export type AIProvider =
@@ -38,6 +41,7 @@ export type AIProvider =
   | 'yi' // 零一万物 Yi
   | 'stepfun' // 阶跃星辰 Step
   | 'iflytek' // 讯飞星火
+  | 'agnes' // Agnes AIHub 免费模型网关（apihub.agnes-ai.com，文本/图像/视频）
   | 'custom'
   | 'mock';
 
@@ -214,6 +218,18 @@ export class AIModelManager {
       });
     }
 
+    // Agnes AIHub（免费模型网关，OpenAI 兼容：文本/图像/视频）
+    if (AGNES_API_KEY) {
+      this.providers.set('agnes', {
+        name: 'Agnes AIHub',
+        baseURL: AGNES_BASE_URL,
+        apiKey: AGNES_API_KEY,
+        models: ['agnes-2.0-flash', 'agnes-image-2.0-flash', 'agnes-image-2.1-flash', 'agnes-video-v2.0'],
+        defaultModel: 'agnes-2.0-flash',
+        enabled: true,
+      });
+    }
+
     // 混元 (Tencent Hunyuan) — 使用腾讯云 TC3 凭据（SECRET_ID / SECRET_KEY）
     if (HUNYUAN_SECRET_ID && HUNYUAN_SECRET_KEY) {
       this.providers.set('hunyuan', {
@@ -238,6 +254,9 @@ export class AIModelManager {
       && (!production || configuredDefault !== 'mock')
     ) {
       this.defaultProvider = configuredDefault;
+    } else if (AGNES_API_KEY && this.providers.has('agnes')) {
+      // 配置 Agnes 免费网关且未显式指定默认厂商时，平台默认走 Agnes（文本/图像/视频统一供给）
+      this.defaultProvider = 'agnes';
     } else if (!mockMode) {
       const firstReal = Array.from(this.providers.entries())
         .find(([provider, config]) => provider !== 'mock' && config.enabled)?.[0];

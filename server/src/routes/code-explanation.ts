@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { createAIClient } from '../config/ai-models';
+import { route } from '../gateway/ai-gateway.service';
 import { AuthRequest, optionalAuth } from '../middleware/auth';
 import { enforceQuota, quotaIncrement } from '../middleware/subscription';
 import { sendError } from '../lib/http-error';
@@ -57,11 +57,9 @@ class CodeExplanationService {
     context?: string
   ): Promise<{ explanation: string; concepts: string[] }> {
     try {
-      const client = createAIClient();
       const prompt = this.buildPrompt(code, language, level, context);
-
-      const completion = await client.chat.completions.create({
-        model: 'gpt-4o', // 使用更强大的模型解释代码
+      const completion = await route({
+        model: 'agnes/agnes-2.0-flash',
         messages: [
           {
             role: 'system',
@@ -72,11 +70,11 @@ class CodeExplanationService {
             content: prompt
           }
         ],
-        temperature: 0.3, // 较低温度以获得更确定的解释
-        max_tokens: 2000
+        temperature: 0.3,
+        maxTokens: 2000
       });
 
-      const explanation = completion.choices[0]?.message?.content || 'No explanation generated';
+      const explanation = completion.reply || 'No explanation generated';
 
       // 提取关键概念（简单实现）
       const concepts = this.extractConcepts(explanation);
@@ -115,10 +113,8 @@ class CodeExplanationService {
     language: ProgrammingLanguage
   ): Promise<string> {
     try {
-      const client = createAIClient();
-
-      const completion = await client.chat.completions.create({
-        model: 'gpt-4o',
+      const completion = await route({
+        model: 'agnes/agnes-2.0-flash',
         messages: [
           {
             role: 'system',
@@ -132,7 +128,7 @@ class CodeExplanationService {
         temperature: 0.5
       });
 
-      return completion.choices[0]?.message?.content || '';
+      return completion.reply || '';
     } catch (error) {
       logger.error('code-explanation', '生成示例失败', error);
       throw error;

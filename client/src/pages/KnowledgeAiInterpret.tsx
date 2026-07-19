@@ -6,8 +6,7 @@ import {
   DownloadOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { aibakAPI, extractApiError } from '@/services/api';
-import { AIBAK_FREE_MODELS, getAibakModel } from '@/config/aibakModels';
+import { aiAPI, apiClient, extractApiError } from '@/services/api';
 import PromptOptimizer from '@/pages/AiChat/PromptOptimizer';
 
 const { TextArea } = Input;
@@ -24,6 +23,15 @@ interface Props {
   /** 文档正文（Markdown） */
   content: string;
 }
+
+// 本页统一走 Agnes 免费模型网关（文本解读 + 文生图/图生图），不再依赖云函数免费通道
+const AGNES_MODELS = [
+  { id: 'agnes-text', kind: 'text', label: 'Agnes 文本', group: '文本对话', desc: 'Agnes 免费文本模型' },
+  { id: 'agnes-image', kind: 'text2img', label: 'Agnes 文生图', group: '图像生成', desc: 'Agnes 免费文生图' },
+  { id: 'agnes-i2i', kind: 'i2i', label: 'Agnes 图生图', group: '图像生成', desc: 'Agnes 图生图' },
+];
+const getAgnesModel = (id: string) =>
+  AGNES_MODELS.find((m) => m.id === id) || AGNES_MODELS[0];
 
 // 把文档内容拼成 AI 解读的系统上下文（截断避免超长）
 function buildContext(title: string, content: string): string {
@@ -105,8 +113,8 @@ function compressImage(file: File): Promise<string> {
 
 export default function KnowledgeAiInterpret({ title, content }: Props) {
   const navigate = useNavigate();
-  const [activeId, setActiveId] = useState<string>('hy3');
-  const active = getAibakModel(activeId) || AIBAK_FREE_MODELS[0];
+  const [activeId, setActiveId] = useState<string>('agnes-text');
+  const active = getAgnesModel(activeId);
   const isText = active.kind === 'text';
 
   // 文本对话状态
@@ -127,6 +135,7 @@ export default function KnowledgeAiInterpret({ title, content }: Props) {
 
   // 自动滚动到底部（首次挂载跳过，避免覆盖路由级回顶）
   const chatMountedRef = useRef(false);
+  const sessionIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!chatMountedRef.current) { chatMountedRef.current = true; return; }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -149,17 +158,15 @@ export default function KnowledgeAiInterpret({ title, content }: Props) {
           .filter((m) => m.role === 'user' || m.role === 'assistant')
           .slice(-8)
           .map((m) => ({ role: m.role, content: m.content }));
-        const res: any = await aibakAPI.chat({
-          messages: [
-            { role: 'system', content: buildContext(title, content) },
-            ...history,
-            { role: 'user', content: msg },
-          ],
-          model: activeId as 'hy3' | 'hy3-preview',
-          stream: false,
+        const res: any = await aiAPI.chat({
+          message: msg,
+          sessionId: sessionIdRef.current || undefined,
+          model: 'agnes/agnes-2.0-flash',
+          config: { systemPrompt: buildContext(title, content) },
         });
         if (res?.success) {
-          setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, content: res.text || '（AI 无响应，请检查网络或稍后重试）' } : m)));
+          sessionIdRef.current = res.sessionId || sessionIdRef.current;
+          setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, content: res.message || '（AI 无响应，请检查网络或稍后重试）' } : m)));
         } else {
           setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, content: `⚠️ 解读失败：${res?.error || '未知错误'}` } : m)));
         }
@@ -200,14 +207,29 @@ export default function KnowledgeAiInterpret({ title, content }: Props) {
     setImgError('');
     setImages([]);
     try {
-      const res: any = await aibakAPI.image({
-        model: active.id,
+      const res: any = await apiClient.post('/text2img/generate', {
         prompt: imgPrompt.trim(),
         size: imgSize,
-        imageBase64: active.kind === 'i2i' ? imgBase64 : undefined,
+        n: 1,
+        provider: 'agnes',
+        style: 'agnes-image-2.0-flash',
+        ...(active.kind === 'i2i' && imgBase64 ? { imageBase64: imgBase64 } : {}),
       });
-      if (res?.success) setImages(res.images || []);
-      else setImgError(res?.error || '图像生成失败');
+      if (!res?.success) { setImgError(res?.error || '图像生成失败'); return; }
+      const taskId = res.data?.taskId;
+      if (!taskId) { setImgError('未返回任务 ID'); return; }
+      // 轮询任务结果（Agnes 同步生成，通常一次即得）
+      let out: any = null;
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const q: any = await apiClient.get(`/text2img/query/${taskId}`);
+        const data = q?.data?.data || q?.data;
+        if (data && data.status === 'completed') { out = data; break; }
+        if (data && data.status === 'failed') { setImgError('图像生成失败'); return; }
+      }
+      if (!out) { setImgError('图像生成超时，请重试'); return; }
+      const imgs = out.images?.length ? out.images : out.outputUrl ? [out.outputUrl] : [];
+      setImages(imgs.map((u: string) => ({ url: u })));
     } catch (err: any) {
       setImgError(extractApiError(err, '图像生成失败'));
     } finally {
@@ -425,7 +447,7 @@ export default function KnowledgeAiInterpret({ title, content }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         {(['文本对话', '图像生成'] as const).map((g) => (
           <Space key={g} size={8} wrap>
-            {AIBAK_FREE_MODELS.filter((m) => m.group.endsWith(g) || (g === '文本对话' && m.kind === 'text') || (g === '图像生成' && m.kind !== 'text')).map((m) => {
+            {AGNES_MODELS.filter((m) => (g === '文本对话' ? m.kind === 'text' : m.kind !== 'text')).map((m) => {
               const sel = m.id === activeId;
               return (
                 <button

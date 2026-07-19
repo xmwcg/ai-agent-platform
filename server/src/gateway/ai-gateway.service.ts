@@ -29,7 +29,8 @@ export type GatewayProviderName =
   | 'hunyuan'
   | 'zhipu'
   | 'qwen'
-  | 'doubao';
+  | 'doubao'
+  | 'agnes';
 
 export interface ChatRouteRequest {
   /** 支持前缀寻址，如 "hunyuan/hunyuan-pro" 或 "deepseek/deepseek-chat"；缺省走策略选择 */
@@ -205,6 +206,18 @@ function buildProviders(): GatewayProvider[] {
     list.push(new MockGatewayProvider());
     return list;
   }
+  // Agnes AIHub（免费模型网关，OpenAI 兼容：文本/图像/视频）
+  if (process.env.AGNES_API_KEY)
+    list.push(
+      new OpenAICompatibleProvider(
+        'agnes',
+        'Agnes AIHub',
+        process.env.AGNES_BASE_URL || 'https://apihub.agnes-ai.com/v1',
+        process.env.AGNES_API_KEY,
+        'agnes',
+        ['agnes-2.0-flash', 'agnes-image-2.0-flash', 'agnes-image-2.1-flash', 'agnes-video-v2.0']
+      )
+    );
   if (process.env.OPENAI_API_KEY)
     list.push(
       new OpenAICompatibleProvider('openai', 'OpenAI', process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1', process.env.OPENAI_API_KEY, 'openai', ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'])

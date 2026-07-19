@@ -23,7 +23,7 @@ export interface UserPreferences {
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   locale: 'zh-CN',
-  defaultModel: 'deepseek/deepseek-chat',
+  defaultModel: 'agnes/agnes-2.0-flash',
   defaultChatMode: 'qa',
   notificationsEnabled: true,
   emailNotifications: false,

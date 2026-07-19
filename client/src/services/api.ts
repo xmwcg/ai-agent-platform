@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { message } from 'antd';
 
 // 创建 axios 实例
-const apiClient: AxiosInstance = axios.create({
+export const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 10000,
   headers: {
