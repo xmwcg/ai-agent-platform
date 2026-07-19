@@ -20,9 +20,10 @@ router.post('/chat', optionalAuth, enforceCostValve(), enforceQuota('ai_chat'), 
     }
 
     let currentSessionId = sessionId;
+    const userId = req.user?.id || 'anonymous';
 
-    if (!currentSessionId) {
-      const userId = req.user?.id || 'anonymous';
+    // If no sessionId from client or session not found on server, create new server session
+    if (!currentSessionId || !aiAgentService.getSession(currentSessionId)) {
       currentSessionId = await aiAgentService.createSession(userId);
     }
 
