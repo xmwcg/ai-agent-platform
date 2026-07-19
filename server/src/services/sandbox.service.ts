@@ -366,8 +366,9 @@ class RemoteProvider implements SandboxProvider {
       };
     }
     try {
+      const url = (cfg.remoteUrl || '').replace(/\/+$/, '') + '/execute';
       const resp = await axios.post(
-        cfg.remoteUrl!,
+        url,
         { language: req.language, code: req.code },
         {
           timeout: cfg.timeoutMs,
