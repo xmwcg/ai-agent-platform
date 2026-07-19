@@ -190,6 +190,7 @@ app.use('/api/marketplace', marketplaceRevenueRoutes); // 市场收益/提现
 app.use('/api/ops', opsRoutes);                         // 运营看板 / 北极星指标
 app.use('/api/relay', relayRoutes);                     // 中转站：整合进平台的模型聚合网关
 app.use('/api', accountRoutes);                         // 账户管理 / 数据导出 / 账号注销 / 协议同意
+app.use('/api/account', accountRoutes);                 // 同时挂载在 /api/account 前缀
 
 // 静态资源：对象存储（OSS）落盘的图片/视频由 /generated 对外提供
 // 与 lib/object-storage.ts 的 LOCAL_STORAGE_DIR 保持一致（默认 server/uploads/generated）
