@@ -20,6 +20,9 @@ import { getOpsSnapshot, getPublicMetrics } from '../services/ops.service';
 
 const router = Router();
 
+// ───────────── API 状态 ─────────────
+router.get('/', (_req, res) => { res.json({ ok: true, name: 'ops' }); });
+
 /**
  * GET /api/ops/snapshot
  * Full operations dashboard — admin only.

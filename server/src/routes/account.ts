@@ -24,6 +24,9 @@ import crypto from "crypto";
 
 const router = Router();
 
+// ───────────── API 状态 ─────────────
+router.get('/', (_req, res) => { res.json({ ok: true, name: 'account' }); });
+
 // 临时 token 存储（生产应使用 Redis）
 const exportTokens = new Map<string, { userId: string; expiresAt: number }>();
 const deleteTokens = new Map<string, { userId: string; requestedAt: number; expiresAt: number }>();

@@ -6,6 +6,9 @@ import { sendError } from '../lib/http-error';
 
 const router = Router();
 
+// ───────────── API 状态 ─────────────
+router.get('/', (_req, res) => { res.json({ ok: true, name: 'compare' }); });
+
 // 获取可对比项列表
 router.get('/items', (req: Request, res: Response) => {
   const type = req.query.type as CompareItem['type'];

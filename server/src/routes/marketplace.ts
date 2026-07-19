@@ -38,6 +38,9 @@ interface EnforceApiKeyOptions {
 
 const router = Router();
 
+// ───────────── API 状态 ─────────────
+router.get('/', (_req, res) => { res.json({ ok: true, name: 'marketplace' }); });
+
 /** API Key 允许的 scope 白名单（避免越权授予未实现的能力） */
 const ALLOWED_SCOPES = ['chat', 'embed', 'compare', 'image'] as const;
 

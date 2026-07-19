@@ -9,6 +9,9 @@ import {
 import { sendError } from '../lib/http-error';
 
 const router = Router();
+
+// ───────────── API 状态 ─────────────
+router.get('/', (_req, res) => { res.json({ ok: true, name: 'points' }); });
 router.use(requireAuth);
 
 router.post('/checkin', async (req: AuthRequest, res: Response) => {
