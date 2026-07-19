@@ -109,7 +109,14 @@ const ModelConfigPage: React.FC = () => {
         message.success(`已自动获取 ${ids.length} 个模型`);
       }
     } catch (e: any) {
-      message.error(extractApiError(e, '自动获取失败'));
+      const em = extractApiError(e, '自动获取失败');
+      if (em.includes('仅提供接入参考') || em.includes('不支持在线获取')) {
+        message.info(em);
+      } else if (em.includes('网络') || em.includes('超时') || em.includes('timeout')) {
+        message.error('网络请求失败：请检查 API Key 是否正确、厂商服务是否可用，稍后重试');
+      } else {
+        message.error(em);
+      }
     }
     setFetchingModels(false);
   };
