@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /pricing
+Allow: /terms
+Allow: /privacy
+Allow: /login
+Allow: /register
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /team
+Disallow: /marketplace
+Disallow: /skills
+Disallow: /workflows
+Disallow: /plugins
+
+Sitemap: https://aibak.site/sitemap.xml
