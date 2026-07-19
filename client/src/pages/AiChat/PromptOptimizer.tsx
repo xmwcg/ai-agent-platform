@@ -37,15 +37,19 @@ export default function PromptOptimizer({ open, onClose, originalPrompt, onApply
     setLoading(true);
     setError('');
     try {
+      const directionLabel = OPTIMIZE_DIRECTIONS.find(d => d.value === direction)?.label || direction;
+      // Use the model from props (currentModel) if available, otherwise use deepseek v4 flash
+      const modelToUse = currentModel || 'deepseek/deepseek-v4-flash';
       const res: any = await aiAPI.chat({
-        message: `请根据"${OPTIMIZE_DIRECTIONS.find(d => d.value === direction)?.label}"的方向，优化以下提示词。只返回优化后的提示词，不要添加其他解释：
+        message: `请根据"${directionLabel}"的方向，优化以下提示词。只返回优化后的提示词，不要添加其他解释：
 
 ${originalPrompt}`,
-        model: currentModel || 'deepseek/deepseek-v4-flash',
+        model: modelToUse,
       });
       setOptimized(res?.message || '（优化失败，请重试）');
     } catch (err: any) {
-      setError(err?.response?.data?.message || '优化失败，请检查网络和API配置');
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || '优化失败，请检查网络和API配置';
+      setError(errMsg);
     } finally {
       setLoading(false);
     }

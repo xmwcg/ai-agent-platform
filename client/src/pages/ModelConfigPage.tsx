@@ -117,7 +117,7 @@ const ModelConfigPage: React.FC = () => {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
-    form.setFieldsValue({ provider: 'deepseek', enabled: true, models: ['deepseek-chat'], note: 'personal' });
+    form.setFieldsValue({ provider: 'deepseek', enabled: true, models: ['deepseek-v4-flash'], note: 'personal' });
     setModalOpen(true);
   };
 
@@ -332,7 +332,7 @@ const ModelConfigPage: React.FC = () => {
             <Input.Password placeholder="sk-..." />
           </Form.Item>
           <Form.Item name="defaultModel" label="默认模型" rules={[{ required: true }]}>
-            <Input placeholder="deepseek-chat" />
+            <Input placeholder="deepseek-v4-flash" />
           </Form.Item>
           <Form.Item name="models" label="可用模型列表" tooltip="可手动增删，支持自动获取">
             <Select mode="tags" placeholder="输入模型名后回车" />

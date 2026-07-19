@@ -268,7 +268,7 @@ export const modelConfigAPI = {
   // 自动获取厂商模型清单（15s 超时 + 服务端缓存，修复慢/网络错误）
   providerCatalog: () => apiClient.get('/model-config/providers/catalog'),
   fetchModels: (data: { providerId: string; endpointId?: string; apiKey: string }) =>
-    apiClient.post('/model-config/providers/fetch-models', data),
+    apiClient.post('/model-config/providers/fetch-models', data, { timeout: 30000 }),
   // 平台免费额度（云函数 4 个免费模型）元信息
   aibakFree: () => apiClient.get('/model-config/providers/aibak-free'),
 };

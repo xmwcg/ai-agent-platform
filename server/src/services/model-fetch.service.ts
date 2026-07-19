@@ -118,7 +118,7 @@ export async function fetchCatalogProviderModels(input: FetchCatalogModelsInput)
     const response = await axios.get(target.toString(), {
       headers,
       params,
-      timeout: Math.min(Math.max(input.timeoutMs || 15000, 1000), 15000),
+      timeout: Math.min(Math.max(input.timeoutMs || 30000, 1000), 30000),
       maxRedirects: 0,
       maxContentLength: MAX_RESPONSE_BYTES,
       maxBodyLength: MAX_RESPONSE_BYTES,

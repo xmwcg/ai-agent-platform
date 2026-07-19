@@ -189,7 +189,7 @@ export const NODE_TYPES: { type: string; label: string; category: string; icon: 
   { type: 'output', label: '输出', category: '基础', icon: 'ExportOutlined', color: '#fa8c16', defaultConfig: { outputFormat: 'text' } },
 
   // AI 能力
-  { type: 'ai_chat', label: 'AI 对话', category: 'AI', icon: 'RobotOutlined', color: '#1890ff', defaultConfig: { provider: 'deepseek', model: 'deepseek-chat', temperature: 0.7, systemPrompt: '你是一个有用的助手。', maxTokens: 2000 } },
+  { type: 'ai_chat', label: 'AI 对话', category: 'AI', icon: 'RobotOutlined', color: '#1890ff', defaultConfig: { provider: 'deepseek', model: 'deepseek-v4-flash', temperature: 0.7, systemPrompt: '你是一个有用的助手。', maxTokens: 2000 } },
   { type: 'rag_search', label: 'RAG 检索', category: 'AI', icon: 'SearchOutlined', color: '#722ed1', defaultConfig: { maxDocuments: 5, minSimilarity: 0.7 } },
   { type: 'translate', label: '翻译', category: 'AI', icon: 'TranslationOutlined', color: '#13c2c2', defaultConfig: { targetLanguage: '英文', sourceLanguage: '自动检测' } },
   { type: 'web_search', label: '网络搜索', category: 'AI', icon: 'GlobalOutlined', color: '#eb2f96', defaultConfig: { maxResults: 5 } },
