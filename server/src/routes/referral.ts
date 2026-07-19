@@ -11,6 +11,8 @@ import { Withdrawal } from '../models/Withdrawal';
 
 const router = Router();
 
+router.get('/', (req, res) => { res.json({ ok: true, name: 'referral', routes: ['/code', '/stats', '/list', '/commissions', '/withdraw'] }); });
+
 // 所有路由需要登录
 router.use(requireAuth);
 

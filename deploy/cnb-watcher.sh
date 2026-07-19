@@ -379,7 +379,17 @@ compose_up() {
     log "发布状态不完整，拒绝执行 Compose: $state_file"
     return 1
   }
-  "${COMPOSE[@]}" --env-file "$state_file" -f "$LOADED_RELEASE_COMPOSE_FILE" \
+    # 移除旧容器避免 name conflict
+  for c in ai-platform-server ai-platform-client; do
+    docker stop "$c" 2>/dev/null || true
+    docker rm "$c" 2>/dev/null || true
+  done
+  # 移除旧容器避免 name conflict
+  for c in ai-platform-server ai-platform-client; do
+    docker stop "$c" 2>/dev/null || true
+    docker rm "$c" 2>/dev/null || true
+  done
+"${COMPOSE[@]}" --env-file "$state_file" -f "$LOADED_RELEASE_COMPOSE_FILE" \
     -p "$COMPOSE_PROJECT_NAME" up -d --no-build >>"$DEPLOY_LOG" 2>&1
 }
 
