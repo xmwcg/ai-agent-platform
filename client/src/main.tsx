@@ -52,7 +52,8 @@ function ThemedApp() {
       var changed = false;
       var cleaned = chatStorage
         .replace(/"deepseek-chat"/g, '"deepseek-v4-flash"')
-        .replace(/"deepseek-coder"/g, '"deepseek-v4-flash"');
+        .replace(/"deepseek-coder"/g, '"deepseek-v4-flash"')
+        .replace(/"mc_[a-f0-9]+\\/g, '"');
       if (cleaned !== chatStorage) {
         localStorage.setItem('ai-chat-storage', cleaned);
         changed = true;
