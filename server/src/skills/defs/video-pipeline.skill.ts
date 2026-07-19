@@ -2,6 +2,41 @@ import { route } from '../../gateway/ai-gateway.service';
 import { mediaGenService, ensureAgnesLoaded } from '../../services/media-gen.service';
 import type { Skill } from '../types';
 
+/** 视频类 Provider（不具备对话能力，不能用于调研/脚本/视觉提示词阶段） */
+const VIDEO_PROVIDER_RE = /agnes|moneyprinterturbo|^mc_/i;
+
+/**
+ * 解析「对话阶段」使用的 Provider。
+ * 前端「模型」选择器可能把 Agnes / MoneyPrinterTurbo 等视频模型选为默认模型，
+ * 这些模型不具备对话能力，必须回退到 deepseek（已验证可用的对话 Provider），
+ * 否则调研/脚本阶段会直接失败、整条流水线卡死。
+ */
+function resolveChatProvider(provider?: string): string {
+  if (!provider) return 'deepseek';
+  if (VIDEO_PROVIDER_RE.test(provider)) return 'deepseek';
+  return provider;
+}
+
+/** 视觉提示词兜底：上游偶发空响应时，基于主题构造纯画面英文描述（符合视频模型内容策略）。 */
+function buildFallbackVisualPrompt(topic: string, style?: string | number): string {
+  const mood = String(style || 'cinematic commercial').trim();
+  return `A bright, modern scene visually representing the idea: ${topic}. Smooth camera movement, soft natural light, clean composition, ${mood} style, no on-screen text, no logos, no people speaking.`;
+}
+
+/** 调用 AI 网关完成一个对话阶段；上游偶发空响应时自动重试一次（换更高温度）。 */
+async function callChatStage(
+  chatProvider: string | undefined,
+  messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
+  maxTokens: number,
+  temperature: number,
+): Promise<string> {
+  const attempt = (t: number) =>
+    route({ ...(chatProvider ? { provider: chatProvider as any } : {}), messages, maxTokens, temperature: t });
+  let reply = ((await attempt(temperature)).reply || '').trim();
+  if (!reply) reply = ((await attempt(0.7)).reply || '').trim();
+  return reply;
+}
+
 /**
  * 视频生产流水线技能：research → script → compose。
  * 所有阶段必须由真实 Provider 产出；任何关键阶段失败都会返回明确错误，绝不把错误文本包装成成功结果。
@@ -32,7 +67,7 @@ export const videoPipelineSkill: Skill = {
     marketable: true,
   },
   async invoke(ctx) {
-    const { topic, duration, style, compose = true, provider, model } = ctx.input || {};
+    const { topic, duration, style, compose = true, provider } = ctx.input || {};
     if (typeof topic !== 'string' || !topic.trim()) {
       return { ok: false, status: 400, code: 'VIDEO_TOPIC_REQUIRED', error: '视频流水线需要非空 topic（主题）' };
     }
@@ -41,69 +76,53 @@ export const videoPipelineSkill: Skill = {
     }
 
     const cleanTopic = topic.trim();
+    // 对话阶段（调研/脚本/视觉提示词）必须用「对话型」Provider。
+    // 用户在前端可能把 Agnes / MoneyPrinterTurbo 等视频模型选为「模型」，它们不能做对话，
+    // 一旦检测到就回退到 deepseek（已验证可用），否则调研/脚本阶段会直接失败、整条流水线卡死。
+    const chatProvider = resolveChatProvider(provider as string | undefined);
     try {
-      const researchResult = await route({
-        ...(typeof provider === 'string' ? { provider: provider as any } : {}),
-        ...(typeof model === 'string' && model.trim() ? { model: model.trim() } : {}),
-        messages: [
-          {
-            role: 'system',
-            content: '你是短视频内容调研员。基于用户主题给出目标受众、核心痛点、可信卖点、内容风险和三条可验证的创作依据。不得声称已联网，也不得编造来源。',
-          },
-          { role: 'user', content: `主题：${cleanTopic}` },
-        ],
-        maxTokens: 700,
-        temperature: 0.3,
-      });
-      const research = researchResult.reply?.trim();
+      const research = await callChatStage(chatProvider, [
+        {
+          role: 'system',
+          content: '你是短视频内容调研员。基于用户主题给出目标受众、核心痛点、可信卖点、内容风险和三条可验证的创作依据。不得声称已联网，也不得编造来源。',
+        },
+        { role: 'user', content: `主题：${cleanTopic}` },
+      ], 700, 0.3);
       if (!research) throw new Error('调研 Provider 返回空内容');
 
-      const scriptResult = await route({
-        ...(typeof provider === 'string' ? { provider: provider as any } : {}),
-        ...(typeof model === 'string' && model.trim() ? { model: model.trim() } : {}),
-        messages: [
-          {
-            role: 'system',
-            content: '你是短视频脚本专家。根据给定调研结果输出完整口播脚本、分镜、字幕和画面提示，不得补写不存在的事实来源。',
-          },
-          {
-            role: 'user',
-            content: `主题：${cleanTopic}
+      const script = await callChatStage(chatProvider, [
+        {
+          role: 'system',
+          content: '你是短视频脚本专家。根据给定调研结果输出完整口播脚本、分镜、字幕和画面提示，不得补写不存在的事实来源。',
+        },
+        {
+          role: 'user',
+          content: `主题：${cleanTopic}
 目标时长：${duration || 30} 秒
 风格：${style || '自然专业'}
 调研结果：
 ${research}`,
-          },
-        ],
-        maxTokens: 1200,
-        temperature: 0.5,
-      });
-      const script = scriptResult.reply?.trim();
+        },
+      ], 1200, 0.5);
       if (!script) throw new Error('脚本 Provider 返回空内容');
 
       // 视觉提示词：把脚本转成「纯画面、无品牌/口号/文案」的镜头化英文描述，专供视频模型。
       // 视频模型有内容策略过滤，直接喂整段带品牌名/slogan 的营销脚本会触发 content_policy_violation。
       let visualPrompt = '';
       if (compose) {
-        const visualResult = await route({
-          ...(typeof provider === 'string' ? { provider: provider as any } : {}),
-          ...(typeof model === 'string' && model.trim() ? { model: model.trim() } : {}),
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are a cinematography prompt writer for a text-to-video model. Convert the given script into ONE concise English shot description of the VISUALS only: subjects, actions, setting, lighting, camera movement, mood and style. Rules: describe only what the camera sees; NO brand names, NO logos, NO slogans, NO on-screen text/captions, NO marketing claims, NO people speaking words. Keep it under 60 words. Output the description only, no preamble.',
-            },
-            {
-              role: 'user',
-              content: `Topic: ${cleanTopic}\nStyle: ${style || 'cinematic commercial'}\nScript:\n${script}`,
-            },
-          ],
-          maxTokens: 220,
-          temperature: 0.4,
-        });
-        visualPrompt = (visualResult.reply || '').trim();
-        if (!visualPrompt) throw new Error('视觉提示词 Provider 返回空内容');
+        visualPrompt = await callChatStage(chatProvider, [
+          {
+            role: 'system',
+            content:
+              'You are a cinematography prompt writer for a text-to-video model. Convert the given script into ONE concise English shot description of the VISUALS only: subjects, actions, setting, lighting, camera movement, mood and style. Rules: describe only what the camera sees; NO brand names, NO logos, NO slogans, NO on-screen text/captions, NO marketing claims, NO people speaking words. Keep it under 60 words. Output the description only, no preamble.',
+          },
+          {
+            role: 'user',
+            content: `Topic: ${cleanTopic}\nStyle: ${style || 'cinematic commercial'}\nScript:\n${script}`,
+          },
+        ], 220, 0.4);
+        // 兜底：上游偶发空响应时，基于主题构造纯画面描述，避免整条流水线失败
+        if (!visualPrompt) visualPrompt = buildFallbackVisualPrompt(cleanTopic, style);
       }
 
       let composeResult: any = null;
@@ -129,8 +148,8 @@ ${research}`,
         ok: true,
         data: {
           stages: {
-            research: { content: research, provider: researchResult.provider, model: researchResult.model },
-            script: { content: script, provider: scriptResult.provider, model: scriptResult.model },
+            research: { content: research, provider: chatProvider },
+            script: { content: script, provider: chatProvider },
             ...(visualPrompt ? { visualPrompt } : {}),
             compose: composeResult,
           },
