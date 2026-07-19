@@ -34,6 +34,7 @@ COPY --from=build --chown=node:node /usr/src/app/dist ./dist
 # are irrelevant to the application but still reported by image scanners).
 RUN rm -rf /usr/local/lib/node_modules/npm \
   && rm -f /usr/local/bin/npm /usr/local/bin/npx \
+  && mkdir -p /usr/src/app/.cache/assets
   && mkdir -p /usr/src/app/uploads \
   && chown -R node:node /usr/src/app/uploads \
   && node --version
