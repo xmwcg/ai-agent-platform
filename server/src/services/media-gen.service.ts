@@ -42,7 +42,6 @@ export {
 
 const PROVIDERS: Record<MediaProviderName, MediaProvider> = {
   mock: new MockProvider(),
-  agnes: new AgneProvider(),
   hunyuan: new HunyuanProvider(),
   keling: new KelingProvider(),
   jimeng: new JimengProvider(),

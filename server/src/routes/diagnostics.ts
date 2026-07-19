@@ -84,6 +84,14 @@ router.get('/', requireAuth, async (_req: Request, res: Response) => {
       hasPlatformCert: !!process.env.WECHAT_PLATFORM_CERT,
       hasPrivateKey: !!process.env.WECHAT_PRIVATE_KEY,
     },
+    stripe: {
+      configured: envPresent('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'),
+      hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
+      hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+    },
+    alipay: {
+      configured: envPresent('ALIPAY_APP_ID', 'ALIPAY_PRIVATE_KEY', 'ALIPAY_PUBLIC_KEY'),
+    },
   };
 
   res.json({

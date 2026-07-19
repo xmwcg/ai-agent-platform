@@ -78,7 +78,7 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
   {
     id: 'deepseek', name: 'DeepSeek', category: 'domestic', protocols: [openAICompatible],
     endpoints: [{ id: 'cn', name: '官方 API', region: '中国大陆', baseUrl: 'https://api.deepseek.com/v1', modelListPath: '/models', authMode: 'bearer' }],
-    keyFormat: 'sk-…', recommendedModels: ['deepseek-chat', 'deepseek-reasoner'],
+    keyFormat: 'sk-…', recommendedModels: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     capabilities: ['chat', 'reasoning', 'tool-use'], supportsModelFetch: true,
     officialWebsite: 'https://www.deepseek.com/', registrationUrl: 'https://platform.deepseek.com/',
     apiKeyGuideUrl: 'https://platform.deepseek.com/api_keys', officialDocsUrl: 'https://api-docs.deepseek.com/api/list-models',
