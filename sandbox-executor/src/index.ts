@@ -91,7 +91,7 @@ app.post('/execute', async (req, res) => {
 });
 
 // 启动
-app.listen(PORT, '127.0.0.1', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Sandbox executor running on http://127.0.0.1:${PORT}`);
   if (!AUTH_TOKEN) {
     console.warn('WARNING: SANDBOX_AUTH_TOKEN not set!');

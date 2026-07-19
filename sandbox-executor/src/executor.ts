@@ -7,7 +7,7 @@
 import { execFile } from 'child_process';
 import { randomBytes } from 'crypto';
 import { writeFile, unlink } from 'fs/promises';
-import { tmpdir } from 'os';
+const SANDBOX_TMP = process.env.SANDBOX_TMPDIR || '/tmp';
 import { join } from 'path';
 
 export interface SandboxExecRequest {
@@ -112,7 +112,7 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
   // 生成唯一文件名
   const runId = randomBytes(8).toString('hex');
   const fileName = `sandbox-${runId}${langConfig.fileExt}`;
-  const tmpFilePath = join(tmpdir(), fileName);
+  const tmpFilePath = join(SANDBOX_TMP, fileName);
 
   try {
     // 写入代码到临时文件
@@ -136,14 +136,12 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
       '--memory', `${maxMemoryMB}m`,
       '--memory-swap', `${maxMemoryMB}m`,
       '--cpus', String(maxCpuShares),
-      '--cpu-period', String(cpuPeriod),
-      '--cpu-quota', String(cpuQuota),
       '--pids-limit', String(maxPids),
       '--ulimit', 'nofile=64:64',
       '--ulimit', 'nproc=64:64',
       '--stop-timeout', '2',
       // 挂载代码文件
-      '-v', `${tmpFilePath}:/sandbox/${fileName}:ro`,
+      '-v', `${tmpFilePath}:/sandbox/code${langConfig.fileExt}:ro`,
       // 设置工作目录
       '-w', '/sandbox',
       // 镜像
