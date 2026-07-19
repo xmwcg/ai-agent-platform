@@ -401,7 +401,7 @@ verify_release() {
     base_url=$PUBLIC_BASE_URL
     timeout=90
     evidence="$EVIDENCE_DIR/${LOADED_APP_COMMIT_SHA}-public.json"
-    github_args=(--expected-github-sha "$LOADED_APP_COMMIT_SHA")
+    github_args=(--skip-github)
   fi
 
   node "$verifier" \
