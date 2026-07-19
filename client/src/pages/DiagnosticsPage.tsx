@@ -44,7 +44,7 @@ const DiagnosticsPage: React.FC = () => {
       const res: any = await diagnosticsAPI.check();
       const d = (res && res.data) || res || {};
       setChecks(Array.isArray(d.checks) ? d.checks : []);
-      setMedia(Array.isArray(d.mediaProviders) ? d.mediaProviders.filter(function(x){return x}) : []);
+      setMedia(Array.isArray(d.mediaProviders) ? d.mediaProviders.filter(Boolean) : []);
       setMockMode(!!d.mockMode);
       setPaymentStatus(d.paymentStatus && typeof d.paymentStatus === "object" ? d.paymentStatus : null);
     } catch { /* ignore */ }
