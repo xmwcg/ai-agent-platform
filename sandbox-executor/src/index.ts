@@ -1,19 +1,5 @@
 /**
- * AIapp.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'sandbox-executor', timestamp: new Date().toISOString() });// 鉴权中间件
-app.use((req, res, next) => {
-  if (!AUTH_TOKEN) {
-    return res.status(500).json({ error: '执行器未配置鉴权令牌' });
-  }
-  const auth = req.headers.authorization || '';
-  if (auth !== `Bearer ${AUTH_TOKEN}`) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
-  next();
-});
-
-// 健康检查
-bak 沙箱执行器（Sandbox Executor）
+ * AIbak 沙箱执行器（Sandbox Executor）
  *
  * 独立服务，接收主站的代码执行请求，在 Docker 隔离容器中运行代码。
  * 每个执行请求创建一个一次性容器，执行完毕后立即销毁。
@@ -40,8 +26,24 @@ const AUTH_TOKEN = process.env.SANDBOX_AUTH_TOKEN || '';
 const app = express();
 app.use(express.json({ limit: '128kb' }));
 
-
+// 健康检查
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', service: 'sandbox-executor', timestamp: new Date().toISOString() });
 });
+
+
+// 鉴权中间件
+app.use((req, res, next) => {
+  if (!AUTH_TOKEN) {
+    return res.status(500).json({ error: '执行器未配置鉴权令牌' });
+  }
+  const auth = req.headers.authorization || '';
+  if (auth !== `Bearer ${AUTH_TOKEN}`) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  next();
+});
+
 
 // 代码执行接口
 app.post('/execute', async (req, res) => {
