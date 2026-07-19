@@ -8,7 +8,13 @@ import dotenv from 'dotenv';
 import { assertStartupEnv } from '../config/env-check';
 
 function normalizePem(value: string): string {
-  return value.replace(/\\n/g, '\n').trim();
+  if (!value) return "";
+  let cleaned = value.trim();
+  if ((cleaned.startsWith("\"") && cleaned.endsWith("\"")) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1);
+  }
+  cleaned = cleaned.replace(/\\n/g, "\n");
+  return cleaned.trim();
 }
 
 function assertProtocol(name: string, value: string, protocols: string[]): void {
