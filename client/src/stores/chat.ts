@@ -53,7 +53,7 @@ interface ChatState {
   renameSession: (id: string, title: string) => void;
 
   // 消息管理
-  addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => string;
   updateMessage: (id: string, updates: Partial<ChatMessage>) => void;
   clearMessages: () => void;
 
@@ -140,9 +140,10 @@ export const useChatStore = create<ChatState>()(
       },
 
       addMessage: (msg) => {
+        const messageId = nextMsgId();
         const message: ChatMessage = {
           ...msg,
-          id: nextMsgId(),
+          id: messageId,
           timestamp: Date.now(),
         };
         set((s) => ({
@@ -159,6 +160,7 @@ export const useChatStore = create<ChatState>()(
               : ss
           ),
         }));
+        return messageId;
       },
 
       updateMessage: (id, updates) => {

@@ -86,8 +86,7 @@ export default function AiChat() {
       addMessage({ role: 'user', content: text.trim(), model, mode });
 
       // 添加空的 AI 消息占位
-      const aiMsgId = `msg_${Date.now()}_placeholder`;
-      addMessage({ role: 'assistant', content: '⏳ 思考中...', model, mode });
+      const aiMsgId = addMessage({ role: 'assistant', content: '⏳ 思考中...', model, mode });
       setLoading(true);
 
       try {
