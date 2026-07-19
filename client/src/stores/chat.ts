@@ -207,6 +207,26 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'ai-chat-storage',
+      version: 2,
+      migrate: (persisted: any) => {
+        if (!persisted || persisted.version === 2) return persisted;
+        const cleanModel = (m: string) => {
+          if (!m) return m;
+          m = m.replace(/deepseek-chat/g, "deepseek-v4-flash");
+          m = m.replace(/deepseek-coder/g, "deepseek-v4-flash");
+          return m;
+        };
+        return {
+          ...persisted,
+          version: 2,
+          model: cleanModel(persisted.model),
+          sessions: (persisted.sessions || []).map((s: any) => ({
+            ...s,
+            model: cleanModel(s.model),
+            messages: (s.messages || []).map((m: any) => ({ ...m, model: cleanModel(m.model) })),
+          })),
+        };
+      },
       partialize: (state) => ({
         sessions: state.sessions.map((s) => ({
           ...s,
