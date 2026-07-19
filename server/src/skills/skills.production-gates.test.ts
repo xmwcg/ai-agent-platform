@@ -42,7 +42,7 @@ describe('技能生产真实性门禁', () => {
 
   it('视频脚本失败时不进入合成阶段', async () => {
     mockedRoute
-      .mockResolvedValueOnce({ reply: '真实调研结果', provider: 'deepseek', model: 'deepseek-chat' } as any)
+      .mockResolvedValueOnce({ reply: '真实调研结果', provider: 'deepseek', model: 'deepseek-v4-flash' } as any)
       .mockRejectedValueOnce(new Error('script provider unavailable'));
     const result = await videoPipelineSkill.invoke({ input: { topic: '真实商业发布' } });
     expect(result.ok).toBe(false);
@@ -52,7 +52,7 @@ describe('技能生产真实性门禁', () => {
 
   it('视频合成失败时不把错误包装成成功结果', async () => {
     mockedRoute
-      .mockResolvedValueOnce({ reply: '真实调研结果', provider: 'deepseek', model: 'deepseek-chat' } as any)
+      .mockResolvedValueOnce({ reply: '真实调研结果', provider: 'deepseek', model: 'deepseek-v4-flash' } as any)
       .mockResolvedValueOnce({ reply: '真实视频脚本', provider: 'openai', model: 'gpt-4o' } as any);
     mockedGenerate.mockRejectedValueOnce(new Error('compose provider unavailable'));
     const result = await videoPipelineSkill.invoke({ input: { topic: '真实商业发布' } });
@@ -62,13 +62,13 @@ describe('技能生产真实性门禁', () => {
 
   it('视频流水线成功时返回真实阶段元数据与可追踪任务', async () => {
     mockedRoute
-      .mockResolvedValueOnce({ reply: '真实调研结果', provider: 'deepseek', model: 'deepseek-chat' } as any)
+      .mockResolvedValueOnce({ reply: '真实调研结果', provider: 'deepseek', model: 'deepseek-v4-flash' } as any)
       .mockResolvedValueOnce({ reply: '真实视频脚本', provider: 'openai', model: 'gpt-4o' } as any);
     mockedGenerate.mockResolvedValueOnce({ taskId: 'video-task-001', status: 'processing', provider: 'moneyprinterturbo' } as any);
     const result = await videoPipelineSkill.invoke({ input: { topic: '真实商业发布', duration: 30, style: '专业' } });
     expect(result.ok).toBe(true);
     expect(result.data.stages).toEqual({
-      research: { content: '真实调研结果', provider: 'deepseek', model: 'deepseek-chat' },
+      research: { content: '真实调研结果', provider: 'deepseek', model: 'deepseek-v4-flash' },
       script: { content: '真实视频脚本', provider: 'openai', model: 'gpt-4o' },
       compose: expect.objectContaining({ taskId: 'video-task-001', provider: 'moneyprinterturbo' }),
     });
@@ -78,20 +78,20 @@ describe('技能生产真实性门禁', () => {
   });
 
   it('代码解释调用真实生成服务而不是回显输入冒充结果', async () => {
-    mockedGenerateText.mockResolvedValueOnce({ text: '该函数把两个数字相加并返回结果。', provider: 'deepseek', model: 'deepseek-chat' });
+    mockedGenerateText.mockResolvedValueOnce({ text: '该函数把两个数字相加并返回结果。', provider: 'deepseek', model: 'deepseek-v4-flash' });
     const result = await codeExplainSkill.invoke({ input: { code: 'const add = (a, b) => a + b;', language: 'typescript', level: 'brief' } });
-    expect(result).toMatchObject({ ok: true, data: { explanation: '该函数把两个数字相加并返回结果。', provider: 'deepseek', model: 'deepseek-chat' } });
+    expect(result).toMatchObject({ ok: true, data: { explanation: '该函数把两个数字相加并返回结果。', provider: 'deepseek', model: 'deepseek-v4-flash' } });
     expect(result.data).not.toHaveProperty('input');
     expect(mockedGenerateText).toHaveBeenCalledTimes(1);
   });
 
   it('翻译技能调用真实翻译服务并返回 Provider 元数据', async () => {
     mockedTranslate.mockResolvedValueOnce({
-      sourceText: '你好', translatedText: 'Hello', sourceLang: '中文', targetLang: '英语', provider: 'deepseek', model: 'deepseek-chat',
+      sourceText: '你好', translatedText: 'Hello', sourceLang: '中文', targetLang: '英语', provider: 'deepseek', model: 'deepseek-v4-flash',
     });
     const result = await translateSkill.invoke({ input: { text: '你好', sourceLang: 'zh', targetLang: 'en' } });
     expect(result.ok).toBe(true);
-    expect(result.data).toMatchObject({ translatedText: 'Hello', provider: 'deepseek', model: 'deepseek-chat' });
+    expect(result.data).toMatchObject({ translatedText: 'Hello', provider: 'deepseek', model: 'deepseek-v4-flash' });
     expect(mockedTranslate).toHaveBeenCalledWith('你好', 'en', 'zh', undefined, undefined);
   });
 
