@@ -133,7 +133,7 @@ export const aiAPI = {
     provider?: string;
     model?: string;
     config?: { systemPrompt?: string; temperature?: number; maxTokens?: number };
-  }) => apiClient.post('/ai/chat', data),
+  }) => apiClient.post('/ai/chat', data, { timeout: 90000 }),
 
   // 获取可用模型（旧：仅 provider 维度，保留兼容）
   getModels: () => apiClient.get('/ai/models'),
