@@ -183,17 +183,46 @@ const JinWangTongPage: React.FC = () => {
     },
     {
       key: 'dashboard',
-      label: '在线演示',
+
+      label: '使用说明',
+
       children: (
-        <div style={{ background: '#fff', borderRadius: 8, overflow: 'hidden', border: '1px solid #eef1f5' }}>
-          <iframe
-            src="/jinwangtong/"
-            title="金网通控制台"
-            style={{ width: '100%', height: 'calc(100vh - 250px)', border: 'none' }}
-          />
+
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+
+          <Title level={4}>金网通控制台（本地运行）</Title>
+
+          <Paragraph type="secondary" style={{ maxWidth: 600, margin: '16px auto' }}>
+
+            金网通是一款本地PowerShell脚本工具，需在Windows电脑上下载运行。
+
+            下载后在管理机以管理员运行 <code>console.ps1</code> 即可打开Web控制台（默认 http://localhost:8080）。
+
+          </Paragraph>
+
+          <Space size={12} style={{ marginTop: 16 }}>
+
+            <Button type="primary" size="large" icon={<DownloadOutlined />} style={{ borderRadius: 8 }}>
+
+              下载脚本包
+
+            </Button>
+
+            <Button size="large" icon={<ApiOutlined />} style={{ borderRadius: 8 }}
+
+              onClick={() => window.open('https://cnb.cool/aibak.site/enterprise-network-hub', '_blank')}>
+
+              查看源码
+
+            </Button>
+
+          </Space>
+
         </div>
+
       ),
-    },
+
+      },
   ];
 
   return (
