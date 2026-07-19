@@ -42,11 +42,11 @@ const DiagnosticsPage: React.FC = () => {
     setLoading(true);
     try {
       const res: any = await diagnosticsAPI.check();
-      const d = res.data?.data || res.data || {};
-      setChecks(d.checks || []);
-      setMedia(d.mediaProviders || []);
+      const d = (res && res.data) || res || {};
+      setChecks(Array.isArray(d.checks) ? d.checks : []);
+      setMedia(Array.isArray(d.mediaProviders) ? d.mediaProviders.filter(function(x){return x}) : []);
       setMockMode(!!d.mockMode);
-      setPaymentStatus(d.paymentStatus || null);
+      setPaymentStatus(d.paymentStatus && typeof d.paymentStatus === "object" ? d.paymentStatus : null);
     } catch { /* ignore */ }
     setLoading(false);
   };

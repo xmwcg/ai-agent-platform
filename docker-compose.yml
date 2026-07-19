@@ -9,7 +9,28 @@ services:
       MONGO_INITDB_DATABASE: ai-agent-platform
     volumes:
       - mongodb_data:/data/db
+    
+  sandbox-executor:
+    build: ./sandbox-executor
+    container_name: sandbox-executor
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4090
+      - SANDBOX_AUTH_TOKEN=
+      - SANDBOX_TMPDIR=/tmp/sandbox
+    volumes:
+      - sandbox_tmp:/tmp/sandbox
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
+      - ai-platform-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "const h=require('http');const r=h.get('http://127.0.0.1:4090/health',x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)"]
+      interval: 15s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+networks:
       - ai-platform-network
     # 安全加固：不对外暴露端口，仅 docker 内网可访问
 
@@ -86,3 +107,4 @@ volumes:
   mongodb_data:
   redis_data:
   server_uploads:
+  sandbox_tmp:
