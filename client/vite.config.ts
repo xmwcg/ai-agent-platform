@@ -23,6 +23,27 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react-dom') || id.includes('react/') || id.includes('react-router')) {
+              return 'react-vendor';
+            }
+            if (id.includes('antd') || id.includes('@ant-design')) {
+              return 'antd-vendor';
+            }
+            if (id.includes('dompurify') || id.includes('marked') || id.includes('highlight')) {
+              return 'markdown-vendor';
+            }
+            if (id.includes('monaco-editor') || id.includes('@monaco-editor')) {
+              return 'monaco-editor';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
   }
 });
