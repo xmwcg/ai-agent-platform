@@ -7,7 +7,7 @@
 import { execFile } from 'child_process';
 import { randomBytes } from 'crypto';
 import { writeFile, unlink, mkdir } from 'fs/promises';
-const SANDBOX_TMP = process.env.SANDBOX_TMPDIR || '/tmp';
+const SANDBOX_TMP = process.env.SANDBOX_TMPDIR || '/tmp/sandbox';\n// Docker daemon runs on the HOST, so bind-mount source paths must be host paths.\n// HOST_SANDBOX_TMP must be set to the host-side volume path (e.g. /var/lib/docker/volumes/.../_data).\nconst HOST_SANDBOX_TMP = process.env.HOST_SANDBOX_TMP || SANDBOX_TMP;
 import { join } from 'path';
 
 export interface SandboxExecRequest {
@@ -112,7 +112,7 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
   // 生成唯一文件名
   const runId = randomBytes(8).toString('hex');
   const fileName = `sandbox-${runId}${langConfig.fileExt}`;
-  const tmpFilePath = join(SANDBOX_TMP, fileName);
+  const tmpFilePath = join(SANDBOX_TMP, fileName);\n  const hostFilePath = join(HOST_SANDBOX_TMP, fileName);
 
   try {
     // 确保临时目录存在
@@ -142,7 +142,7 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
       '--ulimit', 'nproc=64:64',
       '--stop-timeout', '2',
       // 挂载代码文件
-      '-v', `${tmpFilePath}:/code${langConfig.fileExt}:rw`,
+      '-v', `${hostFilePath}:/code${langConfig.fileExt}:rw`,
       // 设置工作目录
       '-w', '/tmp',
       // 镜像
