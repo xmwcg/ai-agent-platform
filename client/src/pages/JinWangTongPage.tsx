@@ -98,9 +98,7 @@ const JinWangTongPage: React.FC = () => {
   window.open('/api/billing/private-license/download?type=trial', '_blank');
   message.success('正在下载金网通试用版（需登录验证）...');
 };
-  const handleViewSource = () => {
-  message.info('金网通为商业软件，源码不对外公开。如需定制开发请联系客服。');
-};
+  
 
   return (
     <div style={{ padding: '0 8px', maxWidth: 1200, margin: '0 auto' }}>
@@ -115,7 +113,6 @@ const JinWangTongPage: React.FC = () => {
           <Paragraph style={{ color: '#64748b', fontSize: 14, maxWidth: 640, margin: '0 auto 24px' }}>一次部署全公司打通：文件共享 · 远程桌面 · 统一管控 · 审计溯源 · 上网管控 · 网络体检 — <Text strong style={{ color: '#818cf8' }}>六合一</Text> · 离线可用 · 数据不出公司</Paragraph>
           <Space size={16} wrap>
             <Button type="primary" size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}>免费下载试用 (15天)</Button>
-            <Button size="large" ghost icon={<ApiOutlined />} onClick={handleViewSource} style={{ borderRadius: 10, height: 48, padding: '0 24px', fontSize: 15, borderColor: '#6366f1', color: '#a5b4fc' }}>查看源码</Button>
           </Space>
           <div style={{ marginTop: 32, display: 'flex', justifyContent: 'center', gap: 40, flexWrap: 'wrap' }}>
             {[{ icon: <WindowsOutlined />, label: 'Win10/11全版本' }, { icon: <AppleOutlined />, label: 'macOS支持' }, { icon: <LinuxOutlined />, label: 'Linux扫描' }, { icon: <SafetyOutlined />, label: '离线可用' }, { icon: <ThunderboltOutlined />, label: '永久买断' }].map((item, i) => (<div key={i} style={{ textAlign: 'center' }}><div style={{ fontSize: 22, color: '#818cf8', marginBottom: 4 }}>{item.icon}</div><Text style={{ color: '#94a3b8', fontSize: 12 }}>{item.label}</Text></div>))}
@@ -158,7 +155,7 @@ const JinWangTongPage: React.FC = () => {
       <div style={{ marginBottom: 32 }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}><Title level={2} style={{ marginBottom: 8 }}>快速开始</Title><Paragraph type="secondary" style={{ fontSize: 15 }}>4 步完成部署，无需专业IT背景</Paragraph></div>
         <Card style={{ borderRadius: 16, marginBottom: 24 }}><Steps current={-1} direction="vertical" size="small" items={INSTALL_STEPS.map(s => ({ title: <Text strong>{s.title}</Text>, description: <Text type="secondary">{s.desc}</Text> }))} style={{ maxWidth: 600, margin: '0 auto' }} /></Card>
-        <div style={{ textAlign: 'center', marginTop: 24 }}><Button type="primary" size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', fontWeight: 600, fontSize: 15 }}>下载脚本包 (ZIP)</Button><Paragraph type="secondary" style={{ marginTop: 12, fontSize: 13 }}>或通过命令行克隆：<code style={{ background: '#1e293b', color: '#e2e8f0', padding: '2px 8px', borderRadius: 4 }}>通过上方按钮下载（需登录）</code></Paragraph></div>
+        <div style={{ textAlign: 'center', marginTop: 24 }}><Button type="primary" size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', fontWeight: 600, fontSize: 15 }}>下载脚本包 (ZIP)</Button><Paragraph type="secondary" style={{ marginTop: 12, fontSize: 13 }}></Paragraph></div>
       </div>
 
       <Divider />

@@ -538,22 +538,35 @@ router.get('/profit-summary', requireAuth, requireAdmin, async (req: AuthRequest
 });
 
 
-// 金网通私有化授权下载（需登录）
-router.get('/private-license/download', requireAuth, async (req: AuthRequest, res: Response) => {
+// 金网通试用版公开下载（无需登录）+ 完整版需登录验证
+router.get('/private-license/download', async (req: Request, res: Response) => {
   try {
     const type = (req.query.type as string) || 'trial';
     const zipPath = path.join(process.cwd(), '..', '金网通-完整项目源码-v1.0', 'dist', '金网通-企业局域网电脑互联互通系统-v1.0.zip');
+
+    // 完整版需要登录
+    if (type === 'full') {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, error: '完整版下载需登录验证' });
+      }
+      try {
+        const jwt = require('jsonwebtoken');
+        const secret = process.env.JWT_SECRET || 'dev-secret';
+        jwt.verify(authHeader.slice(7), secret);
+      } catch {
+        return res.status(401).json({ success: false, error: '登录已过期，请重新登录' });
+      }
+    }
 
     if (!fs.existsSync(zipPath)) {
       logger.warn('private-license', 'Download ZIP not found: ' + zipPath);
       return res.status(404).json({ success: false, error: '安装包暂不可用，请联系客服' });
     }
 
-    const filename = type === 'full'
-      ? 'JinWangTong-Full-v1.0.zip'
-      : 'JinWangTong-Trial-v1.0.zip';
-
-    logger.info('private-license', `Download: userId=${req.user!.id} type=${type} ip=${req.ip}`);
+    const filename = 'JinWangTong-Trial-v1.0.zip';
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    logger.info('private-license', `Download: type=${type} ip=${ip}`);
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
