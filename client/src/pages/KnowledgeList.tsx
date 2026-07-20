@@ -11,7 +11,7 @@ import {
   UploadOutlined, DownloadOutlined, FileOutlined, SwapOutlined,
   MoreOutlined, ClockCircleOutlined, UserOutlined, FireOutlined,
 } from '@ant-design/icons';
-import { knowledgeAPI } from '@/services/api';
+import { knowledgeAPI, extractApiError } from '@/services/api';
 import FileConverter from '@/components/FileConverter';
 import KnowledgeImport from '@/components/KnowledgeImport';
 import { repairKnowledgeDocument, repairStringList } from '@/utils/repairMojibake';
@@ -67,7 +67,7 @@ export default function KnowledgeList() {
         setDocuments(response.data.map(repairKnowledgeDocument));
         setPagination((p) => ({ ...p, total: response.pagination?.total || 0 }));
       }
-    } catch {
+    } catch (e) {
       message.error('加载文档失败');
     } finally {
       setLoading(false);

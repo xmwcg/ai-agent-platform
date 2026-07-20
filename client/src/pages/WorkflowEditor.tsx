@@ -286,7 +286,7 @@ export default function WorkflowEditor() {
       if (!id && saved.data.data?._id) {
         navigate(`/workflow/${saved.data.data._id}`, { replace: true });
       }
-    } catch {
+    } catch (e) {
       message.error('保存失败');
     } finally {
       setSaving(false);

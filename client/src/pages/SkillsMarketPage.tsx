@@ -123,8 +123,8 @@ const SkillsMarketPage: React.FC = () => {
     try {
       const res: any = await skillsAPI.list();
       setPlatformSkills(res.skills || []);
-    } catch {
-      message.error('平台技能加载失败');
+    } catch (e) {
+      message.error(extractApiError(e, '平台技能加载失败'));
     }
     setPlatformLoading(false);
   };
@@ -134,8 +134,8 @@ const SkillsMarketPage: React.FC = () => {
     try {
       const res: any = await skillsAPI.mine();
       setMySkills(res.skills || []);
-    } catch {
-      message.error('我的技能加载失败');
+    } catch (e) {
+      message.error(extractApiError(e, '我的技能加载失败'));
     }
     setMyLoading(false);
   };
@@ -145,8 +145,8 @@ const SkillsMarketPage: React.FC = () => {
     try {
       const res: any = await skillsAPI.catalog();
       setCatalog(res.catalog || []);
-    } catch {
-      message.error('外部市场目录加载失败');
+    } catch (e) {
+      message.error(extractApiError(e, '外部市场目录加载失败'));
     }
     setCatalogLoading(false);
   };

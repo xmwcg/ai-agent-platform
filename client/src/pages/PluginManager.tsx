@@ -47,8 +47,8 @@ export default function PluginManager() {
     try {
       const res: any = await mcpAPI.list();
       setServers(res.data || []);
-    } catch {
-      message.error('加载 MCP 服务器失败');
+    } catch (e) {
+      message.error(extractApiError(e, '加载 MCP 服务器失败'));
     } finally {
       setLoading(false);
     }
@@ -92,8 +92,8 @@ export default function PluginManager() {
       await mcpAPI.disconnect(id);
       message.success('已断开');
       loadServers();
-    } catch {
-      message.error('断开失败');
+    } catch (e) {
+      message.error(extractApiError(e, '断开失败'));
     }
   };
 
