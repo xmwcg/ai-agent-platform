@@ -446,7 +446,7 @@ export default function KnowledgeDetail() {
               description={
                 <Space wrap style={{ marginTop: 4 }}>
                   {doc?.access === 'plan_locked' ? (
-                    <Button type="primary" size="small" icon={<CrownOutlined />} onClick={() => navigate('/pricing')}>升级会员</Button>
+                    <Space size={8}><Button type="primary" size="small" icon={<CrownOutlined />} onClick={() => navigate('/pricing')}>升级会员</Button>{(doc?.creditsCost ?? 0) > 0 && (<Button size="small" loading={unlocking} icon={<LockOutlined />} onClick={unlock}>积分解锁 ({(doc?.creditsCost ?? 0)}分)</Button>)}</Space>
                   ) : (
                     <Button type="primary" size="small" loading={unlocking} icon={<LockOutlined />} onClick={unlock}>解锁全文</Button>
                   )}

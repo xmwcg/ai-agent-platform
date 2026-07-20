@@ -161,6 +161,9 @@ function BottomTabBar({ onMenuOpen }: { onMenuOpen: () => void }) {
 function RouteScrollRestoration() {
   const location = useLocation();
 
+  // 以下页面自行管理滚动（内部容器 overflow:auto + height:100vh），跳过全局 scrollTo 以避免页面弹跳
+  const SELF_SCROLL_PAGES = ['/ai-chat', '/aibak-chat', '/sandbox'];
+
   useEffect(() => {
     const previous = window.history.scrollRestoration;
     window.history.scrollRestoration = 'manual';
@@ -175,6 +178,8 @@ function RouteScrollRestoration() {
     let frame = 0;
     let hashAttempts = 0;
 
+    // 跳过自管理滚动的页面（AI对话/沙盒等有独立滚动容器）
+    if (SELF_SCROLL_PAGES.some(p => location.pathname.startsWith(p))) return;
     // 立即同步滚动一次：useLayoutEffect 在 paint 前同步执行，
     // 保证浏览器以 scrollY=0 渲染新页面，避免先看到旧位置再跳的闪烁。
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -207,6 +212,7 @@ function RouteScrollRestoration() {
       // 有 hash 的页面导航：只做 hash 定位，不并行强制回到顶部。
       frame = window.requestAnimationFrame(scrollToLocation);
     } else {
+      if (SELF_SCROLL_PAGES.some(p => location.pathname.startsWith(p))) return;
       // 无 hash 的普通导航：仅做一次延迟校正，避免多帧重复滚动导致的页面弹跳。
       // useLayoutEffect 的同步 scrollTo 已确保首帧在顶部；
       // 无 hash 导航：多次校正确保始终回到顶部，防止异步加载内容导致页面弹跳
