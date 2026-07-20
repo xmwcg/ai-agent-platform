@@ -25,7 +25,7 @@ const RelayAdminPage: React.FC = () => {
       ]);
       setChannels((ch as any)?.data?.channels || []);
       setTokens((tk as any)?.data?.tokens || []);
-    } catch { /* ignore */ }
+    } catch { setChannels([]); }
     setLoading(false);
   };
 

@@ -44,7 +44,7 @@ const AuditLogPage: React.FC = () => {
     try {
       const res: any = await customerServiceAPI.auditStats(id);
       setStats(res.data);
-    } catch { /* ignore */ }
+    } catch { setLogs([]); }
   }, [id]);
 
   const loadLogs = useCallback(async (p: number) => {

@@ -47,7 +47,7 @@ const QuickstartPage: React.FC = () => {
     try {
       const res: any = await quickstartAPI.templates();
       setList(res.data || []);
-    } catch { /* ignore */ }
+    } catch { /* quickstart data not available */ }
     setLoading(false);
   };
 
