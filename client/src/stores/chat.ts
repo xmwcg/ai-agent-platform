@@ -79,6 +79,16 @@ let msgCounter = 0;
 function nextMsgId() { return `msg_${Date.now()}_${++msgCounter}`; }
 function nextSessionId() { return `sess_${Date.now()}_${++msgCounter}`; }
 
+/** 清洗模型 ID：去除 mc_ 前缀、替换弃用名称 */
+function cleanModelId(m: string): string {
+  if (!m) return 'deepseek/deepseek-v4-flash';
+  let cleaned = m.replace(/^mc_[a-f0-9]{20,30}\//, '').replace(/^mc_[a-f0-9]{20,30}$/, '');
+  cleaned = cleaned.replace(/\bdeepseek-chat\b/gi, 'deepseek-v4-flash');
+  cleaned = cleaned.replace(/\bdeepseek-coder\b/gi, 'deepseek-v4-flash');
+  if (!cleaned.includes('/')) cleaned = 'deepseek/' + cleaned;
+  return cleaned;
+}
+
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
@@ -189,7 +199,7 @@ export const useChatStore = create<ChatState>()(
       },
 
       setMode: (mode) => set({ mode }),
-      setModel: (model) => set({ model }),
+      setModel: (model) => set({ model: cleanModelId(model) }),
       setLoading: (loading) => set({ loading }),
 
       addFile: (file) => set((s) => ({ files: [...s.files, file] })),
@@ -209,37 +219,33 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'ai-chat-storage',
-      version: 2,
-      migrate: (persisted: any) => {
-        if (!persisted || persisted.version === 2) return persisted;
-        const cleanModel = (m: string) => {
-          if (!m) return m;
-          // Remove mc_<mongodbId>/ prefix from old format
-          m = m.replace(/^mc_[a-f0-9]+\//, "");
-          // Replace deprecated model names
-          m = m.replace(/deepseek-chat/g, "deepseek-v4-flash");
-          m = m.replace(/deepseek-coder/g, "deepseek-v4-flash");
-          return m;
-        };
-        return {
-          ...persisted,
-          version: 2,
-          model: cleanModel(persisted.model),
-          sessions: (persisted.sessions || []).map((s: any) => ({
+      version: 3,
+      migrate: (persisted: any, version: number) => {
+        if (!persisted) return {} as any;
+        const clean = (m: string) => cleanModelId(m);
+        if (version < 3) {
+          persisted.model = clean(persisted.model || '');
+          persisted.sessions = (persisted.sessions || []).map((s: any) => ({
             ...s,
-            model: cleanModel(s.model),
-            messages: (s.messages || []).map((m: any) => ({ ...m, model: cleanModel(m.model) })),
-          })),
-        };
+            model: clean(s.model || ''),
+            messages: (s.messages || []).map((msg: any) => ({
+              ...msg,
+              model: msg.model ? clean(msg.model) : undefined,
+            })),
+          }));
+          persisted.version = 3;
+        }
+        return persisted;
       },
       partialize: (state) => ({
         sessions: state.sessions.map((s) => ({
           ...s,
-          messages: s.messages.slice(-50), // 最多保留 50 条消息
+          model: cleanModelId(s.model),
+          messages: s.messages.slice(-50).map((m) => ({ ...m, model: m.model ? cleanModelId(m.model) : m.model })),
         })),
         activeSessionId: state.activeSessionId,
         mode: state.mode,
-        model: state.model,
+        model: cleanModelId(state.model),
       }),
     }
   )
