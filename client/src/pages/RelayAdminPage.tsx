@@ -57,7 +57,7 @@ const RelayAdminPage: React.FC = () => {
   };
 
   const revokeToken = async (id: string) => {
-    await apiClient.delete('/relay/admin/tokens/' + id);
+    await apiClient.post('/relay/admin/tokens/' + id + '/revoke');
     message.success('已吊销');
     load();
   };
