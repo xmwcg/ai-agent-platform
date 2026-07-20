@@ -109,6 +109,10 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - mpt_storage:/MoneyPrinterTurbo/storage
+      # 生产密钥：在服务器上创建 ./mpt/config.production.toml（含真实 key，已被 .gitignore 忽略），
+      # 本挂载在运行时覆盖镜像内的默认 config.toml，无需重建镜像。
+      # 注意：若文件不存在，Docker 会创建空目录导致 MPT 启动失败 —— 启用前务必先建好该文件。
+      - ./mpt/config.production.toml:/MoneyPrinterTurbo/config.toml:ro
     networks:
       - ai-platform-network
     healthcheck:

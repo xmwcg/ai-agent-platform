@@ -19,6 +19,8 @@ lint-run*.log
 
 # MoneyPrinterTurbo 生产密钥（含真实 API key，禁止提交；仅留模板）
 deploy/mpt/config.toml
+deploy/mpt/config.*.toml
+!deploy/mpt/config.example.toml
 
 # 系统
 .DS_Store
