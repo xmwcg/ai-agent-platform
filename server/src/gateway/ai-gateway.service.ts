@@ -346,6 +346,10 @@ export async function route(req: ChatRouteRequest): Promise<ChatRouteResult> {
   ) {
     throw new AppError(400, '生产环境禁止使用 Mock AI Provider', 'AI_MOCK_DISABLED');
   }
+  // reject deprecated model names at gateway level
+  const DEPRECATED=new Set(["deepseek-chat","deepseek-coder","gpt-3.5-turbo","gpt-4"]);
+  const mName=(req.model||"").split("/").pop()||"";
+  if(DEPRECATED.has(mName)){throw new AppError(400,String.fromCharCode(34)+"Model "+JSON.stringify(mName)+" is deprecated"+String.fromCharCode(34),"DEPRECATED_MODEL");}
   const ALL = allProviders();
   let target: GatewayProvider | undefined;
 
