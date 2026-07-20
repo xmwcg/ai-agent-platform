@@ -357,4 +357,13 @@ router.get('/meta/category-tree', (_req: Request, res: Response) => {
   res.json({ success: true, data: KNOWLEDGE_CATEGORY_TREE });
 });
 
+// alias
+router.get("/categories", async function(req, res) {
+  try {
+    const categories = await KnowledgeDocument.distinct("categories");
+    res.json({ success: true, data: categories.filter(function(c) { return c; }) });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
 export default router;

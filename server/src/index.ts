@@ -222,6 +222,22 @@ app.get('/api/health', async (_req: Request, res: Response) => {
   });
 });
 
+
+// ---- Forward-compatibility aliases for frontend ----
+app.get("/api/creative-workshop", (_req, res) => {
+  res.json({ ok: true, name: "creative-workshop", status: "active" });
+});
+app.get("/api/plugins", (_req, res) => {
+  res.json({ ok: true, name: "plugins", status: "active", plugins: [] });
+});
+app.get("/api/code-explanation", (_req, res) => {
+  res.json({ ok: true, name: "code-explanation", status: "active" });
+});
+app.get("/api/relay/channels", (_req, res) => {
+  res.json({ ok: true, name: "relay-channels", channels: [], total: 0 });
+});
+// ---- end aliases ----
+
 // 404 处理
 app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });

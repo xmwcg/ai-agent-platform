@@ -33,7 +33,7 @@ const DiagnosticsPage: React.FC = () => {
   const [media, setMedia] = useState<MediaP[]>([]);
   const [mockMode, setMockMode] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [paymentStatus, setPaymentStatus] = useState<any>({ wechat: {}, stripe: {}, alipay: {} });
+  const [paymentStatus, setPaymentStatus] = useState<any>({ wechat: { configured: false }, stripe: { configured: false }, alipay: { configured: false } });
   const [webhookEvents, setWebhookEvents] = useState<WebhookEvent[]>([]);
   const [webhookSummary, setWebhookSummary] = useState<any>(null);
   const [webhookLoading, setWebhookLoading] = useState(false);
@@ -55,8 +55,8 @@ const DiagnosticsPage: React.FC = () => {
         ps.stripe = (ps.stripe && typeof ps.stripe === "object" && !Array.isArray(ps.stripe)) ? ps.stripe : {};
         ps.alipay = (ps.alipay && typeof ps.alipay === "object" && !Array.isArray(ps.alipay)) ? ps.alipay : {};
       }
-      setPaymentStatus(ps || { wechat: {}, stripe: {}, alipay: {} });
-    } catch { setPaymentStatus({ wechat: {}, stripe: {}, alipay: {} }); }
+      setPaymentStatus(ps || { wechat: { configured: false }, stripe: { configured: false }, alipay: { configured: false } });
+    } catch { setPaymentStatus({ wechat: { configured: false }, stripe: { configured: false }, alipay: { configured: false } }); }
     setLoading(false);
   };
 
