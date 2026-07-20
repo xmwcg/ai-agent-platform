@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Typography } from "antd";
 import {
-  ThunderboltOutlined, WechatOutlined, MailOutlined, GlobalOutlined, LinkOutlined,
+  ThunderboltOutlined, WechatOutlined, MailOutlined, GlobalOutlined, LinkOutlined, TeamOutlined,
 } from "@ant-design/icons";
 
 const { Text } = Typography;
@@ -149,8 +149,8 @@ export default function AppFooter() {
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
             />
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-            <WechatOutlined style={{ color: "#07c160" }} /> 扫码联系我们
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, cursor: "pointer" }} onClick={() => window.open("https://work.weixin.qq.com/kfid/kfce20d584b0179916f", "_blank")}>
+            <TeamOutlined style={{ color: "#07c160" }} /> 加入交流群
           </div>
         </div>
       </div>

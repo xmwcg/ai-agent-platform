@@ -23,6 +23,7 @@ const QUICK_QUESTIONS = [
   '会员怎么收费？',
   '如何接入自己的大模型 API？',
   '分销佣金怎么算？',
+  '加入官方交流群',
 ];
 
 interface Msg { role: 'user' | 'assistant'; content: string; image?: string }
@@ -219,7 +220,7 @@ export default function CustomerServiceFab() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                 {QUICK_QUESTIONS.map((q) => (
                   <Tag key={q} style={{ cursor: 'pointer', borderRadius: 12, padding: '4px 10px' }}
-                    onClick={() => { setInput(q); }}>
+                    onClick={() => { if (q === '加入官方交流群') { window.open('https://work.weixin.qq.com/kfid/kfce20d584b0179916f', '_blank'); } else { setInput(q); } }}>
                     {q}
                   </Tag>
                 ))}

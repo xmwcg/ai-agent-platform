@@ -335,6 +335,7 @@ export default function Home() {
           <Space size={12} wrap>
             <Button size="large" type="primary" onClick={() => navigate('/register')} style={{ background: '#fff', color: '#6c5ce7', border: 'none', borderRadius: 12, fontWeight: 600, height: 46, paddingInline: 24 }}>免费开始</Button>
             <Button size="large" onClick={() => navigate('/pricing')} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: 12, height: 46, paddingInline: 24 }}>查看定价</Button>
+            <Button size="large" icon={<TeamOutlined />} onClick={() => window.open('https://work.weixin.qq.com/kfid/kfce20d584b0179916f', '_blank')} style={{ background: 'rgba(7,193,96,0.2)', border: '1px solid rgba(7,193,96,0.4)', color: '#07c160', borderRadius: 12, height: 46, paddingInline: 24, fontWeight: 600 }}>加入交流群</Button>
           </Space>
           <div style={{ marginTop: 18, display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', color: 'rgba(255,255,255,0.6)', fontSize: 12.5 }}>
             <span><CheckCircleFilled style={{ color: '#07c160' }} /> 无需信用卡</span>
