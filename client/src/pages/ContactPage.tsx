@@ -77,11 +77,11 @@ export default function ContactPage() {
               border: '1px solid var(--border)', background: '#fff', overflow: 'hidden',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <img src="/wechat-qr-placeholder.svg" alt="微信二维码"
+              <img src="/wechat-qr.png" alt="微信二维码"
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
             <Text style={{ display: 'block', marginTop: 12, fontSize: 12, color: 'var(--text-tertiary)' }}>
-              （请将您的微信二维码保存为 client/public/wechat-qr.png 即可生效）
+              扫码添加，工作日 9:00-21:00 在线回复
             </Text>
           </Card>
         </Col>
