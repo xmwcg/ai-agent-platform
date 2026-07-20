@@ -144,7 +144,7 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
       '--ulimit', 'nproc=64:64',
       '--stop-timeout', '2',
       // 挂载代码文件
-      '-v', `${tmpFilePath}:/sandbox/code${langConfig.fileExt}:ro`,
+      '-v', `${tmpFilePath}:/sandbox/code${langConfig.fileExt}:rw`,
       // 设置工作目录
       '-w', '/sandbox',
       // 镜像
