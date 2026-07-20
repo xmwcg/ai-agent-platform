@@ -81,7 +81,7 @@ export default function ContactPage() {
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
             <Text style={{ display: 'block', marginTop: 12, fontSize: 12, color: 'var(--text-tertiary)' }}>
-              （二维码待上传，替换 public/wechat-qr.png 即可生效）
+              （请将您的微信二维码保存为 client/public/wechat-qr.png 即可生效）
             </Text>
           </Card>
         </Col>
