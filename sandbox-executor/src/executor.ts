@@ -57,22 +57,22 @@ function detectDangerous(code: string): string[] {
 const LANGUAGE_IMAGES: Record<string, { image: string; entry: string[]; fileExt: string }> = {
   python: {
     image: process.env.DOCKER_IMAGE_PYTHON || 'python:3.12-slim',
-    entry: ['sh', '-c', 'python3 /code.py'],
+    entry: ['python3', '/code.py'],
     fileExt: '.py',
   },
   javascript: {
     image: process.env.DOCKER_IMAGE_NODE || 'node:20-slim',
-    entry: ['sh', '-c', 'node /code.js'],
+    entry: ['node', '/code.js'],
     fileExt: '.js',
   },
   typescript: {
     image: process.env.DOCKER_IMAGE_TS || 'node:20-slim',
-    entry: ['sh', '-c', 'npx tsx /code.ts'],
+    entry: ['npx', 'tsx', '/code.ts'],
     fileExt: '.ts',
   },
   bash: {
     image: process.env.DOCKER_IMAGE_BASH || 'alpine:3.19',
-    entry: ['sh', '-c', 'sh /code.sh'],
+    entry: ['/bin/sh', '/code.sh'],
     fileExt: '.sh',
   },
 };
@@ -129,8 +129,7 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
       '--rm',                      // 执行后自动删除
       '--name', `sandbox-${runId}`,
       '--user', '1000:1000',        // 非 root 用户
-      '--read-only',                // 只读根文件系统
-      '--tmpfs', '/tmp:rw,noexec,nosuid,size=32m',  // 独立临时目录
+            '--tmpfs', '/tmp:rw,noexec,nosuid,size=32m',  // 独立临时目录
       '--network', 'none',          // 禁用网络
       '--cap-drop', 'ALL',          // 删除所有 capabilities
       '--security-opt', 'no-new-privileges:true',
