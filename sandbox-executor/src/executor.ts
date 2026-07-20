@@ -57,22 +57,22 @@ function detectDangerous(code: string): string[] {
 const LANGUAGE_IMAGES: Record<string, { image: string; entry: string[]; fileExt: string }> = {
   python: {
     image: process.env.DOCKER_IMAGE_PYTHON || 'python:3.12-slim',
-    entry: ['python3', '/sandbox/code.py'],
+    entry: ['sh', '-c', 'cp /sandbox/code.py /tmp/code.py && python3 /tmp/code.py'],
     fileExt: '.py',
   },
   javascript: {
     image: process.env.DOCKER_IMAGE_NODE || 'node:20-slim',
-    entry: ['node', '/sandbox/code.js'],
+    entry: ['sh', '-c', 'cp /sandbox/code.js /tmp/code.js && node /tmp/code.js'],
     fileExt: '.js',
   },
   typescript: {
     image: process.env.DOCKER_IMAGE_TS || 'node:20-slim',
-    entry: ['npx', 'tsx', '/sandbox/code.ts'],
+    entry: ['sh', '-c', 'cp /sandbox/code.ts /tmp/code.ts && npx tsx /tmp/code.ts'],
     fileExt: '.ts',
   },
   bash: {
     image: process.env.DOCKER_IMAGE_BASH || 'alpine:3.19',
-    entry: ['/bin/sh', '/sandbox/code.sh'],
+    entry: ['sh', '-c', 'cp /sandbox/code.sh /tmp/code.sh && sh /tmp/code.sh'],
     fileExt: '.sh',
   },
 };
@@ -131,7 +131,6 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
       '--user', '1000:1000',        // 非 root 用户
       '--read-only',                // 只读根文件系统
       '--tmpfs', '/tmp:rw,noexec,nosuid,size=32m',  // 独立临时目录
-      '--tmpfs', '/sandbox:rw,noexec,nosuid,size=16m', // /sandbox tmpfs 允许 Python 写 __pycache__
       '--network', 'none',          // 禁用网络
       '--cap-drop', 'ALL',          // 删除所有 capabilities
       '--security-opt', 'no-new-privileges:true',
