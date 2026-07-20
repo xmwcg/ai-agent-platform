@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   VideoCameraOutlined, RocketOutlined, DownloadOutlined, ReloadOutlined,
-  ApiOutlined,
+  ApiOutlined, ShareAltOutlined,
 } from '@ant-design/icons';
 import { skillsAPI, gatewayAPI, extractApiError } from '@/services/api';
 import ModelSelector from '@/components/ModelSelector';
@@ -45,6 +45,8 @@ export default function VideoWorkflow() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<StageResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string>('');
+  const [videoStatus, setVideoStatus] = useState<'idle' | 'processing' | 'completed' | 'failed'>('idle');
 
   // 加载可用模型（内置 + 用户自定义第三方模型），默认选中 Agnes-2.0-Flash
   useEffect(() => {
@@ -64,11 +66,49 @@ export default function VideoWorkflow() {
       .catch(() => { /* 模型列表加载失败不影响主题输入，流水线会用平台默认模型 */ });
   }, []);
 
+  // 成片合成任务提交后，轮询上游状态；完成后拿到可播放/可下载/可分享的成片地址
+  useEffect(() => {
+    const task = result?.compose;
+    if (!task?.taskId || !task?.provider) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const provider = task.provider;
+    const taskId = task.taskId;
+    const pollOnce = async () => {
+      try {
+        const resp = await fetch(`/api/tools/media/task/${provider}/${taskId}`, { credentials: 'include' });
+        const json: any = await resp.json();
+        const data = json?.data;
+        if (!active) return;
+        if (data?.status === 'completed' && data?.outputUrl) {
+          setVideoUrl(data.outputUrl);
+          setVideoStatus('completed');
+        } else if (['failed', 'error', 'cancelled'].includes(data?.status)) {
+          setVideoStatus('failed');
+        } else {
+          setVideoStatus('processing');
+          timer = setTimeout(pollOnce, 4000);
+        }
+      } catch {
+        if (!active) return;
+        setVideoStatus('processing');
+        timer = setTimeout(pollOnce, 4000);
+      }
+    };
+    pollOnce();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [result]);
+
   const handleGenerate = async () => {
     if (!topic.trim()) { message.warning('请先输入视频主题'); return; }
     setLoading(true);
     setError(null);
     setResult(null);
+    setVideoUrl('');
+    setVideoStatus('idle');
     try {
       const payload: Record<string, any> = {
         topic: topic.trim(),
@@ -178,8 +218,8 @@ export default function VideoWorkflow() {
             <Space>
               <Switch checked={compose} onChange={setCompose} />
               <Text>
-                生成后合成成片（MoneyPrinterTurbo）
-                <Text type="secondary" style={{ fontSize: 12 }}> — 开启后将真实调用视频工厂产出带配音字幕的成片（需服务端已配置 MONEY_PRINTER_TURBO_URL）</Text>
+                生成后合成成片（Agnes 视频模型）
+                <Text type="secondary" style={{ fontSize: 12 }}> — 开启后将真实调用视频模型产出成片，可在下方播放、下载与分享</Text>
               </Text>
             </Space>
           </div>
@@ -254,8 +294,42 @@ export default function VideoWorkflow() {
                 <div>
                   <div>任务 ID：<Text code>{composeTask.taskId || '—'}</Text></div>
                   <div style={{ marginTop: 4 }}>
-                    生产环境请轮询 <Text code>/api/tools/media/task/moneyprinterturbo/{composeTask.taskId}</Text> 获取成片地址；
+                    生产环境可轮询 <Text code>/api/tools/media/task/{composeTask.provider || 'agnes'}/{composeTask.taskId}</Text> 获取成片地址；
                     状态：{composeTask.status || 'processing'}
+                  </div>
+                  <video
+                    key={videoUrl}
+                    src={videoUrl}
+                    controls
+                    style={{ width: '100%', marginTop: 12, borderRadius: 8, background: '#000', display: videoUrl ? 'block' : 'none' }}
+                  />
+                  <div style={{ marginTop: 8 }}>
+                    <Space>
+                      <Button
+                        icon={<DownloadOutlined />}
+                        href={videoUrl}
+                        download
+                        target="_blank"
+                        disabled={!videoUrl || videoStatus !== 'completed'}
+                      >
+                        下载成片
+                      </Button>
+                      <Button
+                        icon={<ShareAltOutlined />}
+                        disabled={!videoUrl || videoStatus !== 'completed'}
+                        onClick={() => {
+                          const link = window.location.origin + videoUrl;
+                          navigator.clipboard?.writeText(link).then(
+                            () => message.success('成片链接已复制到剪贴板'),
+                            () => message.info('复制失败，请手动复制：' + link),
+                          );
+                        }}
+                      >
+                        复制分享链接
+                      </Button>
+                      {videoStatus === 'processing' && <Text type="secondary">成片生成中，请稍候……</Text>}
+                      {videoStatus === 'failed' && <Text type="danger">成片生成失败，请重试</Text>}
+                    </Space>
                   </div>
                 </div>
               }
@@ -265,7 +339,7 @@ export default function VideoWorkflow() {
               type="info"
               showIcon
               message="关于成片合成"
-              description="本工作流已交付真实可用的调研与脚本方案（可下载）。勾选上方「生成后合成成片」并在服务端配置 MoneyPrinterTurbo 后，即可一键产出带配音字幕的成片。"
+              description="本工作流已交付真实可用的调研与脚本方案（可下载）。勾选上方「生成后合成成片」即可调用视频模型产出成片，并在下方播放、下载与分享。"
             />
           )}
         </Card>

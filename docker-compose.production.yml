@@ -52,6 +52,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - OSS_LOCAL_DIR=/usr/src/app/uploads/generated
       - MONGODB_URI=mongodb://mongodb:27017/ai-agent-platform
       - REDIS_URL=redis://redis:6379
       - SANDBOX_REMOTE_URL=http://sandbox-executor:4090/run
