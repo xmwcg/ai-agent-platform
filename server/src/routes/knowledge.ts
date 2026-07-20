@@ -195,6 +195,16 @@ router.post('/:id/unlock', requireAuth, async (req: AuthRequest, res: Response) 
   } catch (error) { sendError(res, error); }
 });
 // 获取单个文档详情（私有文档需鉴权；知识库 v2 接入会员/付费/试看/积分权限）
+// alias
+router.get("/categories", async function(req, res) {
+  try {
+    const categories = await KnowledgeDocument.distinct("categories");
+    res.json({ success: true, data: categories.filter(function(c) { return c; }) });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
 router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     // 非法 id（非 ObjectId，如探针误打的 /health）直接 404，避免 Mongoose 转换抛 500
@@ -357,13 +367,4 @@ router.get('/meta/category-tree', (_req: Request, res: Response) => {
   res.json({ success: true, data: KNOWLEDGE_CATEGORY_TREE });
 });
 
-// alias
-router.get("/categories", async function(req, res) {
-  try {
-    const categories = await KnowledgeDocument.distinct("categories");
-    res.json({ success: true, data: categories.filter(function(c) { return c; }) });
-  } catch (error) {
-    sendError(res, error);
-  }
-});
 export default router;
