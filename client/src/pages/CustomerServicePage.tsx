@@ -51,7 +51,7 @@ const CustomerServicePage: React.FC = () => {
     try {
       const res: any = await customerServiceAPI.list();
       setList(res.data || []);
-    } catch { /* ignore */ }
+    } catch { setList([]); }
     setLoading(false);
   };
 
@@ -68,7 +68,7 @@ const CustomerServicePage: React.FC = () => {
     try {
       const res: any = await teamAPI.mine();
       setTeams(res.data || []);
-    } catch { /* ignore */ }
+    } catch { setTeams([]); }
   };
 
   const openCreate = () => {

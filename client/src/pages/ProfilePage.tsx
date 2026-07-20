@@ -75,7 +75,7 @@ export default function ProfilePage() {
       const res: any = await marketplaceAPI.usage();
       const history = res?.data?.transactions || res?.data || [];
       setCreditsHistory(Array.isArray(history) ? history : []);
-    } catch { /* 忽略 */ }
+    } catch { setCreditsHistory([]); }
     setCreditsHistoryLoading(false);
   }, []);
   useEffect(() => { loadCreditsHistory(); }, [loadCreditsHistory]);
@@ -93,7 +93,7 @@ export default function ProfilePage() {
     try {
       const res: any = await authAPI.getBindings();
       if (res?.data) setBindings(res.data);
-    } catch { /* 忽略 */ }
+    } catch { setBindings(null); }
     setBindingsLoading(false);
   }, []);
   useEffect(() => { loadBindings(); }, [loadBindings]);
