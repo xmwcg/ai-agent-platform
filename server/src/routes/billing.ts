@@ -11,6 +11,9 @@ import { resolveUserPlan, getQuotaUsage } from '../middleware/subscription';
 import { sendError } from '../lib/http-error';
 import { validate } from '../lib/validation';
 import { logger } from '../lib/logger';
+import { activateLicense } from '../services/private-license.service';
+import fs from 'fs';
+import path from 'path';
 import { activateSubscription, grantCreditsPack, resolvePaymentProvider, genOrderNo, createOrderSchema } from './billing/logic';
 import webhookRoutes from './billing/webhook.routes';
 import refundRoutes from './billing/refund.routes';
@@ -529,6 +532,71 @@ router.get('/profit-summary', requireAuth, requireAdmin, async (req: AuthRequest
         note: '内部毛利看板，仅管理员可见，不对客户开放',
       },
     });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+
+// 金网通私有化授权下载（需登录）
+router.get('/private-license/download', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const type = (req.query.type as string) || 'trial';
+    const zipPath = path.join(process.cwd(), '..', '金网通-完整项目源码-v1.0', 'dist', '金网通-企业局域网电脑互联互通系统-v1.0.zip');
+
+    if (!fs.existsSync(zipPath)) {
+      logger.warn('private-license', 'Download ZIP not found: ' + zipPath);
+      return res.status(404).json({ success: false, error: '安装包暂不可用，请联系客服' });
+    }
+
+    const filename = type === 'full'
+      ? 'JinWangTong-Full-v1.0.zip'
+      : 'JinWangTong-Trial-v1.0.zip';
+
+    logger.info('private-license', `Download: userId=${req.user!.id} type=${type} ip=${req.ip}`);
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    fs.createReadStream(zipPath).pipe(res);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+
+// 金网通 License 激活（客户端调用，绑定机器指纹）
+router.post('/private-license/activate', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { licenseSign, fingerprint } = req.body as { licenseSign?: string; fingerprint?: string };
+    if (!licenseSign || !fingerprint) {
+      return res.status(400).json({ success: false, error: '缺少 licenseSign 或 fingerprint' });
+    }
+    // 查找该用户的订单
+    const order = await Order.findOne({
+      userId: req.user!.id,
+      orderType: 'private_license',
+      'licensePayload.sign': licenseSign,
+      paymentStatus: 'paid',
+    }).sort({ createdAt: -1 }).lean();
+
+    if (!order || !(order as any).licensePayload) {
+      return res.status(404).json({ success: false, error: '未找到对应 License，请确认已购买' });
+    }
+
+    const existingLicense = (order as any).licensePayload;
+    if (existingLicense.fingerprint && existingLicense.fingerprint !== 'PENDING_ACTIVATION') {
+      return res.status(400).json({ success: false, error: '该 License 已激活，如需迁移请联系客服' });
+    }
+
+    const activated = activateLicense(existingLicense, fingerprint);
+    await Order.updateOne(
+      { _id: order._id },
+      { $set: { licensePayload: activated } }
+    );
+
+    logger.info('private-license', `License activated: orderNo=${order.orderNo} fingerprint=${fingerprint.slice(0, 12)}...`);
+    res.json({ success: true, data: activated });
   } catch (err) {
     sendError(res, err);
   }

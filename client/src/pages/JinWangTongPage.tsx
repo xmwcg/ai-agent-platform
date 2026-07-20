@@ -31,7 +31,7 @@ const FEATURES = [
 ];
 
 const PRICING = [
-  { id: 'free', name: '免费试用版', price: '0', period: '15天', originalPrice: '', features: ['完整硬件扫描', '网络体检(只读)', 'C盘清理(手动确认)', '单机使用', '社区支持'], tag: '推荐试用', tagColor: 'blue', btnText: '免费下载', isFree: true, icon: <DownloadOutlined /> },
+  { id: 'free', name: '免费试用版', price: '0', period: '15天', originalPrice: '', features: ['完整硬件扫描', '网络体检(只读)', 'C盘清理(手动确认)', '单机使用', '社区支持'], tag: '推荐试用', tagColor: 'blue', btnText: '免费试用(需登录)', isFree: true, icon: <DownloadOutlined /> },
   { id: 'ent-standard', name: '专业版', price: '299', period: '永久', originalPrice: '¥2,000+/年', packageId: 'ent-standard', features: ['免费版全部功能', '资产报表+实时价格对比', '打印机一键共享', '文件共享SMB配置', '权限自动修复', '3台设备授权', '邮件工单支持'], tag: '性价比之选', tagColor: 'green', btnText: '立即购买', icon: <CrownOutlined /> },
   { id: 'ent-pro', name: '旗舰版', price: '599', period: '永久', originalPrice: '¥5,000+/年', packageId: 'ent-pro', features: ['专业版全部功能', 'Web集中控制台', '批量任务下发', '上网行为管控', '审计日志追踪', '不限设备数', '优先技术支持'], tag: '企业推荐', tagColor: 'orange', btnText: '立即购买', icon: <ThunderboltOutlined />, highlighted: true },
   { id: 'ent-ultimate', name: '团队版', price: '999', period: '永久', originalPrice: '¥10,000+/年', packageId: 'ent-ultimate', features: ['旗舰版全部功能', '不限席位', '多分支机构管理', '专属技术对接', '定制开发支持', 'SLA保障'], tag: '大团队', tagColor: 'red', btnText: '立即购买', icon: <TeamOutlined /> },
@@ -90,8 +90,17 @@ const JinWangTongPage: React.FC = () => {
     finally { setBuyLoading(null); }
   };
 
-  const handleFreeDownload = () => { window.open('https://cnb.cool/aibak.site/enterprise-network-hub/-/archive/main/enterprise-network-hub-main.zip', '_blank'); message.success('正在下载金网通脚本包...'); };
-  const handleViewSource = () => { window.open('https://cnb.cool/aibak.site/enterprise-network-hub', '_blank'); };
+  const handleFreeDownload = () => {
+  if (!user) {
+    Modal.confirm({ title: '请先登录', content: '登录后即可免费下载金网通试用版。', okText: '去登录', cancelText: '取消', onOk: () => navigate('/login') });
+    return;
+  }
+  window.open('/api/billing/private-license/download?type=trial', '_blank');
+  message.success('正在下载金网通试用版（需登录验证）...');
+};
+  const handleViewSource = () => {
+  message.info('金网通为商业软件，源码不对外公开。如需定制开发请联系客服。');
+};
 
   return (
     <div style={{ padding: '0 8px', maxWidth: 1200, margin: '0 auto' }}>
@@ -149,7 +158,7 @@ const JinWangTongPage: React.FC = () => {
       <div style={{ marginBottom: 32 }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}><Title level={2} style={{ marginBottom: 8 }}>快速开始</Title><Paragraph type="secondary" style={{ fontSize: 15 }}>4 步完成部署，无需专业IT背景</Paragraph></div>
         <Card style={{ borderRadius: 16, marginBottom: 24 }}><Steps current={-1} direction="vertical" size="small" items={INSTALL_STEPS.map(s => ({ title: <Text strong>{s.title}</Text>, description: <Text type="secondary">{s.desc}</Text> }))} style={{ maxWidth: 600, margin: '0 auto' }} /></Card>
-        <div style={{ textAlign: 'center', marginTop: 24 }}><Button type="primary" size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', fontWeight: 600, fontSize: 15 }}>下载脚本包 (ZIP)</Button><Paragraph type="secondary" style={{ marginTop: 12, fontSize: 13 }}>或通过命令行克隆：<code style={{ background: '#1e293b', color: '#e2e8f0', padding: '2px 8px', borderRadius: 4 }}>git clone https://cnb.cool/aibak.site/enterprise-network-hub.git</code></Paragraph></div>
+        <div style={{ textAlign: 'center', marginTop: 24 }}><Button type="primary" size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', fontWeight: 600, fontSize: 15 }}>下载脚本包 (ZIP)</Button><Paragraph type="secondary" style={{ marginTop: 12, fontSize: 13 }}>或通过命令行克隆：<code style={{ background: '#1e293b', color: '#e2e8f0', padding: '2px 8px', borderRadius: 4 }}>通过上方按钮下载（需登录）</code></Paragraph></div>
       </div>
 
       <Divider />
@@ -181,7 +190,7 @@ const JinWangTongPage: React.FC = () => {
       </div>
 
       <div style={{ textAlign: 'center', padding: '16px 0 32px' }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>金网通计算机管理系统 V2 · AIbak 旗下产品 · <a onClick={() => navigate('/ai-chat')} style={{ cursor: 'pointer' }}>技术支持</a> · <a onClick={() => navigate('/pricing')} style={{ cursor: 'pointer' }}>查看定价</a> · <a onClick={handleViewSource} style={{ cursor: 'pointer' }}>源码仓库</a></Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>金网通计算机管理系统 V2 · AIbak 旗下产品 · <a onClick={() => navigate('/ai-chat')} style={{ cursor: 'pointer' }}>技术支持</a> · <a onClick={() => navigate('/pricing')} style={{ cursor: 'pointer' }}>查看定价</a> · </Text>
       </div>
     </div>
   );
