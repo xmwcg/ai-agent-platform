@@ -128,7 +128,7 @@ export default function AiChat() {
           { content: res?.text || res?.message || res?.reply || res?.data?.message || res?.data?.text || '（AI 无响应，请检查 API 配置）' }
         );
       } catch (err: any) {
-        const errMsg = err?.response?.data?.message || err?.message || '请求失败';
+        const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || '请求失败';
         useChatStore.getState().updateMessage(aiMsgId, {
           content: `⚠️ 请求失败：${errMsg}`,
         });
