@@ -31,6 +31,15 @@ COPY --from=build --chown=node:node /usr/src/app/dist ./dist
 
 # npx 保留：MCP 插件通过白名单机制 (MCP_ALLOWED_STDIO_COMMANDS) 限制可执行命令，
 # 仅允许 node/npx，杜绝任意命令执行风险。
+#
+# Chromium：供 Puppeteer MCP 插件使用（无头浏览器自动化）
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    chromium \
+  && rm -rf /var/lib/apt/lists/*
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
 RUN mkdir -p /usr/src/app/.cache/assets \
   && mkdir -p /usr/src/app/uploads \
   && rm -rf /usr/local/lib/node_modules/npm \
