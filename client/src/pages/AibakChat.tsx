@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, Input, Button, Typography, Space, Spin, message, Tag, Alert } from 'antd';
-import { SendOutlined, RobotOutlined, UserOutlined, ClearOutlined, CloudOutlined } from '@ant-design/icons';
+import { SendOutlined, RobotOutlined, UserOutlined, ClearOutlined, CloudOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { aibakAPI, extractApiError } from '@/services/api';
 
 const { Text, Paragraph } = Typography;
@@ -14,6 +14,19 @@ interface Message {
 }
 
 export default function AibakChat() {
+  const handleCopyMsg = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => message.success('已复制'), () => message.error('复制失败'));
+  };
+  const handleExportChat = () => {
+    const text = messages.map((m: any) => (m.role === 'user' ? '[用户] ' : '[AI] ') + (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))).join('\n\n---\n\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'aibak-chat-export.txt'; a.click();
+    URL.revokeObjectURL(url);
+    message.success('对话已导出');
+  };
+
   const [messages, setMessages] = useState<Message[]>([
     { id: 'welcome', role: 'assistant', content: '你好！我是 AIbak 免费助手，由 CloudBase AI 驱动。我可以帮你回答问题、创作内容、分析文本等。请随时向我提问！' }
   ]);

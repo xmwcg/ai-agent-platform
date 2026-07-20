@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Card, Typography, Button, Space, Select, Radio, Input, Tag, Spin, message, Divider
 } from 'antd';
-import { ThunderboltOutlined, CodeOutlined } from '@ant-design/icons';
+import { ThunderboltOutlined, CodeOutlined, CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { codeAPI , extractApiError} from '@/services/api';
 
 const { Title, Paragraph, Text } = Typography;
@@ -53,6 +53,18 @@ export default function CodeExplanation() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => message.success("已复制到剪贴板"), () => message.error("复制失败"));
+  };
+  const handleDownload = (text: string, filename: string) => {
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    message.success("下载已开始");
   };
 
   const handleExample = async () => {
@@ -153,6 +165,10 @@ export default function CodeExplanation() {
           ) : explanation ? (
             <>
               <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>{explanation}</div>
+              <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Button size="small" icon={<CopyOutlined />} onClick={() => handleCopy(explanation)}>复制解释</Button>
+                <Button size="small" icon={<DownloadOutlined />} onClick={() => handleDownload(explanation, "code-explanation.txt")}>下载 TXT</Button>
+              </div>
               {concepts.length > 0 && (
                 <div style={{ marginTop: 16 }}>
                   <Text type="secondary">关键概念：</Text>

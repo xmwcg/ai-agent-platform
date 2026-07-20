@@ -40,6 +40,16 @@ interface CompareRow {
 type CompareType = 'model' | 'framework' | 'language' | 'all';
 
 export default function ComparePage() {
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => message.success("已复制"), () => message.error("复制失败"));
+  };
+  const handleDownloadCSV = (data: string, filename: string) => {
+    const blob = new Blob([data], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
   const [items, setItems] = useState<CompareItem[]>([]);
   const [selectedType, setSelectedType] = useState<CompareType>('model');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);

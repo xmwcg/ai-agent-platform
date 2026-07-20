@@ -644,3 +644,6 @@ router.get("/private-license/my-licenses", requireAuth, async (req: AuthRequest,
 
 
 
+
+export default router;
+
