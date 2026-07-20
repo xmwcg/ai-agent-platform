@@ -72,6 +72,10 @@ async function runMongodump(outputPath: string, incremental = false): Promise<vo
       logger.warn("backup", `mongodump stderr: ${stderr.slice(0, 200)}`);
     }
   } catch (err: any) {
+        if (err?.code === "ENOENT" || err?.message?.includes("ENOENT")) {
+      logger.warn("backup", "mongodump not installed in container, skipping backup");
+      return;
+    }
     logger.error("backup", `mongodump failed: ${err?.message || err}`);
     throw new Error(`MONGODUMP_FAILED: ${err?.message || "unknown error"}`);
   }

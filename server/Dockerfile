@@ -29,7 +29,7 @@ COPY --chown=node:node package.json package-lock.json ./
 COPY --from=build --chown=node:node /usr/src/app/node_modules ./node_modules
 COPY --from=build --chown=node:node /usr/src/app/dist ./dist
 
-RUN apt-get update   && apt-get install -y --no-install-recommends wget gnupg   && wget -qO- https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor > /usr/share/keyrings/mongodb-server-7.0.gpg   && echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] http://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" > /etc/apt/sources.list.d/mongodb-org-7.0.list   && apt-get update   && apt-get install -y --no-install-recommends mongodb-database-tools mongodb-mongosh   && rm -rf /var/lib/apt/lists/* /usr/share/keyrings/mongodb-server-7.0.gpg   && mkdir -p /usr/src/app/.cache/assets \
+RUN mkdir -p /usr/src/app/.cache/assets \
   && mkdir -p /usr/src/app/uploads \
   && rm -rf /usr/local/lib/node_modules/npm \
   && rm -f /usr/local/bin/npm /usr/local/bin/npx \
