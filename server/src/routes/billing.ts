@@ -17,6 +17,26 @@ import refundRoutes from './billing/refund.routes';
 import reconciliationRoutes from './billing/reconciliation.routes';
 
 const router = Router();
+// 根路由：返回可用端点列表
+router.get('/', (_req: Request, res: Response) => {
+  res.json({ 
+    success: true, 
+    name: 'billing',
+    endpoints: [
+      'GET /api/billing/plans',
+      'GET /api/billing/payment-methods', 
+      'GET /api/billing/credits-packages',
+      'POST /api/billing/credits-packages/order',
+      'POST /api/billing/subscribe',
+      'GET /api/billing/orders',
+      'GET /api/billing/orders/:orderNo',
+      'POST /api/billing/private-license/order',
+      'GET /api/billing/private-license/packages',
+      'GET /api/billing/cost-dashboard'
+    ]
+  });
+});
+
 
 // 套餐列表（公开）
 router.get('/plans', (_req: Request, res: Response) => {
