@@ -13,6 +13,10 @@ const resourceAccess_1 = require("../middleware/resourceAccess");
 const http_error_1 = require("../lib/http-error");
 const crypto_1 = __importDefault(require("crypto"));
 const router = (0, express_1.Router)();
+// 快速启动总览
+router.get('/', (_req, res) => {
+    res.json({ ok: true, service: 'quickstart', endpoints: ['GET /templates', 'POST /apply'] });
+});
 /** 场景化快速启动模板：差异化亮点（对标 n8n 模板市场 / Dify 应用模板），降低上手门槛 */
 exports.QUICKSTART_TEMPLATES = [
     {

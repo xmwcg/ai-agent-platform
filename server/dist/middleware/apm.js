@@ -127,7 +127,7 @@ function apmMiddleware(req, res, next) {
                 break;
             }
         }
-        // 错误计数（4xx/5xx）
+        // 错误计数（5xx 服务端错误）
         if (res.statusCode >= 400) {
             bucket.errors++;
             metrics.totalErrors++;

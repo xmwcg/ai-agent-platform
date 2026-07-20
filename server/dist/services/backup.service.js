@@ -97,6 +97,10 @@ async function runMongodump(outputPath, incremental = false) {
         }
     }
     catch (err) {
+        if (err?.code === "ENOENT" || err?.message?.includes("ENOENT")) {
+            logger_1.logger.warn("backup", "mongodump not installed in container, skipping backup");
+            return;
+        }
         logger_1.logger.error("backup", `mongodump failed: ${err?.message || err}`);
         throw new Error(`MONGODUMP_FAILED: ${err?.message || "unknown error"}`);
     }

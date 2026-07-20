@@ -154,7 +154,14 @@ export default function ModelSelector(props: ModelSelectorProps) {
   return (
     <Select
       value={value}
-      onChange={onChange}
+      onChange={(val) => {
+        // Normalize: ensure model name part is lowercase for consistent matching
+        if (typeof val === "string" && val.includes("/")) {
+          const [provider, ...rest] = val.split("/");
+          val = provider + "/" + rest.join("/").toLowerCase();
+        }
+        onChange?.(val);
+      }}
       placeholder={placeholder}
       style={style}
       disabled={disabled}
@@ -168,3 +175,4 @@ export default function ModelSelector(props: ModelSelectorProps) {
     />
   );
 }
+

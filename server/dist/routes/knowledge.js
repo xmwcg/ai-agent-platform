@@ -140,6 +140,35 @@ router.get('/', auth_1.optionalAuth, async (req, res) => {
         (0, http_error_1.sendError)(res, error);
     }
 });
+// 显式解锁付费/积分文档（POST，避免 GET 副作用歧义，客户端点"解锁"按钮走此路由）
+router.post('/:id/unlock', auth_1.requireAuth, async (req, res) => {
+    try {
+        if (!mongoose_1.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(404).json({ error: '文档不存在' });
+        }
+        const doc = await KnowledgeDocument_1.KnowledgeDocument.findById(req.params.id);
+        if (!doc)
+            return res.status(404).json({ error: '文档不存在' });
+        if (!doc.isPublic) {
+            const memberRole = await resolveDocMemberRole(doc, req.user?.id);
+            const allowed = (0, resourceAccess_1.canAccessResource)({ userId: req.user?.id, author: doc.author, memberRole, minRole: 'viewer' });
+            if (!allowed)
+                return res.status(403).json({ error: '无权访问该文档' });
+        }
+        const verdict = (0, kb_access_1.resolveKbAccess)(doc, req.user);
+        const { content, deducted } = await (0, kb_access_1.applyKbAccess)(doc, req.user, verdict);
+        if (verdict.level !== 'full') {
+            return res.status(402).json({
+                success: false, error: verdict.level === 'plan_locked' ? '需要升级会员' : '积分不足',
+                access: verdict.level,
+            });
+        }
+        res.json({ success: true, data: { _id: doc._id, title: doc.title, content, htmlContent: doc.htmlContent, access: 'full', creditsDeducted: deducted } });
+    }
+    catch (error) {
+        (0, http_error_1.sendError)(res, error);
+    }
+});
 // 获取单个文档详情（私有文档需鉴权；知识库 v2 接入会员/付费/试看/积分权限）
 router.get('/:id', auth_1.optionalAuth, async (req, res) => {
     try {

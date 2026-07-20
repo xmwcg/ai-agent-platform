@@ -7,6 +7,10 @@ const subscription_1 = require("../middleware/subscription");
 const http_error_1 = require("../lib/http-error");
 const logger_1 = require("../lib/logger");
 const router = (0, express_1.Router)();
+// 服务信息
+router.get('/', (_req, res) => {
+    res.json({ ok: true, service: 'code-explanation', endpoints: ['POST /explain', 'POST /example', 'GET /languages'] });
+});
 // 代码解释服务
 class CodeExplanationService {
     // 构建解释提示词
