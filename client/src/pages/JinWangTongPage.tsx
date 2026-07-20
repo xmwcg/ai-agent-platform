@@ -8,7 +8,7 @@ import {
   CrownOutlined, ThunderboltOutlined, LaptopOutlined, CheckCircleOutlined,
   GlobalOutlined, SwapOutlined, DatabaseOutlined, FundOutlined,
   WindowsOutlined, AppleOutlined, LinuxOutlined, SettingOutlined,
-  TeamOutlined, AuditOutlined, RadarChartOutlined,
+  TeamOutlined, AuditOutlined, RadarChartOutlined, WechatOutlined,
 } from '@ant-design/icons';
 import { billingAPI, extractApiError } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
