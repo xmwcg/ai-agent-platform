@@ -225,7 +225,7 @@ class MCPService extends EventEmitter {
       config.status = 'error';
       this.servers.set(id, config);
       const detail = err?.code === 'ENOENT'
-        ? `命令 "${config.command}" 无法执行（${err.message}）。该 MCP 服务可能未安装或在当前运行环境中不可用。`
+        ? `命令 "${config.command}" 无法执行。此插件需要在服务器上预装对应的 MCP 服务包。请联系管理员使用「一键安装」功能或手动安装。详情：${err.message}`
         : (err?.message || String(err));
       logger.error('mcp', `MCP connect failed: ${config.name}`, err?.message);
       throw new Error(`MCP 连接失败（${config.name}）：${detail}`);

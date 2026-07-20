@@ -10,6 +10,7 @@ export interface IMCPServer extends Document {
   url?: string;
   env?: Record<string, string>;
   enabled: boolean;
+  installNote?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +26,7 @@ const mcpServerSchema = new Schema<IMCPServer>(
     url: { type: String },
     env: { type: Schema.Types.Mixed },
     enabled: { type: Boolean, default: true },
+    installNote: { type: String },
   },
   { timestamps: true }
 );

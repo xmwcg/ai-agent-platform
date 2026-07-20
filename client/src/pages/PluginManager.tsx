@@ -31,6 +31,7 @@ interface MCPServer {
   status: 'connected' | 'disconnected' | 'error' | 'connecting';
   tools?: MCPTool[];
   connectedAt?: number;
+  installNote?: string;
 }
 
 export default function PluginManager() {
@@ -228,6 +229,16 @@ export default function PluginManager() {
                           </Tooltip>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  {(server as any).installNote && server.status === 'error' && (
+                    <div style={{
+                      marginTop: 10, padding: '8px 12px', borderRadius: 10,
+                      background: 'rgba(250,173,20,0.1)', border: '1px solid rgba(250,173,20,0.3)',
+                      fontSize: 12, color: 'var(--text-secondary)'
+                    }}>
+                      <Text strong style={{ color: '#d48806' }}>⚠ 安装提示：</Text>
+                      <span>{(server as any).installNote}</span>
                     </div>
                   )}
                   {server.connectedAt && (
