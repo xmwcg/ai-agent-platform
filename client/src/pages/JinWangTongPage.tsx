@@ -5,7 +5,7 @@ import {
   ScanOutlined, WifiOutlined, PrinterOutlined,
   FileProtectOutlined, SafetyOutlined, DownloadOutlined, ApiOutlined,
   CloudServerOutlined, ClusterOutlined, AppstoreOutlined, ToolOutlined,
-  CrownOutlined, ThunderboltOutlined, LaptopOutlined, CheckCircleOutlined,
+  CrownOutlined, ThunderboltOutlined, LaptopOutlined, PlayCircleOutlined, CheckCircleOutlined,
   GlobalOutlined, SwapOutlined, DatabaseOutlined, FundOutlined,
   WindowsOutlined, AppleOutlined, LinuxOutlined, SettingOutlined,
   TeamOutlined, AuditOutlined, RadarChartOutlined, WechatOutlined,
