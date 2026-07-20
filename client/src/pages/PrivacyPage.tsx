@@ -289,7 +289,7 @@ export default function PrivacyPage() {
         <ul>
           <li><Text strong>电子邮箱：</Text>xmwcg5059@outlook.com（个人信息保护专员）</li>
           <li><Text strong>在线客服：</Text>访问 <a href="/contact">联系我们</a> 页面提交，或点击网站左侧悬浮客服按钮</li>
-          <li><Text strong>微信客服：</Text>添加微信 aibak-service，备注"Aibak隐私咨询"</li>
+          <li><Text strong>企业微信客服：</Text>添加企业微信「AIbak 官方支持」，备注"Aibak 隐私咨询"</li>
           <li><Text strong>办公时间：</Text>周一至周日 9:00 – 21:00（北京时间）</li>
         </ul>
       </Paragraph>
