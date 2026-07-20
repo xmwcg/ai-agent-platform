@@ -84,14 +84,13 @@ router.post('/generate-tips', optionalAuth, async (req: AuthRequest, res: Respon
 请生成促单建议。`;
 
     // 调用 AI
-    const aiRes: any = await callCloudbaseChat({
-      model: AIBAK_MODELS.FAST || AIBAK_MODELS.DEFAULT,
-      messages: [
+    const aiRes: any = await callCloudbaseChat(
+      [
         { role: 'system', content: SALES_COACH_PROMPT },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.7,
-    });
+      AIBAK_MODELS.text[0]
+    );
 
     let tips: any[] = [];
     try {
