@@ -64,7 +64,7 @@ const ModelConfigPage: React.FC = () => {
     try {
       const res: any = await modelConfigAPI.list();
       setList(res.data || []);
-    } catch { /* ignore */ }
+    } catch (e) { /* ignore */ }
     setLoading(false);
   };
 
@@ -207,7 +207,7 @@ const ModelConfigPage: React.FC = () => {
       await modelConfigAPI.update(rec._id, { pinned: !rec.pinned });
       message.success(rec.pinned ? '已取消置顶' : '已置顶');
       load();
-    } catch { message.error('操作失败'); }
+    } catch (e) { message.error('操作失败'); }
   };
 
   const columns = [

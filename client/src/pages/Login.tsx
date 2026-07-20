@@ -79,7 +79,7 @@ export default function Login() {
       apiClient.get('/auth/profile', { headers: { Authorization: `Bearer ${token}` } })
         .then((res: any) => finishLogin(token, res.user ?? res.data ?? res))
         .catch(() => { message.error('第三方登录校验失败'); });
-      try { popupRef.current?.close(); } catch { /* noop */ }
+      try { popupRef.current?.close(); } catch (e) { /* noop */ }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
