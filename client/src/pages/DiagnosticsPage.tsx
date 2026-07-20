@@ -45,16 +45,17 @@ const DiagnosticsPage: React.FC = () => {
       const body = (res && res.data) || {}; // res 已经是拦截器提取后的 { success, data: {...} }
       const d: any = (body && body.data && typeof body.data === "object" && !Array.isArray(body.data)) ? body.data : (body || {});
       setChecks(Array.isArray(d.checks) ? d.checks : []);
-      setMedia(Array.isArray(d.mediaProviders) ? d.mediaProviders.filter(Boolean) : []);
+      setMedia(Array.isArray(d.mediaProviders) ? d.mediaProviders.filter((m: any) => m && typeof m === 'object' && 'name' in m && 'configured' in m) : []);
       setMockMode(!!d.mockMode);
       // 防御：确保 paymentStatus 所有嵌套对象都有默认值，防止 Cannot read properties of undefined
-      const ps = d.paymentStatus && typeof d.paymentStatus === "object" && !Array.isArray(d.paymentStatus) ? { ...d.paymentStatus } : null;
-      if (ps) {
-        ps.wechat = ps.wechat && typeof ps.wechat === "object" ? ps.wechat : {};
-        ps.stripe = ps.stripe && typeof ps.stripe === "object" ? ps.stripe : {};
-        ps.alipay = ps.alipay && typeof ps.alipay === "object" ? ps.alipay : {};
+      let ps: any = null;
+      if (d.paymentStatus && typeof d.paymentStatus === "object" && !Array.isArray(d.paymentStatus)) {
+        ps = { ...d.paymentStatus };
+        ps.wechat = (ps.wechat && typeof ps.wechat === "object" && !Array.isArray(ps.wechat)) ? ps.wechat : {};
+        ps.stripe = (ps.stripe && typeof ps.stripe === "object" && !Array.isArray(ps.stripe)) ? ps.stripe : {};
+        ps.alipay = (ps.alipay && typeof ps.alipay === "object" && !Array.isArray(ps.alipay)) ? ps.alipay : {};
       }
-      setPaymentStatus(ps);
+      setPaymentStatus(ps || { wechat: {}, stripe: {}, alipay: {} });
     } catch { setPaymentStatus({ wechat: {}, stripe: {}, alipay: {} }); }
     setLoading(false);
   };
