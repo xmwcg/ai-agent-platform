@@ -21,6 +21,25 @@ const webhook_routes_1 = __importDefault(require("./billing/webhook.routes"));
 const refund_routes_1 = __importDefault(require("./billing/refund.routes"));
 const reconciliation_routes_1 = __importDefault(require("./billing/reconciliation.routes"));
 const router = (0, express_1.Router)();
+// 根路由：返回可用端点列表
+router.get('/', (_req, res) => {
+    res.json({
+        success: true,
+        name: 'billing',
+        endpoints: [
+            'GET /api/billing/plans',
+            'GET /api/billing/payment-methods',
+            'GET /api/billing/credits-packages',
+            'POST /api/billing/credits-packages/order',
+            'POST /api/billing/subscribe',
+            'GET /api/billing/orders',
+            'GET /api/billing/orders/:orderNo',
+            'POST /api/billing/private-license/order',
+            'GET /api/billing/private-license-packages',
+            'GET /api/billing/cost-dashboard'
+        ]
+    });
+});
 // 套餐列表（公开）
 router.get('/plans', (_req, res) => {
     res.json({ success: true, data: Object.values(billing_1.PLANS) });

@@ -10,6 +10,20 @@ const cost_control_service_1 = require("../services/cost-control.service");
 const http_error_1 = require("../lib/http-error");
 const logger_1 = require("../lib/logger");
 const router = (0, express_1.Router)();
+// 根路由：AI 服务端点索引
+router.get('/', (_req, res) => {
+    res.json({
+        success: true,
+        name: 'ai-service',
+        endpoints: [
+            'POST /api/ai/chat - AI 对话',
+            'GET  /api/ai/models - 可用模型列表',
+            'GET  /api/ai/test/:provider - 测试模型连接',
+            'POST /api/ai/session - 创建对话会话',
+            'GET  /api/ai/session/:sessionId - 获取会话详情',
+        ]
+    });
+});
 // 聊天接口（使用 Agent 服务；chat provider 不可用时回退 CloudBase 免费模型，保证可用）
 router.post('/chat', auth_1.optionalAuth, (0, subscription_1.enforceCostValve)(), (0, subscription_1.enforceQuota)('ai_chat'), async (req, res) => {
     try {

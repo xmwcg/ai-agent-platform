@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import { QRCodeSVG } from 'qrcode.react';
 import ReactECharts from 'echarts-for-react';
-import { referralAPI } from '@/services/api';
+import { referralAPI, extractApiError } from '@/services/api';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -70,8 +70,8 @@ export default function DistributionPage() {
       setCommissions(Array.isArray(arr) ? arr : []);
       const wd = wdRes?.data || wdRes?.data?.list || [];
       setWithdrawals(Array.isArray(wd) ? wd : []);
-    } catch {
-      message.warning('分销数据加载失败，请稍后重试');
+    } catch (e) {
+      message.warning(extractApiError(e, '分销数据加载失败，请稍后重试'));
     } finally {
       setLoading(false);
     }
