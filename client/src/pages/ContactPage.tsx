@@ -7,7 +7,7 @@ import {
 const { Title, Paragraph, Text } = Typography;
 
 const CHANNELS = [
-  { icon: <MailOutlined />, title: '商务邮箱', value: 'contact@aibak.site', color: '#6c5ce7' },
+  { icon: <MailOutlined />, title: '商务邮箱', value: 'xmwcg5059@outlook.com', color: '#6c5ce7' },
   { icon: <GlobalOutlined />, title: '官方网站', value: 'aibak.site', color: '#0ea5e9', link: 'https://aibak.site' },
   { icon: <CustomerServiceOutlined />, title: '在线客服', value: '首页左下角 AI 客服', color: '#f59e0b' },
   { icon: <ClockCircleOutlined />, title: '服务时间', value: '周一至周日 9:00 - 21:00', color: '#10b981' },

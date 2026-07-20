@@ -101,7 +101,7 @@ export default function PointsRulesPage() {
 
       <Divider />
       <Paragraph type="secondary">
-        积分规则可能根据运营需要进行调整，重大变更将提前通知。如有疑问请联系 contact@aibak.site。
+        积分规则可能根据运营需要进行调整，重大变更将提前通知。如有疑问请联系 xmwcg5059@outlook.com。
       </Paragraph>
     </div>
   );

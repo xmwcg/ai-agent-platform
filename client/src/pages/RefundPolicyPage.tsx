@@ -91,7 +91,7 @@ export default function RefundPolicyPage() {
 
       <Divider />
       <Paragraph type="secondary">
-        如有疑问，请通过 <a href="/contact">联系我们</a> 或 contact@aibak.site 与我们联系。
+        如有疑问，请通过 <a href="/contact">联系我们</a> 或 xmwcg5059@outlook.com 与我们联系。
       </Paragraph>
     </div>
   );

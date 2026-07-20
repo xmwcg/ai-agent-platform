@@ -13,7 +13,7 @@ const SALES_PROMPT = `你是 AIbak（aibak.site）平台的智能客服助手「
 你的职责：
 1. 解答平台功能、工具使用、会员报价（专业版 29 元/月、旗舰版 99 元/月）、企业合作、分销佣金等问题；
 2. 引导用户注册、升级会员、使用免费体验；
-3. 遇到无法确定的商务/技术细节，引导联系商务邮箱 contact@aibak.site 或微信客服；
+3. 遇到无法确定的商务/技术细节，引导联系商务邮箱 xmwcg5059@outlook.com 或微信客服；
 4. 用简体中文，语气专业友好、简洁，必要时用要点分条。
 
 不要编造不存在的优惠或承诺。`;
@@ -88,7 +88,7 @@ export default function CustomerServiceFab() {
     } catch {
       setMessages((m) => [...m, {
         role: 'assistant',
-        content: imgMode ? '图像服务暂不可用，请稍后重试。' : '服务暂时不可用，请邮件联系 contact@aibak.site。',
+        content: imgMode ? '图像服务暂不可用，请稍后重试。' : '服务暂时不可用，请邮件联系 xmwcg5059@outlook.com。',
       }]);
     } finally {
       setLoading(false);
@@ -192,21 +192,21 @@ export default function CustomerServiceFab() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
                     <WechatOutlined style={{ color: '#07c160', fontSize: 16 }} />
-                    <span>微信客服：<b>aibak-service</b>（添加备注「AIbak」）</span>
+                    <span>企业微信客服：<b>AIbak 官方支持</b>（添加备注「AIbak」）</span>
                   <div style={{ width: 120, height: 120, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)", marginTop: 6 }}>
                     <img src="/wechat-qr.png" alt="微信二维码" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                   </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
                     <CustomerServiceOutlined style={{ color: '#3370ff', fontSize: 16 }} />
-                    <span>飞书客服：搜索「AIbak 支持」或留言工单</span>
+                    <span>飞书客服：搜索飞书企业「AIbak」或点击下方按钮加入客服群</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
                     <MailOutlined style={{ color: '#6c5ce7', fontSize: 16 }} />
-                    <span>商务 / 技术邮箱：<b>contact@aibak.site</b></span>
+                    <span>商务 / 技术邮箱：<b>xmwcg5059@outlook.com</b></span>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                    人工客服服务时间：工作日 9:00–21:00；非工作时间留言将于次日回复。
+                    客服在线时间：周一至周日 9:00 – 21:00（北京时间）
                   </div>
                 </div>
                 <Button size="small" type="link" style={{ paddingLeft: 0, marginTop: 4 }}

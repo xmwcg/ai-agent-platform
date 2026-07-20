@@ -9,7 +9,7 @@ const { Text } = Typography;
 const BRAND = "AIbak";
 const BRAND_SLOGAN = "打造您的全站 AI 应用平台";
 const SITE_URL = "https://aibak.site";
-const CONTACT_EMAIL = "contact@aibak.site";
+const CONTACT_EMAIL = "xmwcg5059@outlook.com";
 
 // 页脚导航分组
 const FOOTER_GROUPS: { title: string; links: { label: string; path: string; external?: boolean }[] }[] = [

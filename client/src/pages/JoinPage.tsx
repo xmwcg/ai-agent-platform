@@ -32,8 +32,8 @@ export default function JoinPage() {
           与 AIbak 一起共建 AI 应用生态 —— 分销推广、技术集成、内容渠道、资源共建，多种合作方式任选。
         </Paragraph>
         <Button size="large" icon={<MailOutlined />} style={{ marginTop: 18, borderRadius: 12, fontWeight: 600 }}
-          onClick={() => window.open('mailto:contact@aibak.site')}>
-          商务合作 contact@aibak.site
+          onClick={() => window.open('mailto:xmwcg5059@outlook.com')}>
+          商务合作 xmwcg5059@outlook.com
         </Button>
       </section>
 
@@ -89,7 +89,7 @@ export default function JoinPage() {
 
       <div style={{ textAlign: 'center', marginTop: 28 }}>
         <Button type="primary" size="large" icon={<MailOutlined />} style={{ borderRadius: 12, fontWeight: 600 }}
-          onClick={() => window.open('mailto:contact@aibak.site')}>
+          onClick={() => window.open('mailto:xmwcg5059@outlook.com')}>
           立即咨询合作
         </Button>
       </div>

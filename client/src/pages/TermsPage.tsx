@@ -118,7 +118,7 @@ export default function TermsPage() {
 
       <Divider />
       <Paragraph type="secondary">
-        如需进一步说明，请通过 <a href="/contact">联系我们</a> 页面或发送邮件至 contact@aibak.site 与我们取得联系。
+        如需进一步说明，请通过 <a href="/contact">联系我们</a> 页面或发送邮件至 xmwcg5059@outlook.com 与我们取得联系。
       </Paragraph>
     </div>
   );
