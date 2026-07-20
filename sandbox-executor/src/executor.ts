@@ -131,6 +131,7 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
       '--user', '1000:1000',        // 非 root 用户
       '--read-only',                // 只读根文件系统
       '--tmpfs', '/tmp:rw,noexec,nosuid,size=32m',  // 独立临时目录
+      '--tmpfs', '/sandbox:rw,noexec,nosuid,size=16m', // /sandbox tmpfs 允许 Python 写 __pycache__
       '--network', 'none',          // 禁用网络
       '--cap-drop', 'ALL',          // 删除所有 capabilities
       '--security-opt', 'no-new-privileges:true',
