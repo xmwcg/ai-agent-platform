@@ -56,6 +56,12 @@ router.post('/chat', optionalAuth, enforceCostValve(), enforceQuota('ai_chat'), 
       usage = result.usage;
     } catch (gwErr) {
       // 兜底：外部 chat provider 未配置/不可用时，走 CloudBase 小程序成长计划免费模型
+      // 弃用模型错误直接返回给前端，不静默降级
+      const gwMsg = (gwErr as Error)?.message || "";
+      if (gwMsg.includes("DEPRECATED_MODEL") || gwMsg.includes("deprecated")) {
+        return res.status(400).json({ error: gwMsg, code: "DEPRECATED_MODEL" });
+      }
+      
       logger.warn('ai.chat', `Gateway failed, falling back to CloudBase free model: ${(gwErr as Error)?.message}`);
       const cfMessages = [
         { role: 'system', content: config?.systemPrompt || 'You are a helpful AI assistant.' },
