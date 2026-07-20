@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   MenuFoldOutlined, MenuUnfoldOutlined, InfoCircleOutlined,
-  ClearOutlined, RobotOutlined, ThunderboltOutlined,
+  ClearOutlined, RobotOutlined, ThunderboltOutlined, DownloadOutlined,
   BarChartOutlined, SettingOutlined,
 } from '@ant-design/icons';
 import { useChatStore } from '@/stores/chat';
@@ -24,6 +24,16 @@ export default function AiChat() {
     createSession, addMessage, updateMessage, clearMessages,
     setMode, setModel, setLoading, rightPanelOpen, toggleRightPanel,
   } = useChatStore();
+  const handleExportChat = () => {
+    var text = messages.map(function(m) { return (m.role === 'user' ? '[用户] ' : '[AI] ') + (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)); }).join('\n\n---\n\n');
+    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'ai-chat-export.txt'; a.click();
+    URL.revokeObjectURL(url);
+    message.success('对话已导出');
+  };
+
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [optimizerOpen, setOptimizerOpen] = useState(false);
@@ -197,7 +207,7 @@ export default function AiChat() {
             <ModelSelector value={model} onChange={setModel} style={{ width: 200 }} size="small" placeholder="选择模型" mode="chat" />
 
             <Tooltip title="清空对话">
-              <Button type="text" icon={<ClearOutlined />} onClick={clearMessages} disabled={messages.length === 0} />
+              <Button type="text" icon={<DownloadOutlined />} onClick={handleExportChat} title="导出对话" /><Button type="text" icon={<ClearOutlined />} onClick={clearMessages} disabled={messages.length === 0} />
             </Tooltip>
 
             <Tooltip title="会话详情">
