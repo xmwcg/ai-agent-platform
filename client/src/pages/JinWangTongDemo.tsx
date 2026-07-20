@@ -12,7 +12,7 @@ import {
   PlayCircleOutlined, DownloadOutlined, CrownOutlined, CheckCircleOutlined,
   ClockCircleOutlined, CloseCircleOutlined, ClusterOutlined,
   AppstoreOutlined, CodeOutlined, AuditOutlined, GlobalOutlined,
-  FileProtectOutlined, SwapOutlined,
+  FileProtectOutlined, SwapOutlined, ShoppingCartOutlined,
 } from '@ant-design/icons';
 
 const { Title, Paragraph, Text } = Typography;
@@ -225,12 +225,18 @@ export default function JinWangTongDemo() {
           以下是金网通运行后的真实效果演示（演示数据）。安装后即可对本机进行真实扫描和管理。
         </Paragraph>
         <Space size={16} style={{ position: 'relative', zIndex: 1 }}>
-          <Button type="primary" size="large" icon={<DownloadOutlined />}
-            onClick={() => { if (!user) { Modal.confirm({ title: '请先登录', content: '登录后即可下载试用版（需验证身份，防止未授权分发）。', okText: '去登录', cancelText: '取消', onOk: () => nav('/login') }); return; } window.open('/api/billing/private-license/download?type=trial', '_blank'); }}
-            style={{ borderRadius: 10, height: 48, padding: '0 28px', fontSize: 16, fontWeight: 600,
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none',
-              boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}>
-            免费下载试用版
+          <Button type="primary" size="large" icon={<PlayCircleOutlined />}
+            onClick={() => { setActiveTab("hardware"); }}
+            style={{ borderRadius: 10, height: 48, padding: "0 28px", fontSize: 16, fontWeight: 600,
+              background: "linear-gradient(135deg, #6366f1, #8b5cf6)", border: "none",
+              boxShadow: "0 4px 20px rgba(99,102,241,0.4)" }}>
+            在线体验（免费演示）
+          </Button>
+          <Button size="large" icon={<ShoppingCartOutlined />}
+            onClick={() => nav("/jinwangtong#pricing")}
+            style={{ borderRadius: 10, height: 48, padding: "0 28px", fontSize: 15, fontWeight: 600,
+              background: "#fff", color: "#6366f1", border: "2px solid #6366f1" }}>
+            立即购买 ¥299起
           </Button>
           <Button size="large" ghost onClick={() => nav('/contact')}
             style={{ borderRadius: 10, height: 48, padding: '0 28px', fontSize: 15, color: '#07c160', borderColor: '#07c160' }}>
@@ -250,7 +256,7 @@ export default function JinWangTongDemo() {
       {/* How it works */}
       <Card style={{ borderRadius: 14, marginBottom: 24 }} title="📦 如何使用">
         <Steps direction="vertical" current={-1} items={[
-          { title: '下载试用版', description: '点击上方按钮下载 JinWangTong-Trial.zip 解压到任意目录' },
+          { title: '在线体验（无需下载）', description: '点击上方按钮进入 Web 在线演示，无需安装' },
           { title: '环境体检', description: '右键 PowerShell → 以管理员运行 .\\compat-check.ps1' },
           { title: '一键修复', description: '如有问题运行 .\\perms-fix.ps1 自动修复' },
           { title: '开始扫描', description: '运行 .\\wizard.ps1 打开交互式配置向导，选择需要的功能' },
@@ -262,14 +268,14 @@ export default function JinWangTongDemo() {
         background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
         borderRadius: 16, padding: '40px 32px', textAlign: 'center', marginBottom: 24,
       }}>
-        <Title level={3} style={{ color: '#fff', marginBottom: 8 }}>15天全功能免费试用</Title>
+        <Title level={3} style={{ color: '#fff', marginBottom: 8 }}>购买后即可下载安装包</Title>
         <Paragraph style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, marginBottom: 20 }}>
-          满意后再购买 · 永久买断 ¥299起 · License自动签发
+          在线体验满意后购买 · 永久买断 ¥299起 · 支付成功自动签发License · 立即下载安装包
         </Paragraph>
         <Space size={16}>
-          <Button size="large" onClick={() => { if (!user) { Modal.confirm({ title: '请先登录', content: '登录后即可下载试用版（需验证身份，防止未授权分发）。', okText: '去登录', cancelText: '取消', onOk: () => nav('/login') }); return; } window.open('/api/billing/private-license/download?type=trial', '_blank'); }}
+          <Button size="large" onClick={() => nav('/jinwangtong#pricing')}
             style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>
-            免费下载试用
+            立即购买
           </Button>
           <Button size="large" ghost onClick={() => nav('/jinwangtong')}
             style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}>

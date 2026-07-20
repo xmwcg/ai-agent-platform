@@ -615,6 +615,32 @@ router.post('/private-license/activate', requireAuth, async (req: AuthRequest, r
   }
 });
 
-export default router;
+
+// 获取用户已购买的 License 列表（用于"我的订单"中展示下载按钮）
+router.get("/private-license/my-licenses", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const orders = await Order.find({
+      userId: req.user!.id,
+      orderType: "private_license",
+      paymentStatus: "paid",
+    }).sort({ paidAt: -1 }).select("orderNo packageId amount licensePayload createdAt paidAt").lean();
+
+    const licenses = orders.map((o: any) => ({
+      orderNo: o.orderNo,
+      packageId: o.packageId,
+      amount: o.amount,
+      paidAt: o.paidAt,
+      activated: o.licensePayload?.fingerprint && o.licensePayload?.fingerprint !== "PENDING_ACTIVATION",
+      license: o.licensePayload,
+      downloadUrl: `/api/billing/private-license/download?orderNo=${o.orderNo}`,
+    }));
+
+    res.json({ success: true, data: licenses });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+
 
 

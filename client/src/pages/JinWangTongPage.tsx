@@ -8,7 +8,7 @@ import {
   CrownOutlined, ThunderboltOutlined, LaptopOutlined, PlayCircleOutlined, CheckCircleOutlined,
   GlobalOutlined, SwapOutlined, DatabaseOutlined, FundOutlined,
   WindowsOutlined, AppleOutlined, LinuxOutlined, SettingOutlined,
-  TeamOutlined, AuditOutlined, RadarChartOutlined, WechatOutlined,
+  TeamOutlined, AuditOutlined, RadarChartOutlined, WechatOutlined, ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { billingAPI, extractApiError } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
@@ -31,7 +31,7 @@ const FEATURES = [
 ];
 
 const PRICING = [
-  { id: 'free', name: '免费试用版', price: '0', period: '15天', originalPrice: '', features: ['完整硬件扫描', '网络体检(只读)', 'C盘清理(手动确认)', '单机使用', '社区支持'], tag: '推荐试用', tagColor: 'blue', btnText: '免费试用(需登录)', isFree: true, icon: <DownloadOutlined /> },
+  { id: 'free', name: '免费试用版', price: '0', period: '15天', originalPrice: '', features: ['完整硬件扫描', '网络体检(只读)', 'C盘清理(手动确认)', '单机使用', '社区支持'], tag: '推荐试用', tagColor: 'blue', btnText: '在线体验（免费）', isFree: true, icon: <DownloadOutlined /> },
   { id: 'ent-standard', name: '专业版', price: '299', period: '永久', originalPrice: '¥2,000+/年', packageId: 'ent-standard', features: ['免费版全部功能', '资产报表+实时价格对比', '打印机一键共享', '文件共享SMB配置', '权限自动修复', '3台设备授权', '邮件工单支持'], tag: '性价比之选', tagColor: 'green', btnText: '立即购买', icon: <CrownOutlined /> },
   { id: 'ent-pro', name: '旗舰版', price: '599', period: '永久', originalPrice: '¥5,000+/年', packageId: 'ent-pro', features: ['专业版全部功能', 'Web集中控制台', '批量任务下发', '上网行为管控', '审计日志追踪', '不限设备数', '优先技术支持'], tag: '企业推荐', tagColor: 'orange', btnText: '立即购买', icon: <ThunderboltOutlined />, highlighted: true },
   { id: 'ent-ultimate', name: '团队版', price: '999', period: '永久', originalPrice: '¥10,000+/年', packageId: 'ent-ultimate', features: ['旗舰版全部功能', '不限席位', '多分支机构管理', '专属技术对接', '定制开发支持', 'SLA保障'], tag: '大团队', tagColor: 'red', btnText: '立即购买', icon: <TeamOutlined /> },
@@ -90,14 +90,14 @@ const JinWangTongPage: React.FC = () => {
     finally { setBuyLoading(null); }
   };
 
-  const handleFreeDownload = () => {
-  if (!user) {
-    Modal.confirm({ title: '请先登录', content: '登录后即可免费下载金网通试用版。', okText: '去登录', cancelText: '取消', onOk: () => navigate('/login') });
-    return;
-  }
-  window.open('/api/billing/private-license/download?type=trial', '_blank');
-  message.success('正在下载金网通试用版（需登录验证）...');
-};
+  // 不再提供免费下载试用版。用户先在线体验，满意后购买 → 支付 → 自动签发 License → 下载安装包
+  const handleViewDemo = () => {
+    navigate("/jinwangtong-demo");
+  };
+
+  const handleBuyClick = (pkgId: string, pkgName: string) => {
+    handleBuy(pkgId, pkgName);
+  };
   
 
   return (
@@ -112,7 +112,7 @@ const JinWangTongPage: React.FC = () => {
           <Paragraph style={{ color: '#94a3b8', fontSize: 'clamp(15px, 2vw, 18px)', maxWidth: 700, margin: '0 auto 12px' }}>一套系统管理个人和企业多台电脑设备 · 企业局域网一键互联互通</Paragraph>
           <Paragraph style={{ color: '#64748b', fontSize: 14, maxWidth: 640, margin: '0 auto 24px' }}>一次部署全公司打通：文件共享 · 远程桌面 · 统一管控 · 审计溯源 · 上网管控 · 网络体检 — <Text strong style={{ color: '#818cf8' }}>六合一</Text> · 离线可用 · 数据不出公司</Paragraph>
           <Space size={16} wrap>
-            <Button type="primary" size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}>免费下载试用 (15天)</Button>
+            <Button type="primary" size="large" icon={<PlayCircleOutlined />} onClick={handleViewDemo} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}>在线体验（免费演示）</Button>
           </Space>
           <div style={{ marginTop: 32, display: 'flex', justifyContent: 'center', gap: 40, flexWrap: 'wrap' }}>
             {[{ icon: <WindowsOutlined />, label: 'Win10/11全版本' }, { icon: <AppleOutlined />, label: 'macOS支持' }, { icon: <LinuxOutlined />, label: 'Linux扫描' }, { icon: <SafetyOutlined />, label: '离线可用' }, { icon: <ThunderboltOutlined />, label: '永久买断' }].map((item, i) => (<div key={i} style={{ textAlign: 'center' }}><div style={{ fontSize: 22, color: '#818cf8', marginBottom: 4 }}>{item.icon}</div><Text style={{ color: '#94a3b8', fontSize: 12 }}>{item.label}</Text></div>))}
@@ -143,7 +143,7 @@ const JinWangTongPage: React.FC = () => {
             {pkg.highlighted && <div style={{ position: 'absolute', top: 0, right: 0, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', padding: '4px 20px', fontSize: 11, borderBottomLeftRadius: 12, fontWeight: 600 }}>最受欢迎</div>}
             <div style={{ textAlign: 'center', marginBottom: 16 }}><div style={{ fontSize: 28, color: '#6366f1', marginBottom: 8 }}>{pkg.icon}</div><Tag color={pkg.tagColor as any} style={{ marginBottom: 8 }}>{pkg.tag}</Tag><Title level={4} style={{ marginBottom: 4 }}>{pkg.name}</Title><div style={{ margin: '12px 0' }}><Text style={{ fontSize: 36, fontWeight: 800, color: '#1e293b' }}>¥{pkg.price}</Text><Text type="secondary" style={{ fontSize: 14 }}>/{pkg.period}</Text></div>{pkg.originalPrice && <Text delete type="secondary" style={{ fontSize: 12 }}>竞品参考 {pkg.originalPrice}</Text>}</div>
             <div style={{ marginBottom: 16 }}>{pkg.features.map((feat, j) => (<div key={j} style={{ padding: '4px 0', display: 'flex', alignItems: 'flex-start', gap: 8 }}><CheckCircleOutlined style={{ color: '#10b981', marginTop: 3, flexShrink: 0 }} /><Text style={{ fontSize: 13, lineHeight: 1.5 }}>{feat}</Text></div>))}</div>
-            <Button type={pkg.highlighted ? 'primary' : 'default'} block size="large" loading={buyLoading === pkg.packageId} onClick={() => pkg.isFree ? handleFreeDownload() : pkg.packageId && handleBuy(pkg.packageId, pkg.name)} style={{ borderRadius: 10, height: 44, fontWeight: 600, ...(pkg.highlighted ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none' } : {}) }} icon={pkg.isFree ? <DownloadOutlined /> : <CrownOutlined />}>{pkg.btnText}</Button>
+            <Button type={pkg.highlighted ? 'primary' : 'default'} block size="large" loading={buyLoading === pkg.packageId} onClick={() => pkg.isFree ? handleViewDemo() : pkg.packageId && handleBuy(pkg.packageId, pkg.name)} style={{ borderRadius: 10, height: 44, fontWeight: 600, ...(pkg.highlighted ? { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none' } : {}) }} icon={pkg.isFree ? <DownloadOutlined /> : <CrownOutlined />}>{pkg.btnText}</Button>
           </Card></Col>))}
         </Row>
         <Paragraph type="secondary" style={{ textAlign: 'center', marginTop: 20, fontSize: 13 }}>购买后自动签发 License · 永久授权 · 支持微信支付/对公转账 · <a onClick={() => navigate('/ai-chat')} style={{ cursor: 'pointer', color: '#6366f1' }}>联系客服</a> 获取发票</Paragraph>
@@ -155,7 +155,7 @@ const JinWangTongPage: React.FC = () => {
       <div style={{ marginBottom: 32 }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}><Title level={2} style={{ marginBottom: 8 }}>快速开始</Title><Paragraph type="secondary" style={{ fontSize: 15 }}>4 步完成部署，无需专业IT背景</Paragraph></div>
         <Card style={{ borderRadius: 16, marginBottom: 24 }}><Steps current={-1} direction="vertical" size="small" items={INSTALL_STEPS.map(s => ({ title: <Text strong>{s.title}</Text>, description: <Text type="secondary">{s.desc}</Text> }))} style={{ maxWidth: 600, margin: '0 auto' }} /></Card>
-        <div style={{ textAlign: 'center', marginTop: 24 }}><Button type="primary" size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', fontWeight: 600, fontSize: 15 }}>下载脚本包 (ZIP)</Button><Paragraph type="secondary" style={{ marginTop: 12, fontSize: 13 }}></Paragraph></div>
+        <div style={{ textAlign: 'center', marginTop: 24 }}><Button type="primary" size="large" icon={<PlayCircleOutlined />} onClick={handleViewDemo} style={{ borderRadius: 10, height: 48, padding: '0 32px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', fontWeight: 600, fontSize: 15 }}>在线体验（Web演示）</Button><Paragraph type="secondary" style={{ marginTop: 12, fontSize: 13 }}></Paragraph></div>
       </div>
 
       <Divider />
@@ -182,8 +182,8 @@ const JinWangTongPage: React.FC = () => {
       {/* CTA */}
       <div style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', borderRadius: 16, padding: '48px 32px', textAlign: 'center', marginBottom: 24 }}>
         <Title level={2} style={{ color: '#fff', marginBottom: 8 }}>开始管理您的企业网络</Title>
-        <Paragraph style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, marginBottom: 24 }}>免费试用 15 天 · 零服务器成本 · 纯内网运行 · 数据不出公司</Paragraph>
-        <Space size={16}><Button size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>免费下载试用</Button><Button size="large" ghost onClick={() => navigate('/contact')} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}>联系客服</Button></Space>
+        <Paragraph style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, marginBottom: 24 }}>在线体验满意后购买 · 永久买断 ¥299起 · 支付成功自动签发License</Paragraph>
+        <Space size={16}><Button size="large" icon={<DownloadOutlined />} onClick={handleViewDemo} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>免费下载试用</Button><Button size="large" ghost onClick={() => navigate('/contact')} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}>联系客服</Button></Space>
       </div>
 
       <div style={{ textAlign: 'center', padding: '16px 0 32px' }}>
