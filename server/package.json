@@ -24,6 +24,8 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/server-filesystem": "^2025.4.0",
+    "@modelcontextprotocol/server-puppeteer": "^2025.4.0",
     "axios": "^1.6.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",

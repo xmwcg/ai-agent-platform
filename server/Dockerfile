@@ -29,6 +29,8 @@ COPY --chown=node:node package.json package-lock.json ./
 COPY --from=build --chown=node:node /usr/src/app/node_modules ./node_modules
 COPY --from=build --chown=node:node /usr/src/app/dist ./dist
 
+# npx 保留：MCP 插件通过白名单机制 (MCP_ALLOWED_STDIO_COMMANDS) 限制可执行命令，
+# 仅允许 node/npx，杜绝任意命令执行风险。
 RUN mkdir -p /usr/src/app/.cache/assets \
   && mkdir -p /usr/src/app/uploads \
   && rm -rf /usr/local/lib/node_modules/npm \
