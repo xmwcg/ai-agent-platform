@@ -82,9 +82,17 @@ function nextSessionId() { return `sess_${Date.now()}_${++msgCounter}`; }
 /** 清洗模型 ID：去除 mc_ 前缀、替换弃用名称 */
 function cleanModelId(m: string): string {
   if (!m) return 'deepseek/deepseek-v4-flash';
-  let cleaned = m.replace(/^mc_[a-f0-9]{20,30}\//, '').replace(/^mc_[a-f0-9]{20,30}$/, '');
-  cleaned = cleaned.replace(/\bdeepseek-chat\b/gi, 'deepseek-v4-flash');
-  cleaned = cleaned.replace(/\bdeepseek-coder\b/gi, 'deepseek-v4-flash');
+  let cleaned = m;
+  // 仅替换弃用的模型名，不破坏 provider 前缀
+  const parts = cleaned.split('/');
+  const last = parts.length - 1;
+  parts[last] = parts[last]
+    .replace(/^deepseek-chat$/i, 'deepseek-v4-flash')
+    .replace(/^deepseek-coder$/i, 'deepseek-v4-flash')
+    .replace(/^gpt-3\.5-turbo$/i, 'gpt-4o-mini')
+    .replace(/^gpt-4$/i, 'gpt-4o');
+  cleaned = parts.join('/');
+  // 缺 provider 前缀时默认 deepseek
   if (!cleaned.includes('/')) cleaned = 'deepseek/' + cleaned;
   return cleaned;
 }
