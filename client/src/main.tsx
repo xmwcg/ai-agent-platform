@@ -46,21 +46,24 @@ function ThemedApp() {
 // ─── 浏览器缓存清理：清除旧版模型名和 mc_ 前缀残留 ───
 (function cleanupLegacyCache() {
   try {
-    // 清理 zustand persist 中的旧模型名
     var chatStorage = localStorage.getItem('ai-chat-storage');
     if (chatStorage) {
       var changed = false;
       var cleaned = chatStorage
         .replace(/"deepseek-chat"/g, '"deepseek-v4-flash"')
-        .replace(/"deepseek-coder"/g, '"deepseek-v4-flash"')
-        .replace(/"mc_[a-f0-9]+\\/g, '"');
+        .replace(/"deepseek-coder"/g, '"deepseek-v4-flash"');
+      cleaned = cleaned.replace(/mc_[a-f0-9]{10,30}\\//g, '');
       if (cleaned !== chatStorage) {
         localStorage.setItem('ai-chat-storage', cleaned);
         changed = true;
       }
-      if (changed) console.log('[cleanup] 已清理 localStorage 中的旧模型名');
+      if (changed) console.log('[cleanup] cleaned old models');
     }
-    // 清除 Service Worker 缓存（如果有）
+    var storedVersion = localStorage.getItem('aibak-build-version');
+    var currentVersion = 'bfdda77';
+    if (storedVersion !== currentVersion) {
+      localStorage.setItem('aibak-build-version', currentVersion);
+    }
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.getRegistrations().then(function(regs) {
         regs.forEach(function(reg) { reg.unregister(); });
