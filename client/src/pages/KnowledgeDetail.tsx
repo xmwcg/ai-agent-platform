@@ -267,10 +267,10 @@ export default function KnowledgeDetail() {
     if (!id) return;
     setUnlocking(true);
     try {
-      const res: any = await apiClient.get(`/knowledge/${id}`);
+            const res: any = await apiClient.post(`/knowledge/${id}/unlock`);
       if (res?.data) {
         setDoc(repairKnowledgeDocument(res.data));
-        if (res.data.access !== 'full') {
+        if (res?.data?.access !== 'full') {
           message.warning('积分不足，请先充值积分或升级会员');
         } else {
           message.success('已解锁全文');
