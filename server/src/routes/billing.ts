@@ -31,7 +31,7 @@ router.get('/', (_req: Request, res: Response) => {
       'GET /api/billing/orders',
       'GET /api/billing/orders/:orderNo',
       'POST /api/billing/private-license/order',
-      'GET /api/billing/private-license/packages',
+      'GET /api/billing/private-license-packages',
       'GET /api/billing/cost-dashboard'
     ]
   });
