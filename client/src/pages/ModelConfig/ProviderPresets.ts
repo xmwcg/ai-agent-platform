@@ -18,7 +18,7 @@ export const PROVIDER_PRESETS: ModelProvider[] = [
     id: 'openai', name: 'OpenAI', category: 'international',
     apiBaseUrl: 'https://api.openai.com/v1',
     apiKeyPlaceholder: 'sk-proj-...',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'o1-preview', 'o1-mini'],
+    models: ['gpt-4.1', 'gpt-4.1-mini', 'o3', 'o4-mini'],
     description: '最强通用大模型，支持多模态与工具调用',
     capabilities: { reasoning: true, vision: true, image: false },
     supportsAutoFetch: true,

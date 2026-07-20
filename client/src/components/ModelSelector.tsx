@@ -1,14 +1,35 @@
 import { useEffect, useState } from 'react';
-/** 清理模型显示名称（去除 mc_* 前缀） */
-function cleanModelDisplay(provider: string, model?: string): string {
-  if (!provider.startsWith('mc_')) return provider;
-  // 自定义 provider：只显示模型名
-  if (model) return model;
-  // 去掉 mc_<id> 前缀
-  return provider.replace(/^mc_[a-f0-9]+$/, '自定义模型');
-}
 import { Select, Spin } from 'antd';
 import { gatewayAPI } from '@/services/api';
+
+/**
+ * 清理模型显示名称，用于 UI 展示（不暴露 mc_ 前缀）。
+ * 输入格式：
+ *   - "deepseek/deepseek-v4-flash" → "deepseek-v4-flash"
+ *   - "mc_6a5901cbfabd866d80839427/Agnes-2.0-Flash" → "Agnes-2.0-Flash"
+ *   - "mc_6a5901cbfabd866d80839427" → "自定义模型"
+ *   - "agnes-image-2.0-flash" → "agnes-image-2.0-flash"
+ */
+export function cleanModelDisplay(raw: string): string {
+  if (!raw) return '未选择';
+  // 包含 / 的格式：provider/model 或 mc_<id>/model
+  if (raw.includes('/')) {
+    const parts = raw.split('/');
+    const provider = parts[0] || '';
+    const model = parts.slice(1).join('/');
+    if (provider.startsWith('mc_')) {
+      // 自定义模型：只显示模型名
+      return model || provider.replace(/^mc_[a-f0-9]+$/, '自定义模型');
+    }
+    // 内置 provider：provider/model，只显示模型名
+    return model;
+  }
+  // 单独的 provider 名称
+  if (raw.startsWith('mc_')) {
+    return raw.replace(/^mc_[a-f0-9]+$/, '自定义模型');
+  }
+  return raw;
+}
 
 interface GatewayModelGroup {
   provider: string;
