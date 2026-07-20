@@ -202,7 +202,7 @@ export default function GlobalSearch({ compact = false }: GlobalSearchProps) {
           prefix={<SearchOutlined />}
           placeholder="例如：API Key、Base URL、DeepSeek、知识库、免费额度"
           onChange={(event) => setQuery(event.target.value)}
-          onPressEnter={() => results[0] && goTo(results[0].path)}
+          onPressEnter={() => { if (results[0]) { closeSearch(false); navigate(results[0].path); } }}
         />
 
         {!query.trim() ? (
