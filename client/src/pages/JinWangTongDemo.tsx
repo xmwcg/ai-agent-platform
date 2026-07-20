@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Modal, message } from 'antd';
+import { useAuthStore } from '@/stores/auth';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Typography, Button, Space, Row, Col, Tag, Descriptions, Table,
@@ -67,6 +69,7 @@ const TABS = [
 ];
 
 export default function JinWangTongDemo() {
+  const user = useAuthStore((s) => s.user);
   const nav = useNavigate();
   const [activeTab, setActiveTab] = useState('hardware');
   const [scanProgress, setScanProgress] = useState(0);
@@ -223,7 +226,7 @@ export default function JinWangTongDemo() {
         </Paragraph>
         <Space size={16} style={{ position: 'relative', zIndex: 1 }}>
           <Button type="primary" size="large" icon={<DownloadOutlined />}
-            onClick={() => window.open('/api/billing/private-license/download?type=trial', '_blank')}
+            onClick={() => { if (!user) { Modal.confirm({ title: '请先登录', content: '登录后即可下载试用版（需验证身份，防止未授权分发）。', okText: '去登录', cancelText: '取消', onOk: () => nav('/login') }); return; } window.open('/api/billing/private-license/download?type=trial', '_blank'); }}
             style={{ borderRadius: 10, height: 48, padding: '0 28px', fontSize: 16, fontWeight: 600,
               background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none',
               boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}>
@@ -264,7 +267,7 @@ export default function JinWangTongDemo() {
           满意后再购买 · 永久买断 ¥299起 · License自动签发
         </Paragraph>
         <Space size={16}>
-          <Button size="large" onClick={() => window.open('/api/billing/private-license/download?type=trial', '_blank')}
+          <Button size="large" onClick={() => { if (!user) { Modal.confirm({ title: '请先登录', content: '登录后即可下载试用版（需验证身份，防止未授权分发）。', okText: '去登录', cancelText: '取消', onOk: () => nav('/login') }); return; } window.open('/api/billing/private-license/download?type=trial', '_blank'); }}
             style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>
             免费下载试用
           </Button>

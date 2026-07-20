@@ -538,8 +538,8 @@ router.get('/profit-summary', requireAuth, requireAdmin, async (req: AuthRequest
 });
 
 
-// 金网通试用版公开下载（无需登录）+ 完整版需登录验证
-router.get('/private-license/download', async (req: Request, res: Response) => {
+// 金网通下载（需登录验证）+ 已购买用户可下载完整版
+router.get('/private-license/download', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const type = (req.query.type as string) || 'trial';
     const zipPath = path.join(process.cwd(), 'uploads', 'JinWangTong-Trial-v1.0.zip');
