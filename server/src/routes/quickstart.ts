@@ -8,6 +8,11 @@ import { sendError } from '../lib/http-error';
 import crypto from 'crypto';
 
 const router = Router();
+// 快速启动总览
+router.get('/', (_req: Request, res: Response) => {
+  res.json({ ok: true, service: 'quickstart', endpoints: ['GET /templates', 'POST /apply'] });
+});
+
 
 export interface QuickstartTemplate {
   id: string;
