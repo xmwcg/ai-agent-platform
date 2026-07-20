@@ -65,7 +65,7 @@ const DiagnosticsPage: React.FC = () => {
       const res: any = await billingAPI.getWebhookEvents({ limit: 50 });
       setWebhookEvents(res?.data?.list || []);
       setWebhookSummary(res?.data?.summary || null);
-    } catch { setPaymentStatus({ wechat: {}, stripe: {}, alipay: {} }); }
+    } catch { setWebhookEvents([]); setWebhookSummary(null); }
     setWebhookLoading(false);
   };
 

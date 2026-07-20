@@ -73,8 +73,8 @@ async function runMongodump(outputPath: string, incremental = false): Promise<vo
     }
   } catch (err: any) {
         if (err?.code === "ENOENT" || err?.message?.includes("ENOENT")) {
-      logger.warn("backup", "mongodump not installed in container, skipping backup");
-      return;
+      logger.warn("backup", "mongodump not installed in container, backup skipped (non-critical in container env)");
+      throw { code: "MONGODUMP_NOT_AVAILABLE", message: "mongodump not installed" };
     }
     logger.error("backup", `mongodump failed: ${err?.message || err}`);
     throw new Error(`MONGODUMP_FAILED: ${err?.message || "unknown error"}`);
@@ -147,7 +147,15 @@ export async function performIncrementalBackup(): Promise<BackupInfo | null> {
   const finalPath = join(await ensureBackupDir(), name);
 
   try {
-    await runMongodump(finalPath, true);
+    try {
+      await runMongodump(finalPath, true);
+    } catch (e: any) {
+      if (e?.code === "MONGODUMP_NOT_AVAILABLE") {
+        logger.warn("backup", "mongodump not available for incremental backup, skipping");
+        return null;
+      }
+      throw e;
+    }
 
     const stats = await stat(finalPath);
     const content = await require("fs").promises.readFile(finalPath);
