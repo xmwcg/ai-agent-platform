@@ -43,9 +43,13 @@ const RelayAdminPage: React.FC = () => {
   };
 
   const deleteChannel = async (id: string) => {
-    await apiClient.delete('/relay/admin/channels/' + id);
-    message.success('已删除');
-    load();
+    try {
+      await apiClient.delete('/relay/admin/channels/' + id);
+      message.success('已删除');
+      load();
+    } catch (err: any) {
+      message.error(err?.response?.data?.error || err?.message || '删除渠道失败');
+    }
   };
 
   const issueToken = async () => {
@@ -57,9 +61,13 @@ const RelayAdminPage: React.FC = () => {
   };
 
   const revokeToken = async (id: string) => {
-    await apiClient.post('/relay/admin/tokens/' + id + '/revoke');
-    message.success('已吊销');
-    load();
+    try {
+      await apiClient.post('/relay/admin/tokens/' + id + '/revoke');
+      message.success('已吊销');
+      load();
+    } catch (err: any) {
+      message.error(err?.response?.data?.error || err?.message || '吊销令牌失败');
+    }
   };
 
   return (
