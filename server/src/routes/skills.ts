@@ -344,7 +344,7 @@ router.post('/:id/invoke', optionalAuth, async (req: AuthRequest, res) => {
         input: req.body || {},
       });
       if (!result.ok) {
-        return res.status(result.status || 422).json({
+        return res.status(result.status || 0).json({
           ok: false,
           code: result.code || 'SKILL_INVOCATION_FAILED',
           error: result.error || '技能执行失败',

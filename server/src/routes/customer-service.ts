@@ -151,7 +151,7 @@ router.get('/:id/embed-script', requireAuth, async (req: AuthRequest, res: Respo
   try {
     const cs = await CustomerService.findOne({ _id: req.params.id, ownerId: req.user!.id });
     if (!cs) return res.status(404).json({ success: false, error: '不存在' });
-    const base = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const base = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 0}`;
     const script = `<!-- AI 智能客服嵌入代码 -->\n<script src="${base}/widget/customer-service.js" data-embed="${cs.embedCode}"></script>`;
     res.json({ success: true, data: { embedCode: cs.embedCode, script } });
   } catch (err) {

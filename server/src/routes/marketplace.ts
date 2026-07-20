@@ -159,7 +159,7 @@ router.post('/api-keys', requireAuth, validate(createKeySchema), async (req: Aut
       name,
       keyHash: hash,
       prefix,
-      quotaDaily: quotaDaily || 1000,
+      quotaDaily: quotaDaily || 0,
       scopes: safeScopes,
       creditsEnabled: !!creditsEnabled,
     });

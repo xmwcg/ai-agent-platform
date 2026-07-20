@@ -73,7 +73,7 @@ router.post(
       if (req.user?.id) await quotaIncrement(req.user.id, 'rag_upload');
 
       // 清理上传的临时文件
-      try { fs.unlinkSync(req.file.path); } catch { /* ignore */ }
+      try { fs.unlinkSync(req.file.path); } catch (e) { /* ignore */ }
 
       res.json({
         success: result.errors.length === 0,
