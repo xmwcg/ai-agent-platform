@@ -28,10 +28,8 @@ export function useResponsive() {
     isTablet,
     isDesktop,
     viewportWidth,
-    // 便捷方法
     isSmallScreen: isMobile || isTablet,
     isLargeScreen: isDesktop,
-    // 断点比较
     gt: (breakpoint: number) => viewportWidth > breakpoint,
     lt: (breakpoint: number) => viewportWidth < breakpoint,
   };
@@ -39,6 +37,7 @@ export function useResponsive() {
 
 /**
  * 根据断点返回不同值（类似 CSS clamp 但用 JS）
+ * 注意：所有 hooks 必须先执行，不能条件返回
  */
 export function useBreakpointValue<T>(values: {
   mobile?: T;
@@ -47,10 +46,12 @@ export function useBreakpointValue<T>(values: {
   default: T;
 }): T {
   const { isMobile, isTablet } = useResponsive();
-  if (isMobile && values.mobile !== undefined) return values.mobile;
-  if (isTablet && values.tablet !== undefined) return values.tablet;
-  if (values.desktop !== undefined) return values.desktop;
-  return values.default;
+  // 先计算所有可能值，最后返回 — 避免 hooks 顺序变化导致 React #310
+  let result: T = values.default;
+  if (isMobile && values.mobile !== undefined) result = values.mobile;
+  else if (isTablet && values.tablet !== undefined) result = values.tablet;
+  else if (values.desktop !== undefined) result = values.desktop;
+  return result;
 }
 
 /**

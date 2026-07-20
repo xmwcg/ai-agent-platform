@@ -542,7 +542,7 @@ router.get('/profit-summary', requireAuth, requireAdmin, async (req: AuthRequest
 router.get('/private-license/download', async (req: Request, res: Response) => {
   try {
     const type = (req.query.type as string) || 'trial';
-    const zipPath = path.join(process.cwd(), '..', '金网通-完整项目源码-v1.0', 'dist', '金网通-企业局域网电脑互联互通系统-v1.0.zip');
+    const zipPath = path.join(process.cwd(), 'uploads', 'JinWangTong-Trial-v1.0.zip');
 
     // 完整版需要登录
     if (type === 'full') {
