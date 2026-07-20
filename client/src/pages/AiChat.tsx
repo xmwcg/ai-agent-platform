@@ -86,7 +86,8 @@ export default function AiChat() {
     if (!activeSessionId && sessions.length === 0) {
       createSession();
     }
-    userScrolledUpRef.current = true;
+    // 会话切换时允许自动滚动到底部（重置滚动标记）
+    userScrolledUpRef.current = false;
     prevMsgCountRef.current = 0;
   }, [activeSessionId, sessions.length, createSession]);
 
@@ -103,6 +104,9 @@ export default function AiChat() {
 
       // 添加用户消息
       addMessage({ role: 'user', content: text.trim(), model, mode });
+
+      // 重置滚动标记，让新消息自动滚动到底部
+      userScrolledUpRef.current = false;
 
       // 添加空的 AI 消息占位
       const aiMsgId = addMessage({ role: 'assistant', content: '⏳ 思考中...', model, mode });
@@ -445,7 +449,8 @@ export default function AiChat() {
           .chat-messages { padding: 12px; }
         }
         @media (max-width: 768px) {
-          .chat-container { height: calc(100vh - 64px); }
+          /* 128px = 48px(header) + 8px(content-margin-top) + 8px(content-margin-bottom) + 64px(TabBar预留) */
+          .chat-container { height: calc(100vh - 128px); }
           .chat-topbar { padding: 8px; }
           .mode-indicator { display: none; }
         }

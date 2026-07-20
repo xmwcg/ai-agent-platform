@@ -75,6 +75,9 @@ function useBreadcrumbs() {
 
   // ─── 路由切换时滚动到顶部 ───
   useEffect(() => {
+    // 自管理滚动的页面跳过全局 scrollTo（避免与页面内部滚动冲突）
+    const SELF_SCROLL_PAGES = ['/ai-chat', '/aibak-chat', '/sandbox'];
+    if (SELF_SCROLL_PAGES.some(p => location.pathname.startsWith(p))) return;
     // 延迟执行以确保页面 DOM 已更新
     var timer = setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'instant' });

@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { logger } from '../lib/logger';
+import { sendError } from '../lib/http-error';
 import { RelayChannel } from '../models/RelayChannel';
 import { RelayToken, RelayUsage } from '../models/RelayToken';
 import { requireAdmin, generateAccessToken } from '../middleware/auth';
@@ -42,7 +44,8 @@ router.post('/v1/chat/completions', async (req: Request, res: Response) => {
     res.json(data);
   } catch (e: any) {
     if (e instanceof RelayError) return res.status(e.status).json({ error: e.message });
-    return res.status(500).json({ error: e?.message || 'internal' });
+    logger.error('relay', 'unexpected error', { error: e?.message || 'internal' });
+    sendError(res, e); return;
   }
 });
 
@@ -52,7 +55,8 @@ router.get('/v1/models', async (req: Request, res: Response) => {
     res.json({ object: 'list', data: models.map((id) => ({ id, object: 'model' })) });
   } catch (e: any) {
     if (e instanceof RelayError) return res.status(e.status).json({ error: e.message });
-    return res.status(500).json({ error: e?.message || 'internal' });
+    logger.error('relay', 'unexpected error', { error: e?.message || 'internal' });
+    sendError(res, e); return;
   }
 });
 
