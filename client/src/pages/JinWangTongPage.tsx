@@ -10,6 +10,8 @@ import {
   WindowsOutlined, AppleOutlined, LinuxOutlined, SettingOutlined,
   TeamOutlined, AuditOutlined, RadarChartOutlined, WechatOutlined, ShoppingCartOutlined,
 } from '@ant-design/icons';
+import { usePurchaseIntent } from '@/hooks/usePurchaseIntent';
+import { SalesCoach } from '@/components/SalesCoach';
 import { billingAPI, extractApiError } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 
@@ -64,10 +66,12 @@ const FAQ_ITEMS = [
 
 const JinWangTongPage: React.FC = () => {
   const [buyLoading, setBuyLoading] = useState<string | null>(null);
+  const { trackAction, tips, showPanel, dismissTips } = usePurchaseIntent('jinwangtong', '金网通计算机管理系统');
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
 
   const handleBuy = async (pkgId: string, pkgName: string) => {
+    trackAction('click_pricing', { comparedPlans: [pkgId] });
     if (!user) {
       Modal.confirm({ title: '请先登录', content: '购买金网通需要登录 AIbak 账号。', okText: '去登录', cancelText: '取消', onOk: () => navigate('/login') });
       return;
@@ -188,7 +192,8 @@ const JinWangTongPage: React.FC = () => {
 
       <div style={{ textAlign: 'center', padding: '16px 0 32px' }}>
         <Text type="secondary" style={{ fontSize: 12 }}>金网通计算机管理系统 V2 · AIbak 旗下产品 · <a onClick={() => navigate('/contact')} style={{ cursor: 'pointer' }}>技术支持</a> · <a onClick={() => navigate('/pricing')} style={{ cursor: 'pointer' }}>查看定价</a> · </Text>
-      </div>
+      </div>      <SalesCoach tips={tips} visible={showPanel} onDismiss={dismissTips} productName="金网通计算机管理系统" />
+
     </div>
   );
 };
