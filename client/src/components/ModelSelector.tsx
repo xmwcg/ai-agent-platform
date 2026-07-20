@@ -13,7 +13,7 @@ import { gatewayAPI } from '@/services/api';
 export function cleanModelDisplay(raw: string): string {
   if (!raw) return "未选择";
   // Strip mc_<mongoid>/ prefix first
-  let cleaned = raw.replace(/^mc_[a-f0-9]{20,30}\//, "");
+  let cleaned = raw.replace(/^mc_[a-f0-9]{20,30}\//, "").replace(/^mc_[a-f0-9]{20,30}$/, "");
   if (cleaned.includes("/")) {
     const parts = cleaned.split("/");
     const provider = parts[0] || "";
