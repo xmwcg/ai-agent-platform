@@ -146,7 +146,7 @@ export default function GlobalSearch({ compact = false }: GlobalSearchProps) {
     setError('');
     if (restoreScroll) {
       window.requestAnimationFrame(() => {
-        window.scrollTo({ top: scrollRef.current, left: 0, behavior: 'auto' });
+        window.scrollTo({ top: scrollRef.current, left: 0, behavior: 'instant' });
         returnFocusRef.current?.focus({ preventScroll: true });
       });
     }

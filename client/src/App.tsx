@@ -185,7 +185,7 @@ function RouteScrollRestoration() {
     if (SELF_SCROLL_PAGES.some(p => location.pathname.startsWith(p))) return;
     // 立即同步滚动一次：useLayoutEffect 在 paint 前同步执行，
     // 保证浏览器以 scrollY=0 渲染新页面，避免先看到旧位置再跳的闪烁。
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
 
     const scrollToLocation = () => {
       if (location.hash) {
@@ -198,7 +198,7 @@ function RouteScrollRestoration() {
         const element = window.document.getElementById(id);
         if (element) {
           const top = element.getBoundingClientRect().top + window.scrollY - 80;
-          window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'auto' });
+          window.scrollTo({ top: Math.max(0, top), left: 0, behavior: 'instant' });
           return;
         }
         // 详情正文可能在异步请求后才生成，短暂重试避免深链接落在旧页面位置。
@@ -219,9 +219,9 @@ function RouteScrollRestoration() {
       // 无 hash 的普通导航：仅做一次延迟校正，避免多帧重复滚动导致的页面弹跳。
       // useLayoutEffect 的同步 scrollTo 已确保首帧在顶部；
       // 无 hash 导航：多次校正确保始终回到顶部，防止异步加载内容导致页面弹跳
-      const t1 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }), 100);
-      const t2 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }), 500);
-      const t3 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }), 1000);
+      const t1 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }), 100);
+      const t2 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }), 500);
+      const t3 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }), 1000);
 
       return () => {
         window.clearTimeout(t1);
