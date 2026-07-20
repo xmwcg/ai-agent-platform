@@ -214,9 +214,9 @@ export const codeAPI = {
     language: string;
     level?: 'brief' | 'detailed' | 'teaching';
     context?: string;
-  }) => apiClient.post('/code/explain', data),
+  }) => apiClient.post('/code/explain', data, { timeout: 60000 }),
   example: (data: { concept: string; language: string }) =>
-    apiClient.post('/code/example', data),
+    apiClient.post('/code/example', data, { timeout: 60000 }),
   languages: () => apiClient.get('/code/languages'),
 };
 
