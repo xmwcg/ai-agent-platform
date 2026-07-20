@@ -11,24 +11,20 @@ import { gatewayAPI } from '@/services/api';
  *   - "agnes-image-2.0-flash" → "agnes-image-2.0-flash"
  */
 export function cleanModelDisplay(raw: string): string {
-  if (!raw) return '未选择';
-  // 包含 / 的格式：provider/model 或 mc_<id>/model
-  if (raw.includes('/')) {
-    const parts = raw.split('/');
-    const provider = parts[0] || '';
-    const model = parts.slice(1).join('/');
-    if (provider.startsWith('mc_')) {
-      // 自定义模型：只显示模型名
-      return model || provider.replace(/^mc_[a-f0-9]+$/, '自定义模型');
-    }
-    // 内置 provider：provider/model，只显示模型名
-    return model;
+  if (!raw) return "未选择";
+  // Strip mc_<mongoid>/ prefix first
+  let cleaned = raw.replace(/^mc_[a-f0-9]{20,30}\//, "");
+  if (cleaned.includes("/")) {
+    const parts = cleaned.split("/");
+    const provider = parts[0] || "";
+    const model = parts.slice(1).join("/");
+    const BUILTIN = new Set(["deepseek","openai","anthropic","hunyuan","zhipu","qwen","doubao","moonshot","baichuan","yi","stepfun","iflytek","agnes","custom","mock"]);
+    if (BUILTIN.has(provider.toLowerCase())) return model;
+    if (provider.startsWith("mc_")) return model || "自定义模型";
+    return cleaned;
   }
-  // 单独的 provider 名称
-  if (raw.startsWith('mc_')) {
-    return raw.replace(/^mc_[a-f0-9]+$/, '自定义模型');
-  }
-  return raw;
+  if (cleaned.startsWith("mc_")) return "自定义模型";
+  return cleaned;
 }
 
 interface GatewayModelGroup {
