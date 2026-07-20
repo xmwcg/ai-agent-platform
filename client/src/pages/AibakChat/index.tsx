@@ -1,19 +1,22 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styles from './style.module.css';
-import { aibakAPI, extractApiError } from '@/services/api';
+import { aiAPI, gatewayAPI, extractApiError } from '@/services/api';
+import { cleanModelDisplay } from '@/components/ModelSelector';
 
 // ─── 常量区 ───────────────────────────────
-const MODELS = [
-  { value: 'hy3', label: 'hy3（免费）' },
-  { value: 'hy3-preview', label: 'hy3-preview（免费）' },
+const SUGGESTIONS = [
+  { t: '介绍一下 AIbak 平台', m: '请介绍一下 AIbak 平台的功能和特色' },
+  { t: '知识库怎么用？', m: '请问如何使用知识库功能来管理文档？' },
+  { t: '写一个 Python 脚本', m: '请帮我写一个Python脚本，用于批量重命名文件' },
+  { t: '解释什么是 RAG', m: '请以更详细的方式解释什么是RAG（检索增强生成）' },
 ];
 
-const SUGGESTIONS = [
-  '介绍一下 Reasonix AI 平台',
-  '知识库怎么用？',
-  '写一个 Python 你好世界',
-  '解释一下什么是 RAG',
-];
+interface GatewayModelGroup {
+  provider: string;
+  label: string;
+  models: string[];
+  custom?: boolean;
+}
 
 // ─── 类型 ──────────────────────────────────
 interface ChatMessage {
@@ -29,51 +32,56 @@ function renderMarkdown(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 代码块 (```lang\n...```)
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) =>
     `<pre><code>${code.trim()}</code></pre>`
   );
-
-  // 行内代码
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // 粗体
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-  // 标题
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-  // 列表
   html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[^<]*<\/li>)+/g, '<ul>$&</ul>');
-
-  // 换行
   html = html.replace(/\n/g, '<br>');
-
   return html;
 }
+
+const FALLBACK_MODELS: GatewayModelGroup[] = [
+  { provider: 'deepseek', label: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-v4-pro'] },
+  { provider: 'agnes', label: 'Agnes AIHub', models: ['agnes-2.0-flash'] },
+];
 
 // ─── 组件 ──────────────────────────────────
 const AibakChat: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [model, setModel] = useState('hy3');
-  const [statusText, setStatusText] = useState('AI 在线 · 免费额度');
+  const [model, setModel] = useState('deepseek/deepseek-v4-flash');
+  const [modelGroups, setModelGroups] = useState<GatewayModelGroup[]>(FALLBACK_MODELS);
+  const [statusText, setStatusText] = useState('AI 在线');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 自动滚动到底部（首次挂载跳过，避免覆盖路由级回顶）
-  const chatMountedRef = useRef(false);
+  // 加载网关模型列表
+  useEffect(() => {
+    gatewayAPI.getModels()
+      .then((res: any) => {
+        const data = res?.data;
+        if (Array.isArray(data) && data.length > 0) {
+          const chatGroups = data
+            .map((g: any) => ({ ...g, models: (g.models || []).filter((m: string) => !/image|video/i.test(m)) }))
+            .filter((g: any) => g.models.length > 0);
+          if (chatGroups.length > 0) setModelGroups(chatGroups);
+        }
+      })
+      .catch(() => { /* use fallback */ });
+  }, []);
+
+  // 自动滚动到底部（仅在对话容器内滚动，不影响页面）
   const scrollToBottom = useCallback(() => {
-    if (chatMountedRef.current) { chatMountedRef.current = false; return; }
-    // use container scrollTop instead of scrollIntoView to prevent page jump
-    if (!chatMountedRef.current) {
-      const container = messagesEndRef.current?.closest(".chat-messages");
-      if (container) container.scrollTop = container.scrollHeight;
-    }
+    const container = messagesContainerRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
   }, []);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
@@ -102,26 +110,27 @@ const AibakChat: React.FC = () => {
     setStatusText('思考中...');
 
     try {
-      const data: any = await aibakAPI.chat({
-        messages: newMessages,
-        model: model as 'hy3' | 'hy3-preview',
-        stream: false,
+      // 构建历史（取最近10条）
+      const history = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+      const res: any = await aiAPI.chat({
+        message: msg,
+        history,
+        model,
       });
 
-      if (data?.success) {
-        const aiMsg: ChatMessage = { role: 'assistant', content: data.text };
+      if (res?.success) {
+        const aiMsg: ChatMessage = { role: 'assistant', content: res.message || res.text };
         setMessages(prev => [...prev, aiMsg]);
-        const tokens = data.usage?.total_tokens ?? 'N/A';
-        setStatusText(`上次: ${tokens} tokens · 免费额度`);
+        setStatusText('AI 在线');
       } else {
-        const errMsg: ChatMessage = { role: 'assistant', content: `❌ 错误: ${data?.error || '未知错误'}` };
+        const errMsg: ChatMessage = { role: 'assistant', content: `❌ 错误: ${res?.error || '未知错误'}` };
         setMessages(prev => [...prev, errMsg]);
-        setStatusText('AI 在线 · 免费额度');
+        setStatusText('AI 在线');
       }
     } catch (err: any) {
       const errMsg: ChatMessage = { role: 'assistant', content: `❌ 网络错误: ${extractApiError(err)}` };
       setMessages(prev => [...prev, errMsg]);
-      setStatusText('AI 在线 · 免费额度');
+      setStatusText('AI 在线');
     }
 
     setIsGenerating(false);
@@ -138,15 +147,29 @@ const AibakChat: React.FC = () => {
   // 清空对话
   const handleClear = () => {
     setMessages([]);
-    setStatusText('AI 在线 · 免费额度');
+    setStatusText('AI 在线');
   };
 
   // 点击建议
   const handleSuggestion = (text: string) => {
     setInput(text);
-    // 用 setTimeout 确保 input 更新后再发送
     setTimeout(() => sendMessage(text), 0);
   };
+
+  // 导出对话
+  const handleExport = () => {
+    const text = messages.map(m => `[${m.role === 'user' ? '用户' : 'AI'}] ${m.content}`).join('\n\n---\n\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'aibak-chat-export.txt'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 展平模型选项
+  const modelOptions = modelGroups.flatMap(g =>
+    g.models.map(m => ({ value: `${g.provider}/${m}`, label: `${g.label} - ${m}` }))
+  );
 
   return (
     <div className={styles.container}>
@@ -168,31 +191,34 @@ const AibakChat: React.FC = () => {
             value={model}
             onChange={e => setModel(e.target.value)}
           >
-            {MODELS.map(m => (
-              <option key={m.value} value={m.value}>{m.label}</option>
+            {modelOptions.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+          <button className={styles.clearBtn} onClick={handleExport} title="导出对话">
+            导出
+          </button>
           <button className={styles.clearBtn} onClick={handleClear}>
-            清空对话
+            清空
           </button>
         </div>
       </header>
 
       {/* 消息列表 */}
-      <div className={styles.messages}>
+      <div className={styles.messages} ref={messagesContainerRef}>
         {messages.length === 0 ? (
           <div className={styles.emptyState}>
             <div className={styles.emptyIcon}>AI</div>
             <div className={styles.emptyTitle}>有什么可以帮你的？</div>
-            <p className={styles.emptyDesc}>基于 CloudBase 小程序成长计划免费额度</p>
+            <p className={styles.emptyDesc}>由 DeepSeek 和 Agnes AIHub 提供模型服务</p>
             <div className={styles.suggestions}>
               {SUGGESTIONS.map((s, i) => (
                 <div
                   key={i}
                   className={styles.suggestionCard}
-                  onClick={() => handleSuggestion(s)}
+                  onClick={() => handleSuggestion(s.m)}
                 >
-                  {s}
+                  {s.t}
                 </div>
               ))}
             </div>
@@ -254,7 +280,7 @@ const AibakChat: React.FC = () => {
           </button>
         </div>
         <div className={styles.footer}>
-          由 CloudBase 小程序成长计划免费额度提供服务
+          由 DeepSeek V4 / Agnes AIHub 提供模型服务
         </div>
       </div>
     </div>
