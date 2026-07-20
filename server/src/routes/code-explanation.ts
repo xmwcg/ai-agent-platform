@@ -6,6 +6,11 @@ import { sendError } from '../lib/http-error';
 import { logger } from '../lib/logger';
 
 const router = Router();
+// 服务信息
+router.get('/', (_req: Request, res: Response) => {
+  res.json({ ok: true, service: 'code-explanation', endpoints: ['POST /explain', 'POST /example', 'GET /languages'] });
+});
+
 
 // 支持的编程语言
 type ProgrammingLanguage =
