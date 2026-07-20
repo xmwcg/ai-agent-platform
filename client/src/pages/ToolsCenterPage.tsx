@@ -177,7 +177,7 @@ const PPTOutlineTool = () => (
         { label: '产品介绍', value: '产品介绍' }, { label: '项目汇报', value: '项目汇报' },
       ]},
     ]}
-    promptTemplate={(p) => `请为以下主题生成一份PPT大纲（${p.pages || 10}页，${p.style}风格）：\n主题：${p.topic}\n要求：每页包含标题和3-5个要点，逻辑清晰层层递进`}
+    promptTemplate={(p) => `请为以下主题生成一份PPT大纲（${p.pages || 0}页，${p.style}风格）：\n主题：${p.topic}\n要求：每页包含标题和3-5个要点，逻辑清晰层层递进`}
   />
 );
 
@@ -191,7 +191,7 @@ const VideoScriptTool = () => (
       ]},
       { label: '时长（秒）', key: 'duration', type: 'number' },
     ]}
-    promptTemplate={(p) => `请为${p.platform}平台编写一段短视频脚本（${p.duration || 60}秒）：\n主题：${p.topic}\n要求：包含开场吸引注意力、主体内容、结尾引导互动，每10秒一个分镜描述`}
+    promptTemplate={(p) => `请为${p.platform}平台编写一段短视频脚本（${p.duration || 0}秒）：\n主题：${p.topic}\n要求：包含开场吸引注意力、主体内容、结尾引导互动，每10秒一个分镜描述`}
   />
 );
 

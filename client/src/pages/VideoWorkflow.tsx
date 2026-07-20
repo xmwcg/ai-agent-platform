@@ -168,7 +168,7 @@ export default function VideoWorkflow() {
                 max={300}
                 step={5}
                 value={duration}
-                onChange={(v) => setDuration(v || 30)}
+                onChange={(v) => setDuration(v || 0)}
                 style={{ width: 120, marginLeft: 8 }}
               />
             </div>

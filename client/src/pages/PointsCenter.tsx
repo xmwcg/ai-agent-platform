@@ -265,7 +265,7 @@ export default function PointsCenter() {
                 >
                   {checkedIn ? '今日已签到' : '立即签到'}
                 </Button>
-                {checkedIn && <Tag color="green" style={{ marginLeft: 8 }}>+{checkinStatus?.todayPoints || 10} 积分</Tag>}
+                {checkedIn && <Tag color="green" style={{ marginLeft: 8 }}>+{checkinStatus?.todayPoints || 0} 积分</Tag>}
               </div>
             </Space>
           </Col>

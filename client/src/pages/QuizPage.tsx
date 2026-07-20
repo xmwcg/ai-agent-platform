@@ -71,7 +71,7 @@ export default function QuizPage() {
         throw new Error('测验数据格式无效');
       }
       setQuiz(loaded);
-      setTimeLeft(Math.max(1, loaded.timeLimit || 10) * 60);
+      setTimeLeft(Math.max(1, loaded.timeLimit || 0) * 60);
     } catch (error) {
       message.error(extractApiError(error, '测验加载失败'));
     } finally {
@@ -157,7 +157,7 @@ export default function QuizPage() {
             title={passed ? '🎉 恭喜通过！' : '😅 未通过'}
             subTitle={`得分：${score} / 100（及格线：${quiz.passingScore} 分）`}
             extra={[
-              <Button key="retry" onClick={() => { setSubmitted(false); setAnswers({}); setResults([]); setTimeLeft((quiz.timeLimit || 10) * 60); }}>重新答题</Button>,
+              <Button key="retry" onClick={() => { setSubmitted(false); setAnswers({}); setResults([]); setTimeLeft((quiz.timeLimit || 0) * 60); }}>重新答题</Button>,
               <Button key="back" type="primary" onClick={() => navigate(-1)}>返回课程</Button>
             ]}
           />
