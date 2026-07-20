@@ -193,6 +193,9 @@ export default function CustomerServiceFab() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
                     <WechatOutlined style={{ color: '#07c160', fontSize: 16 }} />
                     <span>微信客服：<b>aibak-service</b>（添加备注「AIbak」）</span>
+                  <div style={{ width: 120, height: 120, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)", marginTop: 6 }}>
+                    <img src="/wechat-qr.png" alt="微信二维码" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
                     <CustomerServiceOutlined style={{ color: '#3370ff', fontSize: 16 }} />

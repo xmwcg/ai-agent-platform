@@ -143,7 +143,7 @@ export default function AppFooter() {
             background: "#fff",
           }}>
             <img
-              src="/wechat-qr-placeholder.svg"
+              src="/wechat-qr.png"
               alt="微信二维码"
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
