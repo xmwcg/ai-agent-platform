@@ -57,22 +57,22 @@ function detectDangerous(code: string): string[] {
 const LANGUAGE_IMAGES: Record<string, { image: string; entry: string[]; fileExt: string }> = {
   python: {
     image: process.env.DOCKER_IMAGE_PYTHON || 'python:3.12-slim',
-    entry: ['sh', '-c', 'cp /sandbox/code.py /tmp/code.py && python3 /tmp/code.py'],
+    entry: ['sh', '-c', 'python3 /code.py'],
     fileExt: '.py',
   },
   javascript: {
     image: process.env.DOCKER_IMAGE_NODE || 'node:20-slim',
-    entry: ['sh', '-c', 'cp /sandbox/code.js /tmp/code.js && node /tmp/code.js'],
+    entry: ['sh', '-c', 'node /code.js'],
     fileExt: '.js',
   },
   typescript: {
     image: process.env.DOCKER_IMAGE_TS || 'node:20-slim',
-    entry: ['sh', '-c', 'cp /sandbox/code.ts /tmp/code.ts && npx tsx /tmp/code.ts'],
+    entry: ['sh', '-c', 'npx tsx /code.ts'],
     fileExt: '.ts',
   },
   bash: {
     image: process.env.DOCKER_IMAGE_BASH || 'alpine:3.19',
-    entry: ['sh', '-c', 'cp /sandbox/code.sh /tmp/code.sh && sh /tmp/code.sh'],
+    entry: ['sh', '-c', 'sh /code.sh'],
     fileExt: '.sh',
   },
 };
@@ -143,9 +143,9 @@ export async function execDockerSandbox(request: SandboxExecRequest): Promise<Sa
       '--ulimit', 'nproc=64:64',
       '--stop-timeout', '2',
       // 挂载代码文件
-      '-v', `${tmpFilePath}:/sandbox/code${langConfig.fileExt}:rw`,
+      '-v', `${tmpFilePath}:/code${langConfig.fileExt}:rw`,
       // 设置工作目录
-      '-w', '/sandbox',
+      '-w', '/tmp',
       // 镜像
       langConfig.image,
       // 入口命令
