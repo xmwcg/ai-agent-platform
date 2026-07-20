@@ -181,7 +181,7 @@ export default function Home() {
       apiClient.get('/courses').catch(() => ({ data: [] })),
       apiClient.get('/ai/models').catch(() => ({ providers: [] })),
     ]).then(([docs, courses, models]: any[]) => {
-      setStats({ documents: docs?.data?.length || 156, courses: courses?.data?.length || 42, models: models?.providers?.length || 28, users: 12850, apiCalls: 2560000 });
+      setStats({ documents: docs?.data?.length || 0, courses: courses?.data?.length || 0, models: models?.providers?.length || 0, users: 0, apiCalls: 0 });
     }).finally(() => { setLoading(false); setTimeout(() => setStatsStarted(true), 200); });
   }, []);
 

@@ -131,7 +131,7 @@ const CustomerServicePage: React.FC = () => {
       const res: any = await customerServiceAPI.chatPublic(testBot.embedCode, { message: curInput });
       setChatMsgs((m) => [...m, { role: 'assistant', content: res.data.reply }]);
     } catch (e) {
-      message.error('对话失败');
+      message.error(extractApiError(e, '对话失败'));
     }
     setChatting(false);
   };
