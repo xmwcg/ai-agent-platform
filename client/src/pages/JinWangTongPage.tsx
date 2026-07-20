@@ -183,7 +183,7 @@ const JinWangTongPage: React.FC = () => {
       <div style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', borderRadius: 16, padding: '48px 32px', textAlign: 'center', marginBottom: 24 }}>
         <Title level={2} style={{ color: '#fff', marginBottom: 8 }}>开始管理您的企业网络</Title>
         <Paragraph style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, marginBottom: 24 }}>免费试用 15 天 · 零服务器成本 · 纯内网运行 · 数据不出公司</Paragraph>
-        <Space size={16}><Button size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>免费下载试用</Button><Button size="large" ghost onClick={() => navigate('/ai-chat')} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}>联系客服咨询</Button></Space>
+        <Space size={16}><Button size="large" icon={<DownloadOutlined />} onClick={handleFreeDownload} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>免费下载试用</Button><Button size="large" ghost onClick={() => navigate('/pricing')} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}>查看报价 · 立即购买</Button></Space>
       </div>
 
       <div style={{ textAlign: 'center', padding: '16px 0 32px' }}>
