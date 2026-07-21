@@ -1,8 +1,10 @@
-import { Typography, Row, Col, Card, Space } from 'antd';
+import { Typography, Row, Col, Card, Space, Button } from 'antd';
 import {
   WechatOutlined, MailOutlined, GlobalOutlined,
   CustomerServiceOutlined, EnvironmentOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
+
+const WEWORK_KF_URL = 'https://work.weixin.qq.com/kfid/kfce20d584b0179916f';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -80,7 +82,12 @@ export default function ContactPage() {
               <img src="/wechat-qr.png" alt="微信二维码"
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
-            <Text style={{ display: 'block', marginTop: 12, fontSize: 12, color: 'var(--text-tertiary)' }}>
+            <Button type="primary" icon={<WechatOutlined />} size="large"
+              onClick={() => window.open(WEWORK_KF_URL, '_blank')}
+              style={{ marginTop: 14, borderRadius: 12, background: '#07c160', borderColor: '#07c160', fontWeight: 600, height: 44, paddingInline: 28 }}>
+              打开企业微信客服
+            </Button>
+            <Text style={{ display: 'block', marginTop: 10, fontSize: 12, color: 'var(--text-tertiary)' }}>
               扫码添加，工作日 9:00-21:00 在线回复
             </Text>
           </Card>

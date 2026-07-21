@@ -120,9 +120,9 @@ export default function ScrollFab() {
         </Tooltip>
       )}
 
-      <Tooltip title="联系我们 / 微信客服" placement="left">
-        <button style={btnStyle} onClick={() => navigate('/contact')}
-          onMouseEnter={hoverIn} onMouseLeave={hoverOut} aria-label="联系我们">
+      <Tooltip title="企业微信客服" placement="left">
+        <button style={btnStyle} onClick={() => window.open('https://work.weixin.qq.com/kfid/kfce20d584b0179916f', '_blank')}
+          onMouseEnter={hoverIn} onMouseLeave={hoverOut} aria-label="企业微信客服">
           <WechatOutlined />
         </button>
       </Tooltip>
