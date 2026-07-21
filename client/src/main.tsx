@@ -47,10 +47,10 @@ function ThemedApp() {
 (function cleanupLegacyCache() {
   try {
     // 清理 zustand persist 中的旧模型名
-    var chatStorage = localStorage.getItem('ai-chat-storage');
+    const chatStorage = localStorage.getItem('ai-chat-storage');
     if (chatStorage) {
-      var changed = false;
-      var cleaned = chatStorage
+      let changed = false;
+      const cleaned = chatStorage
         .replace(/"deepseek-chat"/g, '"deepseek-v4-flash"')
         .replace(/"deepseek-coder"/g, '"deepseek-v4-flash"')
         .replace(/"mc_[a-f0-9]+\\/g, '"');

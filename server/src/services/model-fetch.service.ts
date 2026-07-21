@@ -1,61 +1,8 @@
 import axios from 'axios';
-import dns from 'dns';
-import https from 'https';
-import net from 'net';
 import { getProviderEndpoint } from '../config/provider-catalog';
+import { createPinnedNetworkAgents, resolvePublicAddresses } from '../lib/network-safety';
 
 const MAX_RESPONSE_BYTES = 1024 * 1024;
-const BLOCKED_HOSTNAMES = new Set([
-  'localhost',
-  'localhost.localdomain',
-  'metadata.google.internal',
-  'metadata',
-]);
-
-function isPrivateIpv4(address: string): boolean {
-  const parts = address.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) return true;
-  const [a, b] = parts;
-  return (
-    a === 0 || a === 10 || a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 192 && b === 0) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
-}
-
-export function isBlockedNetworkAddress(address: string): boolean {
-  const normalized = address.toLowerCase().split('%')[0];
-  const family = net.isIP(normalized);
-  if (family === 4) return isPrivateIpv4(normalized);
-  if (family !== 6) return true;
-  if (normalized === '::' || normalized === '::1') return true;
-  if (normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true;
-  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  return mapped ? isPrivateIpv4(mapped[1]) : false;
-}
-
-async function resolvePublicAddresses(hostname: string): Promise<Array<{ address: string; family: number }>> {
-  const cleanHost = hostname.toLowerCase().replace(/\.$/, '');
-  if (BLOCKED_HOSTNAMES.has(cleanHost) || cleanHost.endsWith('.localhost') || cleanHost.endsWith('.local')) {
-    throw new Error('目标地址不在允许的公网范围内');
-  }
-
-  const literalFamily = net.isIP(cleanHost);
-  const addresses = literalFamily
-    ? [{ address: cleanHost, family: literalFamily }]
-    : await dns.promises.lookup(cleanHost, { all: true, verbatim: true });
-
-  if (!addresses.length || addresses.some((item) => isBlockedNetworkAddress(item.address))) {
-    throw new Error('目标地址解析到内网、回环或链路本地地址，已拒绝请求');
-  }
-  return addresses;
-}
-
 function extractModelIds(payload: unknown): string[] {
   const value = payload as any;
   const raw: unknown[] = Array.isArray(value?.data)
@@ -97,13 +44,7 @@ export async function fetchCatalogProviderModels(input: FetchCatalogModelsInput)
   if (target.origin !== base.origin) throw new Error('模型列表路径越界');
 
   const addresses = await resolvePublicAddresses(target.hostname);
-  const pinned = addresses[0];
-  const agent = new https.Agent({
-    keepAlive: false,
-    lookup: ((_hostname: string, _options: unknown, callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void) => {
-      callback(null, pinned.address, pinned.family);
-    }) as any,
-  });
+  const agents = createPinnedNetworkAgents(addresses[0]);
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -123,7 +64,7 @@ export async function fetchCatalogProviderModels(input: FetchCatalogModelsInput)
       maxContentLength: MAX_RESPONSE_BYTES,
       maxBodyLength: MAX_RESPONSE_BYTES,
       responseType: 'json',
-      httpsAgent: agent,
+      httpsAgent: agents.httpsAgent,
       validateStatus: (status) => status >= 200 && status < 300,
       transitional: { silentJSONParsing: false, forcedJSONParsing: true },
     });
@@ -143,6 +84,6 @@ export async function fetchCatalogProviderModels(input: FetchCatalogModelsInput)
     if (error instanceof Error && /目标地址|未知厂商|仅允许|模型列表/.test(error.message)) throw error;
     throw new Error('无法安全连接厂商接口: ' + ((error instanceof Error) ? error.message.slice(0, 200) : String(error).slice(0, 200)));
   } finally {
-    agent.destroy();
+    agents.destroy();
   }
 }

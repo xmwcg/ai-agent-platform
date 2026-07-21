@@ -13,7 +13,7 @@ import { gatewayAPI } from '@/services/api';
 export function cleanModelDisplay(raw: string): string {
   if (!raw) return "未选择";
   // Strip mc_<mongoid>/ prefix first
-  let cleaned = raw.replace(/^mc_[a-f0-9]{20,30}\//, "").replace(/^mc_[a-f0-9]{20,30}$/, "");
+  const cleaned = raw.replace(/^mc_[a-f0-9]{20,30}\//, "").replace(/^mc_[a-f0-9]{20,30}$/, "");
   if (cleaned.includes("/")) {
     const parts = cleaned.split("/");
     const provider = parts[0] || "";
@@ -54,12 +54,15 @@ interface ModelSelectorProps {
   mode?: 'chat' | 'image' | 'all';
 }
 
-// 后端不可用时的最小兜底（仅保证 UI 可用，不依赖外部 Key）
+// 后端不可用时的最小兜底；DeepSeek 为服务端私有接口，不进入公开选择器。
 const FALLBACK: GatewayModelGroup[] = [
+  { provider: 'cloudbase', label: 'CloudBase 免费额度', models: ['hy3', 'hy3-preview'] },
   { provider: 'agnes', label: 'Agnes AIHub', models: ['agnes-2.0-flash', 'agnes-image-2.0-flash', 'agnes-image-2.1-flash', 'agnes-video-v2.0'] },
-  { provider: 'deepseek', label: 'DeepSeek', models: ['deepseek-v4-pro', 'deepseek-v4-flash'] },
-  
 ];
+
+function publicGroups(groups: GatewayModelGroup[]): GatewayModelGroup[] {
+  return groups.filter((group) => group.provider.toLowerCase() !== 'deepseek');
+}
 
 // 非对话模型关键词过滤
 const NON_CHAT_PATTERNS = /image|video|vision|draw|paint|dall-e|midjourney|stability|sora/i;
@@ -108,7 +111,7 @@ export default function ModelSelector(props: ModelSelectorProps) {
         if (!alive) return;
         const data: GatewayModelGroup[] = res?.data;
         if (Array.isArray(data) && data.length) {
-          const filtered = data.map(g => ({ ...g, models: filterModels(g.models, mode) })).filter(g => g.models.length > 0);
+          const filtered = publicGroups(data).map(g => ({ ...g, models: filterModels(g.models, mode) })).filter(g => g.models.length > 0);
           setGroups(filtered.length > 0 ? filtered : FALLBACK);
         } else {
           setGroups(FALLBACK);

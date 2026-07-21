@@ -104,9 +104,9 @@ class MediaGenService {
             throw new Error('提示词不能为空');
         if (params.provider)
             assertMockAllowed(params.provider);
-        // 惰性加载 Agnes 配置：容器重启后 cached 会被重置，且启动期 DB 可能未就绪导致
-        // 首次 reload 失败。这里在每次生成前若未加载则重试一次，确保 isConfigured() 反映数据库真实状态。
-        if (!agnes_provider_1.agnesProvider.isConfigured()) {
+        // 仅在自动选厂商或显式选择 Agnes 时惰性加载其 DB 配置。
+        // 显式 Mock/其他厂商不应被无关的 Agnes 数据库查询阻塞，尤其是本地测试与降级联调。
+        if ((!params.provider || params.provider === 'agnes') && !agnes_provider_1.agnesProvider.isConfigured()) {
             await agnes_provider_1.agnesProvider.reload().catch(() => { });
         }
         const mockMode = !isProduction() && process.env.ENABLE_MOCK_MODE === 'true';

@@ -4,7 +4,7 @@
   "description": "Backend server for AI Agent Platform",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node --transpile-only src/index.ts",
+    "dev": "nodemon --watch src --ext ts,json --exec ts-node --transpile-only src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "jest",
@@ -23,6 +23,7 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
+    "@cloudbase/node-sdk": "^3.18.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@modelcontextprotocol/server-filesystem": "^2025.4.0",
     "@modelcontextprotocol/server-puppeteer": "^2025.4.0",

@@ -32,6 +32,7 @@ import authPasswordRoutes from './routes/auth-password';
 import adminSecurityRoutes from './routes/admin-security';
 import mcpRoutes from './routes/mcp';
 import compareRoutes from './routes/compare';
+import projectGradeRoutes from './routes/project-grade';
 import text2imgRoutes from './routes/text2img';
 import mediaByokRoutes from './routes/media-byok';
 import billingRoutes from './routes/billing';
@@ -154,6 +155,7 @@ app.use('/api/auth', authVerifyRoutes);
 app.use('/api/auth', authPasswordRoutes);
 app.use('/api', adminSecurityRoutes);
 app.use('/api/compare', compareRoutes);
+app.use('/api/project-grade', projectGradeRoutes);
 app.use('/api/ai', aiLimiter(), aiRoutes);           // AI 端点：按用户级别限流
 app.use('/api/aibak', aiLimiter(), aibakChatRoutes);  // CloudBase 免费 AI：同样限流
 app.use('/api/knowledge', knowledgeRoutes);
@@ -260,8 +262,9 @@ export interface BootstrapDependencies {
   reloadProviders: () => Promise<unknown>;
   startMediaWorker: () => Promise<unknown>;
   startOutboxWorker: () => void;
+  seedRelay: () => Promise<unknown>;
+  seedKnowledge: () => Promise<unknown>;
   startHttpServer: () => Server;
-  seedRelay?: () => Promise<unknown>;
 }
 
 export interface BootstrapOptions {
@@ -418,11 +421,13 @@ function defaultBootstrapDependencies(): BootstrapDependencies {
     startMediaWorker: () => mediaWorker.start(),
     startOutboxWorker: () => OutboxWorker.start(),
     seedRelay: seedDefaultRelayChannels,
+    seedKnowledge: seedKnowledgeSamples,
     startHttpServer: () => {
-      // 启动备份调度和运营指标采集
+      // 仅在真实监听 HTTP 时启动长期调度任务；listen=false 的启动门禁不会遗留定时器。
+      scheduleDailyReconciliation();
       startBackupScheduler();
       startDashboardCollection();
-  startApmPersistence();
+      startApmPersistence();
       return app.listen(PORT, () => {
         logger.info('index', `Server running on http://localhost:${PORT}`, {
           env: process.env.NODE_ENV || 'development',
@@ -458,11 +463,8 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Server 
   await startManagedDependency('自定义 AI Provider', dependencies.reloadProviders);
   await startManagedDependency('媒体任务 Worker', dependencies.startMediaWorker);
   await startManagedDependency('Outbox Worker', async () => { dependencies.startOutboxWorker(); });
-  await startManagedDependency('中转站默认渠道', async () => { if (dependencies.seedRelay) await dependencies.seedRelay(); });
-  await startManagedDependency('知识库示例文档', async () => { await seedKnowledgeSamples(); });
-
-  // 每日对账定时器（每天凌晨 2:00 UTC+8）
-  scheduleDailyReconciliation();
+  await startManagedDependency('中转站默认渠道', dependencies.seedRelay);
+  await startManagedDependency('知识库示例文档', dependencies.seedKnowledge);
 
   if (options.listen === false) return undefined;
   return dependencies.startHttpServer();

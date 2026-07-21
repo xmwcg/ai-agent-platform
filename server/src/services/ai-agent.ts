@@ -99,6 +99,7 @@ class AIAgentService {
         messages,
         temperature: config?.temperature || 0.7,
         maxTokens: config?.maxTokens || 2000,
+        publicOnly: true,
       });
 
       const reply = result.reply;

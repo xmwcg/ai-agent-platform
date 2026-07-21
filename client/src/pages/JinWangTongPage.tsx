@@ -47,7 +47,7 @@ const ADVANTAGES = [
 ];
 
 const INSTALL_STEPS = [
-  { step: 1, title: '下载脚本包', desc: '下载 jinwangtong-scripts.zip 解压到任意目录(建议C:\金网通)' },
+  { step: 1, title: '下载脚本包', desc: '下载 jinwangtong-scripts.zip 解压到任意目录(建议 C:\\金网通)' },
   { step: 2, title: '环境体检', desc: '右键 PowerShell → 以管理员运行 .\\health-check.ps1，查看环境是否就绪' },
   { step: 3, title: '一键修复', desc: '如有问题，运行 .\\health-check.ps1 -AutoFix 自动修复防火墙/权限/WMI等' },
   { step: 4, title: '开始使用', desc: '运行 .\\scan-hardware.ps1 扫描资产，启动 .\\console.ps1 打开Web控制台' },

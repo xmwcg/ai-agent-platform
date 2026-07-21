@@ -25,10 +25,10 @@ export default function AiChat() {
     setMode, setModel, setLoading, rightPanelOpen, toggleRightPanel,
   } = useChatStore();
   const handleExportChat = () => {
-    var text = messages.map(function(m) { return (m.role === 'user' ? '[用户] ' : '[AI] ') + (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)); }).join('\n\n---\n\n');
-    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
+    const text = messages.map(function(m) { return (m.role === 'user' ? '[用户] ' : '[AI] ') + (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)); }).join('\n\n---\n\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = url; a.download = 'ai-chat-export.txt'; a.click();
     URL.revokeObjectURL(url);
     message.success('对话已导出');

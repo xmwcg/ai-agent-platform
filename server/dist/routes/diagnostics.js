@@ -32,8 +32,7 @@ router.get('/runtime-safety', (_req, res) => {
     res.status(safe ? 200 : 503).json({ success: safe, data: { runtimeSafety } });
 });
 /** 环境自检：返回各项集成状态（绝不泄露密钥明文），用于部署向导/健康看板；需登录，避免暴露部署指纹 */
-router.get('/', auth_1.optionalAuth, async (req, res) => {
-    const isAuthenticated = !!(req.user && req.user.id);
+router.get('/', auth_1.requireAuth, async (req, res) => {
     const health = await (0, database_1.checkDatabaseHealth)().catch(() => ({ mongodb: false, redis: false }));
     const checks = [
         { key: 'mongodb', label: 'MongoDB 数据库', ok: !!health.mongodb, tip: health.mongodb ? '' : '检查托管 MongoDB 连接和 MONGODB_URI' },

@@ -17,6 +17,8 @@ function dependencySet(events: string[] = []): jest.Mocked<BootstrapDependencies
     reloadProviders: step('providers', undefined),
     startMediaWorker: step('worker', undefined),
     startOutboxWorker: jest.fn(() => { events.push('outbox'); }),
+    seedRelay: step('relay', undefined),
+    seedKnowledge: step('knowledge', undefined),
     startHttpServer: jest.fn(() => {
       events.push('listen');
       return {} as Server;
@@ -64,6 +66,8 @@ describe('bootstrap production startup order', () => {
     ['MCP', 'loadMcp'],
     ['AI provider', 'reloadProviders'],
     ['media worker', 'startMediaWorker'],
+    ['relay seeding', 'seedRelay'],
+    ['knowledge seeding', 'seedKnowledge'],
   ] as const)('fails closed before listen when production %s startup fails', async (_label, key) => {
     const dependencies = dependencySet();
     dependencies[key].mockRejectedValue(new Error(`${key} failed`));
@@ -79,7 +83,7 @@ describe('bootstrap production startup order', () => {
     const server = await bootstrap({ dependencies });
 
     expect(server).toBeDefined();
-    expect(events).toEqual(['validate', 'mongo', 'redis', 'mcp', 'providers', 'worker', 'outbox', 'listen']);
+    expect(events).toEqual(['validate', 'mongo', 'redis', 'mcp', 'providers', 'worker', 'outbox', 'relay', 'knowledge', 'listen']);
   });
 
   it('can run the full startup gate without binding a port', async () => {

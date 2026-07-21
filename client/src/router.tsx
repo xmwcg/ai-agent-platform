@@ -25,6 +25,7 @@ import AuditLogPage from "@/pages/AuditLogPage";
 import ToolsCenterPage from "@/pages/ToolsCenterPage";
 import QuickstartPage from "@/pages/QuickstartPage";
 import DiagnosticsPage from "@/pages/DiagnosticsPage";
+import ProjectGradePage from '@/pages/ProjectGradePage';
 import AdminDashboardPage from "@/pages/AdminDashboardPage";
 import UserAdminPage from "@/pages/UserAdminPage";
 import TeamPage from "@/pages/TeamPage";
@@ -92,6 +93,7 @@ const router = createBrowserRouter([
       { path: "quickstart", element: <QuickstartPage /> },
       { path: "team", element: <TeamPage /> },
       { path: "marketplace", element: <MarketplacePage /> },
+        { path: "project-grade", element: <ProjectGradePage /> },
       { path: "skills", element: <SkillsMarketPage /> },
       { path: "diagnostics", element: <DiagnosticsPage /> },
       { path: "ops-dashboard", element: <AdminDashboardPage /> },

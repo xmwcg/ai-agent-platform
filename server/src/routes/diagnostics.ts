@@ -3,7 +3,7 @@ import { checkDatabaseHealth, isUsingMemoryRedis } from '../config/database';
 import { PLANS } from '../config/billing';
 import { listMediaProviders } from '../services/media-gen.service';
 import { WebhookEvent } from '../models/WebhookEvent';
-import { requireAuth, optionalAuth, AuthRequest } from '../middleware/auth';
+import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -35,8 +35,7 @@ router.get('/runtime-safety', (_req: Request, res: Response) => {
 });
 
 /** 环境自检：返回各项集成状态（绝不泄露密钥明文），用于部署向导/健康看板；需登录，避免暴露部署指纹 */
-router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
-  const isAuthenticated = !!(req.user && req.user.id);
+router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   const health = await checkDatabaseHealth().catch(() => ({ mongodb: false, redis: false }));
   const checks = [
     { key: 'mongodb', label: 'MongoDB 数据库', ok: !!health.mongodb, tip: health.mongodb ? '' : '检查托管 MongoDB 连接和 MONGODB_URI' },

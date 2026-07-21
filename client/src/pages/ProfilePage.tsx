@@ -60,6 +60,9 @@ export default function ProfilePage() {
   const [pwdNew, setPwdNew] = useState('');
   const [pwdConfirm, setPwdConfirm] = useState('');
   const [savingPwd, setSavingPwd] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteRequested, setDeleteRequested] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -538,9 +541,6 @@ export default function ProfilePage() {
   );
 
 
-  const [exportLoading, setExportLoading] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteRequested, setDeleteRequested] = useState(false);
 
   const handleExportData = async () => {
     Modal.confirm({

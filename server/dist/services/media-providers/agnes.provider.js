@@ -13,9 +13,12 @@ exports.agnesProvider = exports.AgnesProvider = void 0;
  * 与 AI 网关共用同一份配置，避免重复维护。apiKey 以密文落库，此处运行时解密。
  */
 const axios_1 = __importDefault(require("axios"));
+const promises_1 = __importDefault(require("fs/promises"));
+const path_1 = __importDefault(require("path"));
 const http_error_1 = require("../../lib/http-error");
 const crypto_1 = require("../../lib/crypto");
 const ModelConfig_1 = require("../../models/ModelConfig");
+const object_storage_1 = require("../../lib/object-storage");
 const media_gen_shared_1 = require("../media-gen.shared");
 function isProduction() {
     return process.env.NODE_ENV === 'production';
@@ -26,6 +29,8 @@ class AgnesProvider {
         this.label = 'Agnes（文生图 / 文生视频）';
         this.supportedTypes = ['text2img', 'image2image', 'text2video'];
         this.cached = null;
+        /** 已落盘任务缓存，避免同一任务跨轮询重复下载（进程内有效，重启后由磁盘存在性兜底）。 */
+        this.localizedTasks = new Set();
     }
     /** 从 ModelConfig 加载 Agnes 配置（baseURL 含 agnès 的自定义配置），结果缓存。 */
     async reload() {
@@ -94,6 +99,44 @@ class AgnesProvider {
         const resp = e?.response?.data;
         const detail = resp ? ` | upstream=${JSON.stringify(resp).slice(0, 300)}` : '';
         return `${em}${detail}`;
+    }
+    /**
+     * 把上游视频落盘到本地 /generated 目录，返回稳定可公开访问的 URL。
+     * - 落盘用对象存储抽象（默认 LocalStorage 写 uploads/generated，由 /generated 静态路由对外提供；
+     *   COS 已配置时自动落到云存储，返回云 URL）。
+     * - 落盘失败不致命：回退返回上游地址，保证成片始终可访问。
+     */
+    async localizeVideo(taskId, upstreamUrl) {
+        const key = `agnes-video/${taskId}.mp4`;
+        const localUrl = `/generated/${key}`;
+        // 进程内已处理 或 本地磁盘已存在 → 直接返回，避免重复下载（重启后仍命中）
+        if (this.localizedTasks.has(taskId))
+            return localUrl;
+        try {
+            await promises_1.default.access(path_1.default.join(object_storage_1.LOCAL_STORAGE_DIR, key));
+            this.localizedTasks.add(taskId);
+            return localUrl;
+        }
+        catch {
+            /* 尚未落盘，继续下载 */
+        }
+        try {
+            const resp = await axios_1.default.get(upstreamUrl, {
+                responseType: 'arraybuffer',
+                timeout: 60000,
+                headers: { 'User-Agent': 'AIBAK-Platform' },
+            });
+            const buf = Buffer.from(resp.data);
+            if (!buf.length)
+                return upstreamUrl;
+            const url = await (0, object_storage_1.getObjectStorage)().put(key, buf, 'video/mp4');
+            this.localizedTasks.add(taskId);
+            return url;
+        }
+        catch (e) {
+            console.warn(`[agnes] 视频落盘失败 task=${taskId}:`, e?.message || e);
+            return upstreamUrl;
+        }
     }
     async generate(params) {
         const cfg = await this.ensureLoaded();
@@ -203,12 +246,16 @@ class AgnesProvider {
                 if (completed && !outputUrl) {
                     throw new http_error_1.AppError(502, 'Agnes 视频生成返回了无效结果', 'MEDIA_PROVIDER_INVALID_RESPONSE');
                 }
+                // 成片完成后落盘到本地 /generated（或云存储），返回稳定可访问 URL；失败回退上游地址。
+                const finalUrl = completed && /^https?:\/\//i.test(outputUrl)
+                    ? await this.localizeVideo(taskId, outputUrl)
+                    : outputUrl;
                 return {
                     type: 'text2video',
                     taskId,
                     status: completed ? 'completed' : 'processing',
                     prompt: '',
-                    outputUrl,
+                    outputUrl: finalUrl,
                     provider: 'agnes',
                     note: completed ? 'Agnes 成片已生成。' : 'Agnes 视频生成中……',
                 };

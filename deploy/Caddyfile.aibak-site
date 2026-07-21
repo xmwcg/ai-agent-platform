@@ -1,0 +1,16 @@
+# This site block is the production contract for AI Agent Platform.
+# Do not point aibak.site or www.aibak.site to another project.
+aibak.site www.aibak.site {
+	tls /etc/caddy/certs/aibak.site.crt /etc/caddy/certs/aibak.site.key
+
+	root * /opt/ai-agent-platform/client/dist
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

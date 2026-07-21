@@ -35,6 +35,7 @@ const auth_password_1 = __importDefault(require("./routes/auth-password"));
 const admin_security_1 = __importDefault(require("./routes/admin-security"));
 const mcp_1 = __importDefault(require("./routes/mcp"));
 const compare_1 = __importDefault(require("./routes/compare"));
+const project_grade_1 = __importDefault(require("./routes/project-grade"));
 const text2img_1 = __importDefault(require("./routes/text2img"));
 const media_byok_1 = __importDefault(require("./routes/media-byok"));
 const billing_1 = __importDefault(require("./routes/billing"));
@@ -63,6 +64,7 @@ const relay_1 = __importDefault(require("./routes/relay"));
 const aibak_chat_1 = __importDefault(require("./routes/aibak-chat"));
 const search_1 = __importDefault(require("./routes/search"));
 const query_center_1 = __importDefault(require("./routes/query-center"));
+const marketing_1 = __importDefault(require("./routes/marketing"));
 const mcp_service_1 = require("./services/mcp.service");
 const http_error_1 = require("./lib/http-error");
 const logger_1 = require("./lib/logger");
@@ -141,6 +143,7 @@ app.use('/api/auth', auth_verify_1.default);
 app.use('/api/auth', auth_password_1.default);
 app.use('/api', admin_security_1.default);
 app.use('/api/compare', compare_1.default);
+app.use('/api/project-grade', project_grade_1.default);
 app.use('/api/ai', (0, rate_limit_1.aiLimiter)(), ai_1.default); // AI 端点：按用户级别限流
 app.use('/api/aibak', (0, rate_limit_1.aiLimiter)(), aibak_chat_1.default); // CloudBase 免费 AI：同样限流
 app.use('/api/knowledge', knowledge_1.default);
@@ -151,6 +154,7 @@ app.use('/api/rag', rag_pipeline_1.default);
 app.use('/api/courses', courses_1.default);
 app.use('/api/code', code_explanation_1.default);
 app.use('/api/billing', billing_1.default);
+app.use('/api/marketing', marketing_1.default);
 app.use('/api/model-calendar', model_calendar_1.default);
 app.use('/api/learning-path', learning_path_1.default);
 app.use('/api/model-config', model_config_1.default);
@@ -206,6 +210,20 @@ app.get('/api/health', async (_req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+// ---- Forward-compatibility aliases for frontend ----
+app.get("/api/creative-workshop", (_req, res) => {
+    res.json({ ok: true, name: "creative-workshop", status: "active" });
+});
+app.get("/api/plugins", (_req, res) => {
+    res.json({ ok: true, name: "plugins", status: "active", plugins: [] });
+});
+app.get("/api/code-explanation", (_req, res) => {
+    res.json({ ok: true, name: "code-explanation", status: "active" });
+});
+app.get("/api/relay/channels", (_req, res) => {
+    res.json({ ok: true, name: "relay-channels", channels: [], total: 0 });
+});
+// ---- end aliases ----
 // 404 处理
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
@@ -358,8 +376,10 @@ function defaultBootstrapDependencies() {
         startMediaWorker: () => queue_service_1.mediaWorker.start(),
         startOutboxWorker: () => outbox_worker_1.OutboxWorker.start(),
         seedRelay: seedDefaultRelayChannels,
+        seedKnowledge: seedKnowledge_1.seedKnowledgeSamples,
         startHttpServer: () => {
-            // 启动备份调度和运营指标采集
+            // 仅在真实监听 HTTP 时启动长期调度任务；listen=false 的启动门禁不会遗留定时器。
+            scheduleDailyReconciliation();
             (0, backup_service_1.startBackupScheduler)();
             (0, dashboard_service_1.startDashboardCollection)();
             (0, apm_2.startApmPersistence)();
@@ -395,11 +415,8 @@ async function bootstrap(options = {}) {
     await startManagedDependency('自定义 AI Provider', dependencies.reloadProviders);
     await startManagedDependency('媒体任务 Worker', dependencies.startMediaWorker);
     await startManagedDependency('Outbox Worker', async () => { dependencies.startOutboxWorker(); });
-    await startManagedDependency('中转站默认渠道', async () => { if (dependencies.seedRelay)
-        await dependencies.seedRelay(); });
-    await startManagedDependency('知识库示例文档', async () => { await (0, seedKnowledge_1.seedKnowledgeSamples)(); });
-    // 每日对账定时器（每天凌晨 2:00 UTC+8）
-    scheduleDailyReconciliation();
+    await startManagedDependency('中转站默认渠道', dependencies.seedRelay);
+    await startManagedDependency('知识库示例文档', dependencies.seedKnowledge);
     if (options.listen === false)
         return undefined;
     return dependencies.startHttpServer();

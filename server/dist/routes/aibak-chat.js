@@ -16,6 +16,8 @@ const router = (0, express_1.Router)();
 // 图像生成云函数（文生图 / 图生图），默认由 chat 云函数 URL 推导同名 ai-image 函数
 const CLOUDBASE_CHAT_URL = process.env.CLOUDBASE_CHAT_URL ||
     'https://jymkjtools-study-d6eipek12446b18-1450366372.ap-shanghai.app.tcloudbase.com/ai-chat';
+// 图像生成云函数（文生图 / 图生图），默认由 chat 云函数 URL 推导同名 ai-image 函数
+// （jymkjtools-study 免费额度，供首页 AI 客服 / 免费体验使用，不在本次 jymkj-knowlage 改动范围内）
 const CLOUDBASE_IMAGE_URL = process.env.CLOUDBASE_IMAGE_URL ||
     CLOUDBASE_CHAT_URL.replace(/\/ai-chat$/, '/ai-image');
 // 图生图参考图临时托管：CloudBase 图像网关对请求体大小有限制，base64 直传会 413，

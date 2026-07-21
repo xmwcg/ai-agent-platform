@@ -18,6 +18,7 @@
 
 ## 架构决策
 
+0. **生产域名永久锁定（P0）**：`aibak.site` / `www.aibak.site` 只能服务 AI Agent Platform。Caddy 前端根目录固定为 `/opt/ai-agent-platform/client/dist`，`/api/*` 固定反代到 `127.0.0.1:3000`；端口 `3100` 属于金网通，严禁绑定主站。任何开发者、AI Agent、脚本或 `acli hermes webui` 均不得覆盖该站点配置。权威规则见 `AGENTS.md` 与 `docs/DEPLOYMENT-LOCK.md`。
 1. **MongoDB**：MVP 阶段保持；专业向量检索长期可迁移 Qdrant/Pinecone。
 2. **Mock 模式优先**：`ENABLE_MOCK_MODE=true` 时无需任何 API Key 即可运行（AI 返回模拟响应）。
 3. **JWT 认证**：`requireAuth` / `optionalAuth` 中间件；无 Token 走匿名。
@@ -335,3 +336,20 @@ AI Key 可选（缺省走 Mock）。支付：`DEFAULT_PAY_PROVIDER`(mock/wechat/
 - **新增环境变量（均可选、默认即安全态）**：`WORKFLOW_CODE_NODE_ENABLED` / `MCP_ALLOWED_STDIO_COMMANDS` / `SANDBOX_LOCAL_ENABLED`。
 - **与 Round 16 沙盒的关系**：Round 16 已建 `sandbox.service.ts` 多模式 Provider + `detectDangerousPatterns` + `selectSandboxMode`；本轮在其上叠加 local 默认禁用开关（1c），属增量加固。
 - **下一步（阶段2 质量治理）**：巨型文件拆分 / any 收敛 / 清理未用依赖 / 补关键模块测试（待用户确认起序）。
+
+## 2026-07-20 最新开发事实覆盖
+
+AIbak 智评通 ProjectGrade 已获用户确认并进入开发阶段。完整评分体系、商业方案、批次计划、生产状态与新窗口续开发说明见：
+
+- `docs/PROJECTGRADE-HANDOFF.md`
+
+若本文件早期的“✅真实可用”声明与生产验证冲突，以交接文档、实时源码、CI、服务器日志和生产探针为准；未经生产证据验证不得宣称功能完成。
+
+## 2026-07-20 全项目总交接文档
+
+跨窗口继续开发时，必须优先读取：
+
+- `docs/AIBAK-FULL-PROJECT-HANDOFF.md`：AIbak、金网通、中转站、智评通、支付、AI模块、客服、合规、部署和验收的总事实源。
+- `docs/PROJECTGRADE-HANDOFF.md`：智评通 ProjectGrade 的详细评分与开发方案。
+
+总交接文档的优先级高于本文件中的历史“已完成”声明。

@@ -40,7 +40,9 @@ export function usePurchaseIntent(productId: string, productName?: string) {
       const res = await api.post('/marketing/generate-tips', { productId, productName });
       const newTips = res.data?.data?.tips || [];
       if (newTips.length > 0) { setTips(newTips); setShowPanel(true); tipsShown.current = true; }
-    } catch {}
+    } catch {
+      // 营销提示为尽力而为，失败不阻断用户当前操作。
+    }
   }, [productId, productName]);
 
   useEffect(() => {

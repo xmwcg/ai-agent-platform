@@ -16,6 +16,9 @@ const subscription_1 = require("../middleware/subscription");
 const http_error_1 = require("../lib/http-error");
 const validation_1 = require("../lib/validation");
 const logger_1 = require("../lib/logger");
+const private_license_service_1 = require("../services/private-license.service");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const logic_1 = require("./billing/logic");
 const webhook_routes_1 = __importDefault(require("./billing/webhook.routes"));
 const refund_routes_1 = __importDefault(require("./billing/refund.routes"));
@@ -499,6 +502,95 @@ router.get('/profit-summary', auth_1.requireAuth, auth_1.requireAdmin, async (re
                 note: '内部毛利看板，仅管理员可见，不对客户开放',
             },
         });
+    }
+    catch (err) {
+        (0, http_error_1.sendError)(res, err);
+    }
+});
+// 金网通下载（需登录验证）+ 已购买用户可下载完整版
+router.get('/private-license/download', auth_1.requireAuth, async (req, res) => {
+    try {
+        const type = req.query.type || 'trial';
+        const zipPath = path_1.default.join(process.cwd(), 'uploads', 'JinWangTong-Trial-v1.0.zip');
+        // 完整版需要登录
+        if (type === 'full') {
+            const authHeader = req.headers.authorization;
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                return res.status(401).json({ success: false, error: '完整版下载需登录验证' });
+            }
+            try {
+                const jwt = require('jsonwebtoken');
+                const secret = process.env.JWT_SECRET || 'dev-secret';
+                jwt.verify(authHeader.slice(7), secret);
+            }
+            catch {
+                return res.status(401).json({ success: false, error: '登录已过期，请重新登录' });
+            }
+        }
+        if (!fs_1.default.existsSync(zipPath)) {
+            logger_1.logger.warn('private-license', 'Download ZIP not found: ' + zipPath);
+            return res.status(404).json({ success: false, error: '安装包暂不可用，请联系客服' });
+        }
+        const filename = 'JinWangTong-Trial-v1.0.zip';
+        const ip = req.ip || req.socket.remoteAddress || 'unknown';
+        logger_1.logger.info('private-license', `Download: type=${type} ip=${ip}`);
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        fs_1.default.createReadStream(zipPath).pipe(res);
+    }
+    catch (err) {
+        (0, http_error_1.sendError)(res, err);
+    }
+});
+// 金网通 License 激活（客户端调用，绑定机器指纹）
+router.post('/private-license/activate', auth_1.requireAuth, async (req, res) => {
+    try {
+        const { licenseSign, fingerprint } = req.body;
+        if (!licenseSign || !fingerprint) {
+            return res.status(400).json({ success: false, error: '缺少 licenseSign 或 fingerprint' });
+        }
+        // 查找该用户的订单
+        const order = await Order_1.Order.findOne({
+            userId: req.user.id,
+            orderType: 'private_license',
+            'licensePayload.sign': licenseSign,
+            paymentStatus: 'paid',
+        }).sort({ createdAt: -1 }).lean();
+        if (!order || !order.licensePayload) {
+            return res.status(404).json({ success: false, error: '未找到对应 License，请确认已购买' });
+        }
+        const existingLicense = order.licensePayload;
+        if (existingLicense.fingerprint && existingLicense.fingerprint !== 'PENDING_ACTIVATION') {
+            return res.status(400).json({ success: false, error: '该 License 已激活，如需迁移请联系客服' });
+        }
+        const activated = (0, private_license_service_1.activateLicense)(existingLicense, fingerprint);
+        await Order_1.Order.updateOne({ _id: order._id }, { $set: { licensePayload: activated } });
+        logger_1.logger.info('private-license', `License activated: orderNo=${order.orderNo} fingerprint=${fingerprint.slice(0, 12)}...`);
+        res.json({ success: true, data: activated });
+    }
+    catch (err) {
+        (0, http_error_1.sendError)(res, err);
+    }
+});
+// 获取用户已购买的 License 列表（用于"我的订单"中展示下载按钮）
+router.get("/private-license/my-licenses", auth_1.requireAuth, async (req, res) => {
+    try {
+        const orders = await Order_1.Order.find({
+            userId: req.user.id,
+            orderType: "private_license",
+            paymentStatus: "paid",
+        }).sort({ paidAt: -1 }).select("orderNo packageId amount licensePayload createdAt paidAt").lean();
+        const licenses = orders.map((o) => ({
+            orderNo: o.orderNo,
+            packageId: o.packageId,
+            amount: o.amount,
+            paidAt: o.paidAt,
+            activated: o.licensePayload?.fingerprint && o.licensePayload?.fingerprint !== "PENDING_ACTIVATION",
+            license: o.licensePayload,
+            downloadUrl: `/api/billing/private-license/download?orderNo=${o.orderNo}`,
+        }));
+        res.json({ success: true, data: licenses });
     }
     catch (err) {
         (0, http_error_1.sendError)(res, err);

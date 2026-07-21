@@ -4,7 +4,13 @@ import { randomBytes } from 'crypto';
 import { AuthRequest, optionalAuth } from '../middleware/auth';
 import { sendError } from '../lib/http-error';
 import { logger } from '../lib/logger';
-import { callCloudbaseChat, AIBAK_MODELS } from '../services/cloudbase-ai.service';
+import {
+  callCloudbaseChat,
+  callKnowledgeGatewayChat,
+  isKnowledgeGatewayAvailable,
+  getKnowledgeGatewayInfo,
+  AIBAK_MODELS,
+} from '../services/cloudbase-ai.service';
 import { putAsset, getAsset, deleteAsset } from '../services/asset-store';
 
 const router = Router();
@@ -12,6 +18,8 @@ const router = Router();
 // 图像生成云函数（文生图 / 图生图），默认由 chat 云函数 URL 推导同名 ai-image 函数
 const CLOUDBASE_CHAT_URL = process.env.CLOUDBASE_CHAT_URL ||
   'https://jymkjtools-study-d6eipek12446b18-1450366372.ap-shanghai.app.tcloudbase.com/ai-chat';
+// 图像生成云函数（文生图 / 图生图），默认由 chat 云函数 URL 推导同名 ai-image 函数
+// （jymkjtools-study 免费额度，供首页 AI 客服 / 免费体验使用，不在本次 jymkj-knowlage 改动范围内）
 const CLOUDBASE_IMAGE_URL = process.env.CLOUDBASE_IMAGE_URL ||
   CLOUDBASE_CHAT_URL.replace(/\/ai-chat$/, '/ai-image');
 
@@ -44,7 +52,7 @@ export { callCloudbaseChat };
 
 /**
  * POST /api/aibak/chat
- * 代理调用 CloudBase ai-chat 云函数，优先消耗小程序成长计划赠送的免费额度
+ * 左侧 AI 对话入口：优先 jymkj-knowlage 网关直调，回退 jymkjtools-study 云函数代理
  */
 router.post('/chat', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -54,14 +62,11 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res: Response) => {
     let chatMessages: Array<{ role: string; content: string }> = [];
 
     if (inputMessages && Array.isArray(inputMessages) && inputMessages.length > 0) {
-      // 前端直接传了完整的 messages 数组（含历史）
       chatMessages = [...inputMessages];
-      // 如果第一个不是 system，自动插入
       if (chatMessages.length === 0 || chatMessages[0].role !== 'system') {
         chatMessages.unshift({ role: 'system', content: SYSTEM_PROMPT });
       }
     } else if (message) {
-      // 简化的单条消息模式
       chatMessages = [
         { role: 'system', content: SYSTEM_PROMPT },
         ...(history || []),
@@ -71,40 +76,62 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, error: 'message 或 messages 必填' });
     }
 
-    logger.info('aibak-chat', `调用云函数 ai-chat, model=${model}, msgs=${chatMessages.length}`);
-
     const startTime = Date.now();
     let text: string;
-    try {
-      text = await callCloudbaseChat(chatMessages, model);
-    } catch (err: any) {
-      logger.warn('aibak-chat', `❌ 云函数返回失败: ${err?.message || '未知'}`);
-      return res.status(502).json({
-        success: false,
-        error: err?.message || 'AI 服务返回异常',
-        code: 'CLOUDBASE_ERROR',
-      });
+    let provider = 'cloudbase-free';
+
+    // ── 通道1：jymkj-knowlage OpenAI 兼容网关（直调，不经过云函数） ──
+    if (isKnowledgeGatewayAvailable()) {
+      try {
+        logger.info('aibak-chat', `🧠 jymkj-knowlage 网关, model=${model}`);
+        text = await callKnowledgeGatewayChat(chatMessages, model);
+        provider = 'jymkj-knowlage-gateway';
+        logger.info('aibak-chat', `✅ jymkj-knowlage 网关成功, ${Date.now() - startTime}ms`);
+      } catch (gatewayErr: any) {
+        logger.warn('aibak-chat', `⚠️ jymkj-knowlage 网关失败: ${gatewayErr.message}, 回退 jymkjtools-study 云函数`);
+        // ── 通道2：回退到 jymkjtools-study 云函数代理 ──
+        try {
+          text = await callCloudbaseChat(chatMessages, model);
+          provider = 'jymkjtools-study-proxy';
+        } catch (cfErr: any) {
+          logger.error('aibak-chat', `❌ 双通道均失败: ${cfErr.message}`);
+          return res.status(502).json({
+            success: false,
+            error: cfErr.message || 'AI 服务返回异常',
+            code: 'DUAL_CHANNEL_ERROR',
+          });
+        }
+      }
+    } else {
+      // ── 通道2：jymkj-knowlage 网关未配置，直接用云函数 ──
+      logger.info('aibak-chat', `调用 jymkjtools-study 云函数, model=${model}`);
+      try {
+        text = await callCloudbaseChat(chatMessages, model);
+        provider = 'jymkjtools-study-proxy';
+      } catch (err: any) {
+        logger.warn('aibak-chat', `❌ 云函数返回失败: ${err?.message || '未知'}`);
+        return res.status(502).json({
+          success: false,
+          error: err?.message || 'AI 服务返回异常',
+          code: 'CLOUDBASE_ERROR',
+        });
+      }
     }
 
     const elapsed = Date.now() - startTime;
-    logger.info('aibak-chat', `✅ 成功, ${elapsed}ms`);
-
     res.json({
       success: true,
       text,
       model,
-      provider: 'cloudbase-free',
+      provider,
       elapsedMs: elapsed,
     });
   } catch (error: any) {
-    // 区分超时、网络错误、云函数内部错误
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      logger.error('aibak-chat', '⏱ CloudBase 云函数超时 (60s)');
+      logger.error('aibak-chat', '⏱ AI 响应超时 (60s)');
       return res.status(504).json({ success: false, error: 'AI 响应超时，请稍后重试', code: 'TIMEOUT' });
     }
-
     if (error.response) {
-      // 云函数返回了 HTTP 错误
       logger.error('aibak-chat', `HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}`);
       return res.status(502).json({
         success: false,
@@ -112,8 +139,7 @@ router.post('/chat', optionalAuth, async (req: AuthRequest, res: Response) => {
         code: error.response.data?.code || 'UPSTREAM_ERROR',
       });
     }
-
-    logger.error('aibak-chat', `网络错误: ${error.message}`);
+    logger.error('aibak-chat', `未知错误: ${error.message}`);
     res.status(502).json({ success: false, error: 'AI 服务暂不可用', code: 'NETWORK_ERROR' });
   }
 });
@@ -218,6 +244,8 @@ router.get('/refs/:id', async (_req, res: Response) => {
 
 router.get('/status', async (_req, res: Response) => {
   const models = [...AIBAK_MODELS.text, ...AIBAK_MODELS.image];
+  const gatewayInfo = getKnowledgeGatewayInfo();
+
   try {
     const response = await axios.post(CLOUDBASE_CHAT_URL, {
       messages: [{ role: 'user', content: 'ping' }],
@@ -237,6 +265,13 @@ router.get('/status', async (_req, res: Response) => {
       imageEnabled: !!CLOUDBASE_IMAGE_URL,
       provider: 'cloudbase-free',
       quotaSource: '小程序成长计划免费额度',
+      // jymkj-knowlage 网关状态
+      knowledgeGateway: {
+        available: gatewayInfo.available,
+        url: gatewayInfo.url,
+        models: gatewayInfo.models,
+        env: gatewayInfo.env,
+      },
     });
   } catch (error: any) {
     res.json({
@@ -249,6 +284,12 @@ router.get('/status', async (_req, res: Response) => {
       imageEnabled: !!CLOUDBASE_IMAGE_URL,
       provider: 'cloudbase-free',
       quotaSource: '小程序成长计划免费额度',
+      knowledgeGateway: {
+        available: gatewayInfo.available,
+        url: gatewayInfo.url,
+        models: gatewayInfo.models,
+        env: gatewayInfo.env,
+      },
     });
   }
 });

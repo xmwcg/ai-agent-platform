@@ -16,7 +16,7 @@ describe('AIAgentService.sendMessage 模型选择透传', () => {
   it('未指定覆盖时使用会话默认模型', async () => {
     const sid = await aiAgentService.createSession('u1', 'openai' as any);
     await aiAgentService.sendMessage(sid, 'hi');
-    expect(route).toHaveBeenCalledWith(expect.objectContaining({ model: 'openai/gpt-4o' }));
+    expect(route).toHaveBeenCalledWith(expect.objectContaining({ model: 'openai/gpt-4.1' }));
   });
 
   it('前端选择器传入国内厂商模型（智谱 GLM）应透传', async () => {

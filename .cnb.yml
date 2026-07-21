@@ -62,6 +62,29 @@ main:
             cd ../client
             npm run build
 
+        - name: project-grade-batch-0-deterministic-gate
+          script: |
+            set -eu
+            cd server
+            # 仅验证 AIbak 内部仓库的确定性规则、证据投影、整改与审计边界。
+            # 不接收用户 URL/Git/CI/生产环境作为扫描目标。
+            npm test -- --runInBand --detectOpenHandles --no-forceExit --runTestsByPath \
+              src/models/project-grade.models.test.ts \
+              src/routes/project-grade.test.ts \
+              src/services/project-grade.service.test.ts \
+              src/services/project-grade.persistence.test.ts \
+              src/services/project-grade.workflow.test.ts
+        - name: project-grade-batch-1-url-safety-gate
+          script: |
+            set -eu
+            cd server
+            # Batch 1 安全门禁只使用 mock DNS/HTTP；Feature Flag 强制关闭，禁止 CI 访问真实外部目标。
+            export PROJECT_GRADE_EXTERNAL_SCANNING_ENABLED=false
+            npm test -- --runInBand --detectOpenHandles --no-forceExit --runTestsByPath \
+              src/lib/network-safety.test.ts \
+              src/services/project-grade-url-scan.service.test.ts \
+              src/routes/project-grade.test.ts \
+              src/services/project-grade.persistence.test.ts
         - name: unit-integration-and-release-tests
           script: |
             set -eu

@@ -5,6 +5,5 @@ module.exports = {
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   collectCoverageFrom: ['src/**/*.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/test/setup.ts'],
-  forceExit: true,
   testTimeout: 30000,
 };

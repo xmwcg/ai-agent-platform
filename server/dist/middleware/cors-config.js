@@ -25,6 +25,8 @@ exports.FALLBACK_ORIGINS = [
     'http://localhost:5173',
     'https://aibak.site',
     'http://aibak.site',
+    'https://www.aibak.site',
+    'http://www.aibak.site',
     'http://159.75.124.59',
     'https://159.75.124.59',
 ];

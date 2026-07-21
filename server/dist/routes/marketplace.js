@@ -128,7 +128,7 @@ router.post('/api-keys', auth_1.requireAuth, (0, validation_1.validate)(createKe
             name,
             keyHash: hash,
             prefix,
-            quotaDaily: quotaDaily || 1000,
+            quotaDaily: quotaDaily || 0,
             scopes: safeScopes,
             creditsEnabled: !!creditsEnabled,
         });

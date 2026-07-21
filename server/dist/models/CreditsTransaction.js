@@ -39,7 +39,17 @@ const CreditsTransactionSchema = new mongoose_1.Schema({
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
     type: {
         type: String,
-        enum: ['purchase', 'grant', 'deduction', 'refund', 'reversal', 'freeze', 'unfreeze', 'adjustment', 'expire'],
+        enum: [
+            'purchase',
+            'grant',
+            'deduction',
+            'refund',
+            'reversal',
+            'freeze',
+            'unfreeze',
+            'adjustment',
+            'expire',
+        ],
         required: true,
     },
     amount: { type: Number, required: true },
@@ -50,7 +60,11 @@ const CreditsTransactionSchema = new mongoose_1.Schema({
     businessId: { type: String },
     sourceOrderNo: { type: String },
     relatedTransactionId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'CreditsTransaction' },
-    status: { type: String, enum: ['pending', 'committed', 'reversed', 'failed'], default: 'committed' },
+    status: {
+        type: String,
+        enum: ['pending', 'committed', 'reversed', 'failed'],
+        default: 'committed',
+    },
     operatorId: { type: String },
     auditReason: { type: String, maxlength: 500 },
     resource: { type: String },
@@ -64,7 +78,13 @@ const CreditsTransactionSchema = new mongoose_1.Schema({
 CreditsTransactionSchema.index({ userId: 1, createdAt: -1 });
 // 按用户 + 变动类型过滤
 CreditsTransactionSchema.index({ userId: 1, type: 1 });
-CreditsTransactionSchema.index({ userId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+// 仅当调用方真正提供字符串幂等键时参与唯一约束。
+// compound sparse 索引会因为 userId 始终存在而仍索引缺失的 idempotencyKey（记为 null），
+// 导致同一用户的第二条普通流水误报 E11000。
+CreditsTransactionSchema.index({ userId: 1, idempotencyKey: 1 }, {
+    unique: true,
+    partialFilterExpression: { idempotencyKey: { $type: 'string' } },
+});
 CreditsTransactionSchema.index({ userId: 1, businessType: 1, businessId: 1, type: 1 });
 exports.CreditsTransaction = mongoose_1.default.model('CreditsTransaction', CreditsTransactionSchema);
 //# sourceMappingURL=CreditsTransaction.js.map

@@ -26,7 +26,7 @@ router.get('/', auth_1.optionalAuth, async (req, res) => {
         const includeTags = req.query.includeTags !== 'false';
         const includeCategories = req.query.includeCategories !== 'false';
         const minSharedTags = Math.max(1, parseInt(req.query.minSharedTags) || 1);
-        const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit) || 500));
+        const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit) || 0));
         // 团队隔离：指定 teamId 时需是该团队成员（viewer+）
         if (teamId) {
             if (!/^[a-fA-F0-9]{24}$/.test(teamId)) {

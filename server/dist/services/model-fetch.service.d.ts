@@ -1,4 +1,3 @@
-export declare function isBlockedNetworkAddress(address: string): boolean;
 export interface FetchCatalogModelsInput {
     providerId: string;
     endpointId?: string;

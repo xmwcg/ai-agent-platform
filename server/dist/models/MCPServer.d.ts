@@ -9,6 +9,7 @@ export interface IMCPServer extends Document {
     url?: string;
     env?: Record<string, string>;
     enabled: boolean;
+    installNote?: string;
     createdAt: Date;
     updatedAt: Date;
 }

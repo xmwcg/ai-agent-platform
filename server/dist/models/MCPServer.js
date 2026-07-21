@@ -45,6 +45,7 @@ const mcpServerSchema = new mongoose_1.Schema({
     url: { type: String },
     env: { type: mongoose_1.Schema.Types.Mixed },
     enabled: { type: Boolean, default: true },
+    installNote: { type: String },
 }, { timestamps: true });
 exports.MCPServer = mongoose_1.default.model('MCPServer', mcpServerSchema);
 //# sourceMappingURL=MCPServer.js.map

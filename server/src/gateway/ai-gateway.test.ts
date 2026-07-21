@@ -93,11 +93,11 @@ describe('AI 网关 - 路由与 provider 注册表', () => {
       ...OLD_ENV,
       NODE_ENV: 'production',
       ENABLE_MOCK_MODE: 'true',
-      DEEPSEEK_API_KEY: 'real-provider-key',
+      CLOUDBASE_KNOWLEDGE_CHAT_URL: 'https://cloudbase.test/ai-chat',
     };
     reloadGatewayProviders();
     expect(listGatewayProviders().some((p) => p.name === 'mock')).toBe(false);
-    expect(listGatewayProviders().some((p) => p.name === 'deepseek')).toBe(true);
+    expect(listGatewayProviders().some((p) => p.name === 'cloudbase')).toBe(true);
   });
 
   it('production 显式 provider/model=mock 直接拒绝，不静默改走真实厂商', async () => {
@@ -119,6 +119,32 @@ describe('AI 网关 - 路由与 provider 注册表', () => {
       messages: [{ role: 'user', content: 'hi' }],
     })).rejects.toMatchObject({ code: 'AI_MOCK_DISABLED', statusCode: 400 });
   });
+
+  it('DeepSeek 保留为服务端私有 Provider，不公开且不能被公开请求调用', async () => {
+    process.env = {
+      ...OLD_ENV,
+      NODE_ENV: 'production',
+      ENABLE_MOCK_MODE: 'false',
+      DEEPSEEK_API_KEY: 'private-deepseek-key',
+    };
+    reloadGatewayProviders();
+
+    expect(listGatewayProviders().some((p) => p.name === 'deepseek')).toBe(false);
+    expect(listGatewayModels().some((m) => m.provider === 'deepseek')).toBe(false);
+
+    await expect(route({
+      model: 'deepseek/deepseek-v4-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+      publicOnly: true,
+    })).rejects.toMatchObject({ code: 'AI_PROVIDER_PRIVATE', statusCode: 403 });
+
+    const internal = await route({
+      model: 'deepseek/deepseek-v4-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(internal.provider).toBe('deepseek');
+    expect(internal.reply).toBe('CUSTOM_OK');
+  });
 });
 
 describe('AI 网关 - 国内主流模型注册（低成本闭环）', () => {
@@ -130,7 +156,8 @@ describe('AI 网关 - 国内主流模型注册（低成本闭环）', () => {
       ZHIPU_API_KEY: 'zhipu-key',
       QWEN_API_KEY: 'qwen-key',
       DOUBAO_API_KEY: 'doubao-key',
-      DEEPSEEK_API_KEY: 'deepseek-key',
+      CLOUDBASE_FREE_BASE_URL: 'https://cloudbase.test/v1/ai/cloudbase',
+      CLOUDBASE_FREE_API_KEY: 'cloudbase-server-key',
     };
     reloadGatewayProviders();
   });
@@ -139,11 +166,15 @@ describe('AI 网关 - 国内主流模型注册（低成本闭环）', () => {
     reloadGatewayProviders();
   });
 
-  it('注册智谱 GLM / 通义千问 / 豆包并暴露在模型列表中', () => {
+  it('注册 CloudBase / 智谱 GLM / 通义千问 / 豆包并暴露在模型列表中', () => {
     const names = listGatewayProviders().map((p) => p.name);
-    expect(names).toEqual(expect.arrayContaining(['zhipu', 'qwen', 'doubao', 'deepseek']));
+    expect(names).toEqual(expect.arrayContaining(['cloudbase', 'zhipu', 'qwen', 'doubao']));
 
     const models = listGatewayModels();
+    const cloudbase = models.find((m) => m.provider === 'cloudbase');
+    expect(cloudbase?.models).toEqual(
+      expect.arrayContaining(['hunyuan-2.0-instruct-20251111'])
+    );
     const zhipu = models.find((m) => m.provider === 'zhipu');
     expect(zhipu?.models).toEqual(expect.arrayContaining(['glm-4-air']));
     const qwen = models.find((m) => m.provider === 'qwen');

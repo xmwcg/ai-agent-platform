@@ -11,7 +11,7 @@
  *   - 提供 route() 统一入口，路由层 / 技能层 / 开放 API 市场都只调它，不直接散落 axios；
  *   - 支持 priority fallback 策略（主厂商失败自动切备份），并尊重 ENABLE_MOCK_MODE。
  */
-export type GatewayProviderName = 'mock' | 'openai' | 'anthropic' | 'deepseek' | 'hunyuan' | 'zhipu' | 'qwen' | 'doubao' | 'agnes';
+export type GatewayProviderName = 'mock' | 'openai' | 'anthropic' | 'deepseek' | 'hunyuan' | 'zhipu' | 'qwen' | 'doubao' | 'cloudbase' | 'agnes';
 export interface ChatRouteRequest {
     /** 支持前缀寻址，如 "hunyuan/hunyuan-pro" 或 "deepseek/deepseek-v4-flash"；缺省走策略选择 */
     model?: string;
@@ -23,6 +23,8 @@ export interface ChatRouteRequest {
     maxTokens?: number;
     /** 强制指定 provider（绕过策略与 fallback） */
     provider?: GatewayProviderName;
+    /** 面向终端用户的公开调用必须排除服务端私有 Provider */
+    publicOnly?: boolean;
 }
 export interface ChatRouteResult {
     reply: string;

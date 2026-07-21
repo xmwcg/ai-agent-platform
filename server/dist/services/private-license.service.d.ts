@@ -5,9 +5,12 @@ export interface IssuedLicense {
     serial?: string;
 }
 /**
- * 调用金网通 store 的 /api/admin/issue（模式 B）直接签发私有化 license。
- * 契约：{ product, version, validDays, seats, offline, email, orderNo, adminToken }
- * 金网通用 PLATFORM_EDITION_MAP[version] 映射内部 edition，validDays<0 视为永久(36500)。
+ * 签发金网通私有化 License（内嵌 HMAC-SHA256，不需要外部 store）
+ * 购买后自动签发，无需人工联系
  */
-export declare function issuePrivateLicense(pkg: PrivateLicensePackage, orderNo: string, userEmail: string): Promise<IssuedLicense>;
+export declare function issuePrivateLicense(pkg: PrivateLicensePackage, orderNo: string, userEmail: string): IssuedLicense;
+/**
+ * 客户端激活 License：将 PENDING_ACTIVATION 绑定到真实机器指纹
+ */
+export declare function activateLicense(existingLicense: Record<string, any>, realFingerprint: string): Record<string, any>;
 //# sourceMappingURL=private-license.service.d.ts.map

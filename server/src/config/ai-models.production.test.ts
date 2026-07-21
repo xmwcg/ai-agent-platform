@@ -12,7 +12,7 @@ describe('旧 AI 模型管理器生产安全门禁', () => {
       ...OLD_ENV,
       NODE_ENV: 'production',
       ENABLE_MOCK_MODE: 'true',
-      DEFAULT_AI_PROVIDER: 'mock',
+      DEFAULT_AI_PROVIDER: 'openai',
       OPENAI_API_KEY: 'real-openai-key',
     };
 

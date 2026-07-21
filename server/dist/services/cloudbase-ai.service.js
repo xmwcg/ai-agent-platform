@@ -15,7 +15,7 @@ exports.AIBAK_MODELS = {
     text: ['hy3', 'hy3-preview'],
     image: ['HY-Image-3.0-Plus-4090-Tob-v1.0', 'HY-Image-v3.0-I2I-ToB-v1.0.1'],
 };
-// 图像生成云函数地址（默认由 chat 云函数 URL 推导同名 ai-image 函数）
+// 图像生成云函数地址（默认由 chat 云函数 URL 推导同名 ai-image 函数，jymkjtools-study 免费额度）
 const CLOUDBASE_IMAGE_URL = process.env.CLOUDBASE_IMAGE_URL ||
     CLOUDBASE_CHAT_URL.replace(/\/ai-chat$/, '/ai-image');
 /**

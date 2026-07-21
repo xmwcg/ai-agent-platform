@@ -119,12 +119,22 @@ class MoneyPrinterTurboProvider implements MediaProvider {
         `${this.baseURL}/api/v1/tasks/${encodeURIComponent(taskId)}`,
         { timeout: 10000 }
       );
-      const d = resp.data?.data || {};
+      const envelope = resp.data;
+      const d = envelope?.data && typeof envelope.data === 'object' ? envelope.data : (envelope || {});
       const state = Number(d.state);
-      if (state === MPT_STATE_FAILED) {
+      const status = typeof d.status === 'string' ? d.status.trim().toLowerCase() : '';
+      const failed = state === MPT_STATE_FAILED || ['failed', 'error', 'cancelled', 'canceled'].includes(status);
+      const completed = state === MPT_STATE_COMPLETE || ['completed', 'succeeded', 'success'].includes(status);
+      const knownState = Number.isFinite(state)
+        || completed
+        || failed
+        || ['processing', 'pending', 'queued', 'running'].includes(status);
+      if (!knownState) {
+        throw new AppError(502, '视频生成服务返回了无法识别的任务状态', 'MEDIA_PROVIDER_INVALID_RESPONSE');
+      }
+      if (failed) {
         throw new AppError(502, '视频生成任务执行失败', 'MEDIA_TASK_FAILED');
       }
-      const completed = state === MPT_STATE_COMPLETE;
       // videos 为成片 URI 数组；相对路径需拼接 baseURL 才能访问
       const videos: string[] = Array.isArray(d.videos) ? d.videos : [];
       let outputUrl = completed && videos.length > 0 ? String(videos[0]) : '';

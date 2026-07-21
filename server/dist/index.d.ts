@@ -9,8 +9,9 @@ export interface BootstrapDependencies {
     reloadProviders: () => Promise<unknown>;
     startMediaWorker: () => Promise<unknown>;
     startOutboxWorker: () => void;
+    seedRelay: () => Promise<unknown>;
+    seedKnowledge: () => Promise<unknown>;
     startHttpServer: () => Server;
-    seedRelay?: () => Promise<unknown>;
 }
 export interface BootstrapOptions {
     listen?: boolean;

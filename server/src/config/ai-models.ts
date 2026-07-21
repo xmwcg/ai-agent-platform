@@ -41,6 +41,7 @@ export type AIProvider =
   | 'yi' // 零一万物 Yi
   | 'stepfun' // 阶跃星辰 Step
   | 'iflytek' // 讯飞星火
+  | 'cloudbase' // 腾讯云 CloudBase 小程序免费计划额度（OpenAI 兼容，腾讯混元 hy3）
   | 'agnes' // Agnes AIHub 免费模型网关（apihub.agnes-ai.com，文本/图像/视频）
   | 'custom'
   | 'mock';
@@ -110,17 +111,7 @@ export class AIModelManager {
       });
     }
 
-    // DeepSeek
-    if (process.env.DEEPSEEK_API_KEY) {
-      this.providers.set('deepseek', {
-        name: 'DeepSeek',
-        baseURL: 'https://api.deepseek.com/v1',
-        apiKey: process.env.DEEPSEEK_API_KEY,
-        models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
-        defaultModel: 'deepseek-v4-flash',
-        enabled: true
-      });
-    }
+    // 注：DeepSeek 厂商已按计划取消（用户要求默认走免费模型），不再注册。
 
     // 智谱 GLM（OpenAI 兼容，低成本中文强模型）
     if (ZHIPU_API_KEY) {
@@ -221,11 +212,26 @@ export class AIModelManager {
     // Agnes AIHub（免费模型网关，OpenAI 兼容：文本/图像/视频）
     if (AGNES_API_KEY) {
       this.providers.set('agnes', {
-        name: 'Agnes AIHub',
+        name: 'agnes',
         baseURL: AGNES_BASE_URL,
         apiKey: AGNES_API_KEY,
         models: ['agnes-2.0-flash', 'agnes-image-2.0-flash', 'agnes-image-2.1-flash', 'agnes-video-v2.0'],
         defaultModel: 'agnes-2.0-flash',
+        enabled: true,
+      });
+    }
+
+    // CloudBase AI Gateway（OpenAI 兼容）优先直连；未配置 API Key 时兼容旧 ai-chat 云函数回退。
+    if (
+      (process.env.CLOUDBASE_FREE_BASE_URL && process.env.CLOUDBASE_FREE_API_KEY)
+      || process.env.CLOUDBASE_KNOWLEDGE_CHAT_URL
+    ) {
+      this.providers.set('cloudbase', {
+        name: 'CloudBase AI',
+        baseURL: process.env.CLOUDBASE_FREE_BASE_URL || process.env.CLOUDBASE_KNOWLEDGE_CHAT_URL,
+        apiKey: process.env.CLOUDBASE_FREE_API_KEY || '',
+        models: ['hunyuan-2.0-instruct-20251111'],
+        defaultModel: 'hunyuan-2.0-instruct-20251111',
         enabled: true,
       });
     }
@@ -254,6 +260,12 @@ export class AIModelManager {
       && (!production || configuredDefault !== 'mock')
     ) {
       this.defaultProvider = configuredDefault;
+    } else if (
+      (process.env.CLOUDBASE_FREE_BASE_URL || process.env.CLOUDBASE_KNOWLEDGE_CHAT_URL)
+      && this.providers.has('cloudbase')
+    ) {
+      // 配置了 CloudBase AI Gateway 或兼容云函数时，未显式指定默认厂商则优先走它。
+      this.defaultProvider = 'cloudbase';
     } else if (AGNES_API_KEY && this.providers.has('agnes')) {
       // 配置 Agnes 免费网关且未显式指定默认厂商时，平台默认走 Agnes（文本/图像/视频统一供给）
       this.defaultProvider = 'agnes';

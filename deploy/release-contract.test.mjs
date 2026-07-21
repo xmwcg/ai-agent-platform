@@ -6,6 +6,18 @@ const watcherPath = new URL('./cnb-watcher.sh', import.meta.url);
 const cnbPath = new URL('../.cnb.yml', import.meta.url);
 const serverDockerfilePath = new URL('../server/Dockerfile', import.meta.url);
 const clientDockerfilePath = new URL('../client/Dockerfile', import.meta.url);
+const productionCaddyPath = new URL('./Caddyfile.aibak-site', import.meta.url);
+
+test('production Caddy contract permanently assigns aibak.site to AI Agent Platform', async () => {
+  const caddy = await readFile(productionCaddyPath, 'utf8');
+
+  assert.match(caddy, /^aibak\.site www\.aibak\.site \{/m);
+  assert.match(caddy, /root \* \/opt\/ai-agent-platform\/client\/dist/);
+  assert.match(caddy, /handle \/api\/\* \{[\s\S]*reverse_proxy 127\.0\.0\.1:3000/);
+  assert.match(caddy, /try_files \{path\} \/index\.html[\s\S]*file_server/);
+  assert.match(caddy, /tls \/etc\/caddy\/certs\/aibak\.site\.crt \/etc\/caddy\/certs\/aibak\.site\.key/);
+  assert.doesNotMatch(caddy, /127\.0\.0\.1:3100/);
+});
 
 test('watcher retries and alerts when the CNB production ref cannot be read', async () => {
   const watcher = await readFile(watcherPath, 'utf8');

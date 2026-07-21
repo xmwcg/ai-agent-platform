@@ -23,18 +23,32 @@ function buildFallbackVisualPrompt(topic: string, style?: string | number): stri
   return `A bright, modern scene visually representing the idea: ${topic}. Smooth camera movement, soft natural light, clean composition, ${mood} style, no on-screen text, no logos, no people speaking.`;
 }
 
-/** 调用 AI 网关完成一个对话阶段；上游偶发空响应时自动重试一次（换更高温度）。 */
+interface ChatStageResult {
+  content: string;
+  provider?: string;
+  model?: string;
+}
+
+/** 调用 AI 网关完成一个对话阶段；保留真实路由元数据，空响应时自动重试一次。 */
 async function callChatStage(
   chatProvider: string | undefined,
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
   maxTokens: number,
   temperature: number,
-): Promise<string> {
+): Promise<ChatStageResult> {
   const attempt = (t: number) =>
     route({ ...(chatProvider ? { provider: chatProvider as any } : {}), messages, maxTokens, temperature: t });
-  let reply = ((await attempt(temperature)).reply || '').trim();
-  if (!reply) reply = ((await attempt(0.7)).reply || '').trim();
-  return reply;
+  let response = await attempt(temperature);
+  let content = typeof response?.reply === 'string' ? response.reply.trim() : '';
+  if (!content) {
+    response = await attempt(0.7);
+    content = typeof response?.reply === 'string' ? response.reply.trim() : '';
+  }
+  return {
+    content,
+    provider: response?.provider || chatProvider,
+    model: response?.model,
+  };
 }
 
 /**
@@ -88,7 +102,7 @@ export const videoPipelineSkill: Skill = {
         },
         { role: 'user', content: `主题：${cleanTopic}` },
       ], 700, 0.3);
-      if (!research) throw new Error('调研 Provider 返回空内容');
+      if (!research.content) throw new Error('调研 Provider 返回空内容');
 
       const script = await callChatStage(chatProvider, [
         {
@@ -101,16 +115,16 @@ export const videoPipelineSkill: Skill = {
 目标时长：${duration || 30} 秒
 风格：${style || '自然专业'}
 调研结果：
-${research}`,
+${research.content}`,
         },
       ], 1200, 0.5);
-      if (!script) throw new Error('脚本 Provider 返回空内容');
+      if (!script.content) throw new Error('脚本 Provider 返回空内容');
 
       // 视觉提示词：把脚本转成「纯画面、无品牌/口号/文案」的镜头化英文描述，专供视频模型。
       // 视频模型有内容策略过滤，直接喂整段带品牌名/slogan 的营销脚本会触发 content_policy_violation。
       let visualPrompt = '';
       if (compose) {
-        visualPrompt = await callChatStage(chatProvider, [
+        const visualStage = await callChatStage(chatProvider, [
           {
             role: 'system',
             content:
@@ -118,9 +132,10 @@ ${research}`,
           },
           {
             role: 'user',
-            content: `Topic: ${cleanTopic}\nStyle: ${style || 'cinematic commercial'}\nScript:\n${script}`,
+            content: `Topic: ${cleanTopic}\nStyle: ${style || 'cinematic commercial'}\nScript:\n${script.content}`,
           },
         ], 220, 0.4);
+        visualPrompt = visualStage.content;
         // 兜底：上游偶发空响应时，基于主题构造纯画面描述，避免整条流水线失败
         if (!visualPrompt) visualPrompt = buildFallbackVisualPrompt(cleanTopic, style);
       }
@@ -134,7 +149,7 @@ ${research}`,
         composeResult = await mediaGenService.generate({
           type: 'text2video',
           // Agnes 视频用纯画面视觉提示词；回退 MPT 时用完整脚本（MPT 需要文案生成配音字幕）
-          prompt: videoProvider === 'agnes' ? visualPrompt : script,
+          prompt: videoProvider === 'agnes' ? visualPrompt : script.content,
           provider: videoProvider as any,
           ...(duration ? { duration } : {}),
           ...(style ? { style } : {}),
@@ -148,8 +163,8 @@ ${research}`,
         ok: true,
         data: {
           stages: {
-            research: { content: research, provider: chatProvider },
-            script: { content: script, provider: chatProvider },
+            research,
+            script,
             ...(visualPrompt ? { visualPrompt } : {}),
             compose: composeResult,
           },

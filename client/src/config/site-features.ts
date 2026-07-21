@@ -32,6 +32,7 @@ export const SITE_FEATURES: SiteFeature[] = [
   { id: 'compare', title: '对比分析', description: '模型与方案对比分析', path: '/compare', group: '工具与分析', keywords: ['比较', '评测', '模型对比'], aliases: ['compare'], authRequired: false, icon: 'chart' },
   { id: 'calendar', title: '模型日历', description: '查看模型事件与更新', path: '/calendar', group: '工具与分析', keywords: ['模型更新', '发布', '日历'], aliases: ['calendar'], authRequired: false, icon: 'calendar' },
   { id: 'workflows', title: '工作流编辑器', description: '创建和运行 AI 工作流', path: '/workflows', group: '工具与分析', keywords: ['流程', '自动化', '编排'], aliases: ['workflow'], authRequired: true, icon: 'workflow' },
+  { id: 'project-grade', title: 'AIbak 智评通', description: '查看 AIbak 内部基线、规则快照、证据与发布门禁', path: '/project-grade', group: '工具与分析', keywords: ['项目评估', '质量评估', '评分', '发布门禁', '证据', 'Finding', '整改'], aliases: ['ProjectGrade', 'project grade', '智评通'], authRequired: false, icon: 'chart' },
   { id: 'query-center', title: '本站查询', description: '查询官方 API 接入、厂商文档、额度、用量与订单', path: '/query-center', group: '平台与生态', keywords: ['API Key', 'Base URL', '协议', '地区', '模型列表', '免费额度', '付费额度', '积分', '订阅', '订单', '价格', '退款', '用量统计'], aliases: ['查询中心', 'query center', '官方API接入查询'], authRequired: false, icon: 'search' },
   { id: 'model-config', title: '模型配置', description: '配置模型厂商、API Key 和默认模型', path: '/model-config', group: '平台与生态', keywords: ['API Key', 'Base URL', 'OpenAI', 'Claude', 'Gemini', 'DeepSeek', '通义千问', 'Kimi'], aliases: ['模型接入', 'provider'], authRequired: true, icon: 'api' },
   { id: 'marketplace', title: 'API 市场', description: '发现和使用平台 API', path: '/marketplace', group: '平台与生态', keywords: ['接口', '市场', 'API'], aliases: ['marketplace'], authRequired: false, icon: 'shop' },
@@ -53,7 +54,7 @@ export const SITE_FEATURES: SiteFeature[] = [
 export const NAVIGATION_GROUPS: NavigationGroup[] = [
   { key: 'core', label: '核心功能', defaultOpen: true, featureIds: ['home', 'quickstart', 'ai-chat', 'knowledge', 'sandbox'] },
   { key: 'create', label: '创作与学习', featureIds: ['courses', 'learning-path', 'creative', 'code'] },
-  { key: 'tools', label: '工具与分析', featureIds: ['tools', 'compare', 'calendar', 'workflows'] },
+  { key: 'tools', label: '工具与分析', featureIds: ['tools', 'compare', 'calendar', 'workflows', 'project-grade'] },
   { key: 'platform', label: '平台与生态', featureIds: ['query-center', 'model-config', 'marketplace', 'skills', 'plugins', 'customer-service', 'relay-admin', 'jinwangtong'] },
   { key: 'manage', label: '管理与账户', featureIds: ['team', 'diagnostics', 'ops-dashboard', 'admin-users', 'pricing', 'points-center', 'distribution', 'profile'] },
 ];

@@ -26,6 +26,21 @@ const txTestSchema = new Schema(
 const TxModel = mongoose.model('CreditsTransaction_Test', txTestSchema);
 
 describe('CreditsTransaction Model — Schema 层验证', () => {
+  it('幂等唯一索引仅约束真实字符串键，不索引缺失值', () => {
+    const { CreditsTransaction } =
+      require('./CreditsTransaction') as typeof import('./CreditsTransaction');
+    const idempotencyIndex = CreditsTransaction.schema
+      .indexes()
+      .find(([keys]) => keys.userId === 1 && keys.idempotencyKey === 1);
+
+    expect(idempotencyIndex).toBeDefined();
+    expect(idempotencyIndex?.[1]).toMatchObject({
+      unique: true,
+      partialFilterExpression: { idempotencyKey: { $type: 'string' } },
+    });
+    expect(idempotencyIndex?.[1]).not.toHaveProperty('sparse');
+  });
+
   const userId = new mongoose.Types.ObjectId();
   const apiKeyId = new mongoose.Types.ObjectId();
 
@@ -141,5 +156,4 @@ describe('CreditsTransaction Model — Schema 层验证', () => {
     const path = txTestSchema.path('createdAt') as any;
     expect(path).toBeDefined();
   });
-
 });

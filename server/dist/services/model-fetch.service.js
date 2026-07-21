@@ -3,62 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isBlockedNetworkAddress = isBlockedNetworkAddress;
 exports.fetchCatalogProviderModels = fetchCatalogProviderModels;
 const axios_1 = __importDefault(require("axios"));
-const dns_1 = __importDefault(require("dns"));
-const https_1 = __importDefault(require("https"));
-const net_1 = __importDefault(require("net"));
 const provider_catalog_1 = require("../config/provider-catalog");
+const network_safety_1 = require("../lib/network-safety");
 const MAX_RESPONSE_BYTES = 1024 * 1024;
-const BLOCKED_HOSTNAMES = new Set([
-    'localhost',
-    'localhost.localdomain',
-    'metadata.google.internal',
-    'metadata',
-]);
-function isPrivateIpv4(address) {
-    const parts = address.split('.').map(Number);
-    if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255))
-        return true;
-    const [a, b] = parts;
-    return (a === 0 || a === 10 || a === 127 ||
-        (a === 100 && b >= 64 && b <= 127) ||
-        (a === 169 && b === 254) ||
-        (a === 172 && b >= 16 && b <= 31) ||
-        (a === 192 && b === 168) ||
-        (a === 192 && b === 0) ||
-        (a === 198 && (b === 18 || b === 19)) ||
-        a >= 224);
-}
-function isBlockedNetworkAddress(address) {
-    const normalized = address.toLowerCase().split('%')[0];
-    const family = net_1.default.isIP(normalized);
-    if (family === 4)
-        return isPrivateIpv4(normalized);
-    if (family !== 6)
-        return true;
-    if (normalized === '::' || normalized === '::1')
-        return true;
-    if (normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb'))
-        return true;
-    const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    return mapped ? isPrivateIpv4(mapped[1]) : false;
-}
-async function resolvePublicAddresses(hostname) {
-    const cleanHost = hostname.toLowerCase().replace(/\.$/, '');
-    if (BLOCKED_HOSTNAMES.has(cleanHost) || cleanHost.endsWith('.localhost') || cleanHost.endsWith('.local')) {
-        throw new Error('目标地址不在允许的公网范围内');
-    }
-    const literalFamily = net_1.default.isIP(cleanHost);
-    const addresses = literalFamily
-        ? [{ address: cleanHost, family: literalFamily }]
-        : await dns_1.default.promises.lookup(cleanHost, { all: true, verbatim: true });
-    if (!addresses.length || addresses.some((item) => isBlockedNetworkAddress(item.address))) {
-        throw new Error('目标地址解析到内网、回环或链路本地地址，已拒绝请求');
-    }
-    return addresses;
-}
 function extractModelIds(payload) {
     const value = payload;
     const raw = Array.isArray(value?.data)
@@ -92,14 +41,8 @@ async function fetchCatalogProviderModels(input) {
     const target = new URL(`${base.toString().replace(/\/+$/, '')}/${resolved.endpoint.modelListPath.replace(/^\/+/, '')}`);
     if (target.origin !== base.origin)
         throw new Error('模型列表路径越界');
-    const addresses = await resolvePublicAddresses(target.hostname);
-    const pinned = addresses[0];
-    const agent = new https_1.default.Agent({
-        keepAlive: false,
-        lookup: ((_hostname, _options, callback) => {
-            callback(null, pinned.address, pinned.family);
-        }),
-    });
+    const addresses = await (0, network_safety_1.resolvePublicAddresses)(target.hostname);
+    const agents = (0, network_safety_1.createPinnedNetworkAgents)(addresses[0]);
     const headers = {
         Accept: 'application/json',
         ...resolved.endpoint.extraHeaders,
@@ -120,7 +63,7 @@ async function fetchCatalogProviderModels(input) {
             maxContentLength: MAX_RESPONSE_BYTES,
             maxBodyLength: MAX_RESPONSE_BYTES,
             responseType: 'json',
-            httpsAgent: agent,
+            httpsAgent: agents.httpsAgent,
             validateStatus: (status) => status >= 200 && status < 300,
             transitional: { silentJSONParsing: false, forcedJSONParsing: true },
         });
@@ -144,7 +87,7 @@ async function fetchCatalogProviderModels(input) {
         throw new Error('无法安全连接厂商接口: ' + ((error instanceof Error) ? error.message.slice(0, 200) : String(error).slice(0, 200)));
     }
     finally {
-        agent.destroy();
+        agents.destroy();
     }
 }
 //# sourceMappingURL=model-fetch.service.js.map

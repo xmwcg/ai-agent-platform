@@ -60,7 +60,7 @@ router.post('/pipeline/upload', auth_1.requireAuth, (0, subscription_1.enforceQu
         try {
             fs_1.default.unlinkSync(req.file.path);
         }
-        catch { /* ignore */ }
+        catch (e) { /* ignore */ }
         res.json({
             success: result.errors.length === 0,
             file: {

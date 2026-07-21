@@ -2,7 +2,10 @@ import express from 'express';
 import request from 'supertest';
 
 jest.mock('../gateway/ai-gateway.service', () => ({ route: jest.fn() }));
-jest.mock('../services/media-gen.service', () => ({ mediaGenService: { generate: jest.fn() } }));
+jest.mock('../services/media-gen.service', () => ({
+  mediaGenService: { generate: jest.fn() },
+  ensureAgnesLoaded: jest.fn().mockResolvedValue(false),
+}));
 jest.mock('../services/ai-text.service', () => ({ generateText: jest.fn() }));
 jest.mock('../services/translation.service', () => ({ translationService: { translate: jest.fn() } }));
 
@@ -53,7 +56,8 @@ describe('技能生产真实性门禁', () => {
   it('视频合成失败时不把错误包装成成功结果', async () => {
     mockedRoute
       .mockResolvedValueOnce({ reply: '真实调研结果', provider: 'deepseek', model: 'deepseek-v4-flash' } as any)
-      .mockResolvedValueOnce({ reply: '真实视频脚本', provider: 'openai', model: 'gpt-4o' } as any);
+      .mockResolvedValueOnce({ reply: '真实视频脚本', provider: 'openai', model: 'gpt-4o' } as any)
+      .mockResolvedValueOnce({ reply: 'A concise visual prompt', provider: 'openai', model: 'gpt-4.1' } as any);
     mockedGenerate.mockRejectedValueOnce(new Error('compose provider unavailable'));
     const result = await videoPipelineSkill.invoke({ input: { topic: '真实商业发布' } });
     expect(result.ok).toBe(false);
@@ -63,13 +67,15 @@ describe('技能生产真实性门禁', () => {
   it('视频流水线成功时返回真实阶段元数据与可追踪任务', async () => {
     mockedRoute
       .mockResolvedValueOnce({ reply: '真实调研结果', provider: 'deepseek', model: 'deepseek-v4-flash' } as any)
-      .mockResolvedValueOnce({ reply: '真实视频脚本', provider: 'openai', model: 'gpt-4o' } as any);
+      .mockResolvedValueOnce({ reply: '真实视频脚本', provider: 'openai', model: 'gpt-4o' } as any)
+      .mockResolvedValueOnce({ reply: 'A concise visual prompt', provider: 'openai', model: 'gpt-4.1' } as any);
     mockedGenerate.mockResolvedValueOnce({ taskId: 'video-task-001', status: 'processing', provider: 'moneyprinterturbo' } as any);
     const result = await videoPipelineSkill.invoke({ input: { topic: '真实商业发布', duration: 30, style: '专业' } });
     expect(result.ok).toBe(true);
     expect(result.data.stages).toEqual({
       research: { content: '真实调研结果', provider: 'deepseek', model: 'deepseek-v4-flash' },
       script: { content: '真实视频脚本', provider: 'openai', model: 'gpt-4o' },
+      visualPrompt: 'A concise visual prompt',
       compose: expect.objectContaining({ taskId: 'video-task-001', provider: 'moneyprinterturbo' }),
     });
     expect(mockedGenerate).toHaveBeenCalledWith(expect.objectContaining({

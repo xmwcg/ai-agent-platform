@@ -36,7 +36,7 @@ router.post('/chat', auth_1.optionalAuth, async (req, res) => {
         if (!Array.isArray(messages) || messages.length === 0) {
             return res.status(400).json({ ok: false, error: 'messages 不能为空' });
         }
-        const result = await (0, ai_gateway_service_1.route)({ model, messages, temperature, maxTokens, provider });
+        const result = await (0, ai_gateway_service_1.route)({ model, messages, temperature, maxTokens, provider, publicOnly: true });
         res.json({ ok: true, ...result });
     }
     catch (e) {

@@ -91,6 +91,62 @@ class OpenAICompatibleProvider {
         };
     }
 }
+/* ------------------------------ CloudBase AI Gateway Provider ------------------------------ */
+// CloudBase AI Gateway 兼容 OpenAI Chat Completions。优先使用服务端 API Key 直连，
+// 并保留 ai-chat 云函数作为旧环境或网关不可用时的兼容回退。
+class CloudbaseChatProvider {
+    constructor() {
+        this.name = 'cloudbase';
+        this.label = 'CloudBase AI';
+        this.modelList = ['hunyuan-2.0-instruct-20251111'];
+    }
+    get baseURL() {
+        return process.env.CLOUDBASE_FREE_BASE_URL || '';
+    }
+    get apiKey() {
+        return process.env.CLOUDBASE_FREE_API_KEY || '';
+    }
+    get functionURL() {
+        return process.env.CLOUDBASE_KNOWLEDGE_CHAT_URL || '';
+    }
+    isConfigured() {
+        return !!(this.baseURL && this.apiKey) || !!this.functionURL;
+    }
+    owns(model) {
+        return model.startsWith('cloudbase/') || model === 'cloudbase' || this.modelList.includes(model);
+    }
+    models() {
+        return this.modelList;
+    }
+    async chat(req, model) {
+        const rawModel = model.includes('/') ? model.split('/').slice(1).join('/') : model;
+        if (this.baseURL && this.apiKey) {
+            const client = new openai_1.default({ apiKey: this.apiKey, baseURL: this.baseURL });
+            const completion = await client.chat.completions.create({
+                model: rawModel,
+                messages: req.messages,
+                temperature: req.temperature ?? 0.7,
+                max_tokens: req.maxTokens ?? 2000,
+            });
+            return {
+                reply: completion.choices[0]?.message?.content || '',
+                provider: 'cloudbase',
+                model: rawModel,
+                usage: completion.usage,
+            };
+        }
+        const resp = await axios_1.default.post(this.functionURL, { messages: req.messages, model: rawModel, stream: false }, { headers: { 'Content-Type': 'application/json' }, timeout: 60000 });
+        if (resp.data?.success) {
+            return {
+                reply: resp.data.text || '',
+                provider: 'cloudbase',
+                model: rawModel,
+                usage: resp.data.usage,
+            };
+        }
+        throw new Error(resp.data?.error || 'CLOUDBASE_FN_ERROR');
+    }
+}
 /* ------------------------------ 腾讯混元（TC3 签名） ------------------------------ */
 const HUNYUAN_HOST = 'hunyuan.tencentcloudapi.com';
 const HUNYUAN_VERSION = '2023-09-01';
@@ -170,12 +226,18 @@ function buildProviders() {
     // Agnes AIHub（免费模型网关，OpenAI 兼容：文本/图像/视频）
     if (process.env.AGNES_API_KEY)
         list.push(new OpenAICompatibleProvider('agnes', 'Agnes AIHub', process.env.AGNES_BASE_URL || 'https://apihub.agnes-ai.com/v1', process.env.AGNES_API_KEY, 'agnes', ['agnes-2.0-flash', 'agnes-image-2.0-flash', 'agnes-image-2.1-flash', 'agnes-video-v2.0']));
+    // 腾讯云 CloudBase「小程序免费计划」额度（经云函数中转 hy3/hy3-preview，绕开渠道限制）
+    // 仅当配置了 jymkj-knowlage 云函数 HTTP 触发地址时才注册；未部署/未填 URL 时不显示该选项，
+    // 由 fallback 接 agnes，避免暴露一个选了会失败的不可用渠道。
+    if (process.env.CLOUDBASE_KNOWLEDGE_CHAT_URL)
+        list.push(new CloudbaseChatProvider());
     if (process.env.OPENAI_API_KEY)
         list.push(new OpenAICompatibleProvider('openai', 'OpenAI', process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1', process.env.OPENAI_API_KEY, 'openai', ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']));
     if (process.env.ANTHROPIC_API_KEY)
         list.push(new OpenAICompatibleProvider('anthropic', 'Anthropic', 'https://api.anthropic.com/v1', process.env.ANTHROPIC_API_KEY, 'anthropic', ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku']));
+    // DeepSeek 自购接口仅供服务端内部调用，不会进入公开模型列表或公开 fallback。
     if (process.env.DEEPSEEK_API_KEY)
-        list.push(new OpenAICompatibleProvider('deepseek', 'DeepSeek', 'https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY, 'deepseek', ['deepseek-v4-pro', 'deepseek-v4-flash']));
+        list.push(new OpenAICompatibleProvider('deepseek', 'DeepSeek（私有）', process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY, 'deepseek', ['deepseek-v4-pro', 'deepseek-v4-flash']));
     // 智谱 GLM（OpenAI 兼容）
     if (process.env.ZHIPU_API_KEY)
         list.push(new OpenAICompatibleProvider('zhipu', '智谱 GLM', 'https://open.bigmodel.cn/api/paas/v4', process.env.ZHIPU_API_KEY, 'zhipu', ['glm-4-plus', 'glm-4-air', 'glm-4-flash', 'glm-4-long']));
@@ -224,12 +286,17 @@ async function reloadCustomProviders(injected) {
 function reloadGatewayProviders() {
     PROVIDERS = buildProviders();
 }
-/** 全部可用 provider（内置 + 第三方自定义），供路由与列表使用 */
+/** 服务端私有 Provider 保留内部调用能力，但不允许公开枚举、显式寻址或 fallback。 */
+const PRIVATE_PROVIDER_NAMES = new Set(['deepseek']);
+/** 全部可用 provider（内置 + 第三方自定义），供内部路由使用 */
 function allProviders() {
     return [...PROVIDERS, ...CUSTOM_PROVIDERS];
 }
+function publicProviders() {
+    return allProviders().filter((p) => !PRIVATE_PROVIDER_NAMES.has(p.name));
+}
 function listGatewayProviders() {
-    return allProviders().map((p) => ({ name: p.name, label: p.label, configured: p.isConfigured() }));
+    return publicProviders().map((p) => ({ name: p.name, label: p.label, configured: p.isConfigured() }));
 }
 /** 列出全部可选模型（内置 + 第三方自定义），供前端模型选择器
  *  如果自定义 provider 与内置 provider 指向同一 API（同 baseURL + apiKey），
@@ -245,7 +312,7 @@ function listGatewayModels() {
         }
     }
     for (const p of PROVIDERS) {
-        if (p.name === 'mock')
+        if (p.name === 'mock' || PRIVATE_PROVIDER_NAMES.has(p.name))
             continue;
         const models = p.models ? p.models() : [];
         // 检查是否与自定义 provider 重复（同 baseURL + apiKey）
@@ -273,7 +340,17 @@ async function route(req) {
         && (req.provider === 'mock' || req.model === 'mock' || req.model?.startsWith('mock/'))) {
         throw new http_error_1.AppError(400, '生产环境禁止使用 Mock AI Provider', 'AI_MOCK_DISABLED');
     }
-    const ALL = allProviders();
+    // reject deprecated model names at gateway level
+    const DEPRECATED = new Set(["deepseek-chat", "deepseek-coder", "gpt-3.5-turbo", "gpt-4"]);
+    const mName = (req.model || "").split("/").pop() || "";
+    if (DEPRECATED.has(mName)) {
+        throw new http_error_1.AppError(400, String.fromCharCode(34) + "Model " + JSON.stringify(mName) + " is deprecated" + String.fromCharCode(34), "DEPRECATED_MODEL");
+    }
+    const requestedProvider = req.provider || (req.model?.includes('/') ? req.model.split('/')[0] : undefined);
+    if (req.publicOnly && requestedProvider && PRIVATE_PROVIDER_NAMES.has(requestedProvider)) {
+        throw new http_error_1.AppError(403, '该模型不对外开放', 'AI_PROVIDER_PRIVATE');
+    }
+    const ALL = req.publicOnly ? publicProviders() : allProviders();
     let target;
     // 1. 显式 provider 优先（含第三方自定义 mc_xxx）
     if (req.provider) {
@@ -305,6 +382,6 @@ async function route(req) {
             logger_1.logger.warn('ai-gateway', `provider ${p.name} 失败，尝试降级：${e.message}`);
         }
     }
-    throw lastErr || new Error('所有 provider 均不可用');
+    throw lastErr || new Error('所有 AI provider 调用失败');
 }
 //# sourceMappingURL=ai-gateway.service.js.map

@@ -15,7 +15,7 @@ export declare const STEPFUN_API_KEY: string;
 export declare const IFlyTEK_API_KEY: string;
 export declare const AGNES_API_KEY: string;
 export declare const AGNES_BASE_URL: string;
-export type AIProvider = 'openai' | 'anthropic' | 'deepseek' | 'hunyuan' | 'zhipu' | 'qwen' | 'doubao' | 'moonshot' | 'baichuan' | 'yi' | 'stepfun' | 'iflytek' | 'agnes' | 'custom' | 'mock';
+export type AIProvider = 'openai' | 'anthropic' | 'deepseek' | 'hunyuan' | 'zhipu' | 'qwen' | 'doubao' | 'moonshot' | 'baichuan' | 'yi' | 'stepfun' | 'iflytek' | 'cloudbase' | 'agnes' | 'custom' | 'mock';
 export interface ProviderConfig {
     name: string;
     baseURL?: string;

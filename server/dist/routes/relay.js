@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const logger_1 = require("../lib/logger");
+const http_error_1 = require("../lib/http-error");
 const RelayChannel_1 = require("../models/RelayChannel");
 const RelayToken_1 = require("../models/RelayToken");
 const auth_1 = require("../middleware/auth");
@@ -36,7 +38,9 @@ router.post('/v1/chat/completions', async (req, res) => {
     catch (e) {
         if (e instanceof relay_service_1.RelayError)
             return res.status(e.status).json({ error: e.message });
-        return res.status(500).json({ error: e?.message || 'internal' });
+        logger_1.logger.error('relay', 'unexpected error', { error: e?.message || 'internal' });
+        (0, http_error_1.sendError)(res, e);
+        return;
     }
 });
 router.get('/v1/models', async (req, res) => {
@@ -47,7 +51,9 @@ router.get('/v1/models', async (req, res) => {
     catch (e) {
         if (e instanceof relay_service_1.RelayError)
             return res.status(e.status).json({ error: e.message });
-        return res.status(500).json({ error: e?.message || 'internal' });
+        logger_1.logger.error('relay', 'unexpected error', { error: e?.message || 'internal' });
+        (0, http_error_1.sendError)(res, e);
+        return;
     }
 });
 // ───────────── 管理后台（需管理员） ─────────────

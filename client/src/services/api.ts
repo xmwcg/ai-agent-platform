@@ -6,8 +6,8 @@ export const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 10000,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 });
 
 /**
@@ -113,14 +113,14 @@ export const knowledgeGraphAPI = {
     includeCategories?: boolean;
     minSharedTags?: number;
     limit?: number;
-  }) => apiClient.get('/knowledge-graph', { params })
+  }) => apiClient.get('/knowledge-graph', { params }),
 };
 
 // 实践沙盒 API
 export const sandboxAPI = {
   run: (data: { language: string; code: string; mode?: string }) =>
     apiClient.post('/sandbox/run', data, { timeout: 60000 }),
-  status: () => apiClient.get('/sandbox/status', { timeout: 15000 })
+  status: () => apiClient.get('/sandbox/status', { timeout: 15000 }),
 };
 
 // AI 聊天 API
@@ -139,7 +139,7 @@ export const aiAPI = {
   getModels: () => apiClient.get('/ai/models'),
 
   // 测试 Provider 连接
-  testProvider: (provider: string) => apiClient.get(`/ai/test/${provider}`)
+  testProvider: (provider: string) => apiClient.get(`/ai/test/${provider}`),
 };
 
 // AI 网关 API（统一模型选择器数据源：内置 + 第三方自定义模型）
@@ -157,8 +157,7 @@ export const billingAPI = {
   getPlans: () => apiClient.get('/billing/plans'),
   getSubscription: () => apiClient.get('/billing/subscription'),
   getCreditsPackages: () => apiClient.get('/billing/credits-packages'),
-  createOrder: (data: Record<string, any>) =>
-    apiClient.post('/billing/orders', data),
+  createOrder: (data: Record<string, any>) => apiClient.post('/billing/orders', data),
   createCreditsOrder: (data: { packageId: string; provider?: PaymentProvider }) =>
     apiClient.post('/billing/credits-packages/order', data),
   // 私有化授权包列表（企业版）
@@ -207,6 +206,90 @@ export const learningPathAPI = {
   }) => apiClient.post('/learning-path/generate', data),
 };
 
+export const projectGradeAPI = {
+  getRules: () => apiClient.get('/project-grade/rules'),
+  getBaseline: () => apiClient.get('/project-grade/baseline'),
+  // Temporary Batch 0 evaluation is deliberately non-persistent. Do not present it as an external scan.
+  evaluate: (payload: { projectName: string; projectType?: string; projectUrl?: string }) =>
+    apiClient.post('/project-grade/evaluate', payload),
+  // Authenticated project workspace. The server remains the authority for RBAC and persistence scope.
+  listProjects: () => apiClient.get('/project-grade/projects'),
+  createProject: (payload: {
+    projectName: string;
+    projectType: 'website' | 'saas' | 'ai_application';
+    projectUrl?: string;
+    description?: string;
+  }) => apiClient.post('/project-grade/projects', payload),
+  listProjectRuns: (projectId: string, limit = 20) =>
+    apiClient.get(`/project-grade/projects/${projectId}/evaluations`, {
+      params: { limit },
+    }),
+  runProjectEvaluation: (projectId: string) =>
+    apiClient.post(`/project-grade/projects/${projectId}/evaluations`),
+  // Batch 1 quick scan always uses the URL already registered on the project.
+  runProjectUrlQuickScan: (projectId: string) =>
+    apiClient.post(`/project-grade/projects/${projectId}/url-scan`),
+  listProjectUrlScans: (projectId: string, limit = 20) =>
+    apiClient.get(`/project-grade/projects/${projectId}/url-scans`, {
+      params: { limit },
+    }),
+  getRun: (runId: string) => apiClient.get(`/project-grade/evaluations/${runId}`),
+  listProjectEvidence: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/evidence`, {
+      params: { limit },
+    }),
+  listProjectFindings: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/findings`, {
+      params: { limit },
+    }),
+  updateFindingWorkflow: (
+    projectId: string,
+    findingId: string,
+    payload: {
+      status:
+        | 'open'
+        | 'in_progress'
+        | 'ready_for_retest'
+        | 'verified'
+        | 'accepted_risk'
+        | 'false_positive';
+      note: string;
+    }
+  ) =>
+    apiClient.patch(`/project-grade/projects/${projectId}/findings/${findingId}/workflow`, payload),
+  listProjectRemediations: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/remediations`, {
+      params: { limit },
+    }),
+  createRemediation: (
+    projectId: string,
+    findingId: string,
+    payload?: { assigneeId?: string; dueAt?: string; slaHours?: number }
+  ) =>
+    apiClient.post(
+      `/project-grade/projects/${projectId}/findings/${findingId}/remediations`,
+      payload
+    ),
+  updateRemediation: (
+    projectId: string,
+    taskId: string,
+    payload: {
+      status?: 'open' | 'in_progress' | 'blocked' | 'ready_for_retest' | 'verified' | 'cancelled';
+      assigneeId?: string;
+      dueAt?: string;
+      slaHours?: number;
+      completionNote?: string;
+      retestRunId?: string;
+    }
+  ) => apiClient.patch(`/project-grade/projects/${projectId}/remediations/${taskId}`, payload),
+  listProjectAudit: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/audit`, {
+      params: { limit },
+    }),
+  rebuildProjection: (runId: string) =>
+    apiClient.post(`/project-grade/evaluations/${runId}/projection/rebuild`),
+};
+
 // 代码解释 API
 export const codeAPI = {
   explain: (data: {
@@ -223,8 +306,7 @@ export const codeAPI = {
 // 个人中心 API
 export const profileAPI = {
   get: () => apiClient.get('/auth/profile'),
-  update: (data: { name?: string; avatar?: string }) =>
-    apiClient.put('/auth/profile', data),
+  update: (data: { name?: string; avatar?: string }) => apiClient.put('/auth/profile', data),
 };
 
 // 认证 API（微信/抖音 OAuth + 账号绑定/解绑）
@@ -257,13 +339,19 @@ export const modelConfigAPI = {
   list: () => apiClient.get('/model-config'),
   available: () => apiClient.get('/model-config/available'),
   create: (data: {
-    name: string; provider: string; baseURL: string; apiKey: string;
-    models?: string[]; defaultModel: string; description?: string;
+    name: string;
+    provider: string;
+    baseURL: string;
+    apiKey: string;
+    models?: string[];
+    defaultModel: string;
+    description?: string;
   }) => apiClient.post('/model-config', data),
   update: (id: string, data: any) => apiClient.put(`/model-config/${id}`, data),
   remove: (id: string) => apiClient.delete(`/model-config/${id}`),
   setDefault: (id: string) => apiClient.post(`/model-config/${id}/set-default`, {}),
-  test: (id: string, model?: string) => apiClient.post(`/model-config/${id}/test`, model ? { model } : {}),
+  test: (id: string, model?: string) =>
+    apiClient.post(`/model-config/${id}/test`, model ? { model } : {}),
   builtinProviders: () => apiClient.get('/model-config/providers/builtin'),
   // 自动获取厂商模型清单（15s 超时 + 服务端缓存，修复慢/网络错误）
   providerCatalog: () => apiClient.get('/model-config/providers/catalog'),
@@ -282,14 +370,27 @@ export const customerServiceAPI = {
   embedScript: (id: string) => apiClient.get(`/customer-service/${id}/embed-script`),
   sessions: (id: string) => apiClient.get(`/customer-service/${id}/sessions`),
   // 合规审计日志（可信客服差异化能力）
-  auditLogs: (id: string, params?: { from?: string; to?: string; escalatedOnly?: boolean; minSatisfaction?: number; page?: number; pageSize?: number }) =>
-    apiClient.get(`/customer-service/${id}/audit-logs`, { params }),
+  auditLogs: (
+    id: string,
+    params?: {
+      from?: string;
+      to?: string;
+      escalatedOnly?: boolean;
+      minSatisfaction?: number;
+      page?: number;
+      pageSize?: number;
+    }
+  ) => apiClient.get(`/customer-service/${id}/audit-logs`, { params }),
   auditExport: (id: string, format: 'json' | 'csv' = 'csv') =>
-    apiClient.get(`/customer-service/${id}/audit-logs/export?format=${format}`, { responseType: 'blob' }),
+    apiClient.get(`/customer-service/${id}/audit-logs/export?format=${format}`, {
+      responseType: 'blob',
+    }),
   auditStats: (id: string) => apiClient.get(`/customer-service/${id}/audit-stats`),
   // 公开对话（嵌入脚本调用）
-  chatPublic: (embedCode: string, data: { message: string; visitorId?: string; sessionId?: string }) =>
-    apiClient.post(`/cs/chat/${embedCode}`, data),
+  chatPublic: (
+    embedCode: string,
+    data: { message: string; visitorId?: string; sessionId?: string }
+  ) => apiClient.post(`/cs/chat/${embedCode}`, data),
 };
 
 // 工具箱 API（翻译/方案/转换/媒体生成）
@@ -298,17 +399,28 @@ export const toolsAPI = {
   translate: (data: { text: string; targetLang: string; sourceLang?: string }) =>
     apiClient.post('/tools/translate', data),
   generatePlan: (data: {
-    topic: string; type?: string; audience?: string;
-    length?: string; requirements?: string;
+    topic: string;
+    type?: string;
+    audience?: string;
+    length?: string;
+    requirements?: string;
   }) => apiClient.post('/tools/plan', data),
   convertFormats: () => apiClient.get('/tools/convert/formats'),
-  convert: (data: { fileName: string; sourceFormat: string; targetFormat: string; content?: string }) =>
-    apiClient.post('/tools/convert', data),
+  convert: (data: {
+    fileName: string;
+    sourceFormat: string;
+    targetFormat: string;
+    content?: string;
+  }) => apiClient.post('/tools/convert', data),
   mediaTypes: () => apiClient.get('/tools/media/types'),
   mediaGenerate: (data: {
     type: 'image2image' | 'text2video' | 'image2video';
-    prompt: string; imageBase64?: string; negativePrompt?: string;
-    duration?: number; size?: string; style?: string;
+    prompt: string;
+    imageBase64?: string;
+    negativePrompt?: string;
+    duration?: number;
+    size?: string;
+    style?: string;
   }) => apiClient.post('/tools/media', data),
   mediaProviders: () => apiClient.get('/tools/media/providers'),
   mediaTask: (provider: string, taskId: string) =>
@@ -324,8 +436,7 @@ export const teamAPI = {
     apiClient.post(`/team/${id}/members`, data),
   updateRole: (id: string, userId: string, data: { role: string }) =>
     apiClient.put(`/team/${id}/members/${userId}`, data),
-  remove: (id: string, userId: string) =>
-    apiClient.delete(`/team/${id}/members/${userId}`),
+  remove: (id: string, userId: string) => apiClient.delete(`/team/${id}/members/${userId}`),
   removeTeam: (id: string) => apiClient.delete(`/team/${id}`),
   generateInvite: (id: string) => apiClient.post(`/team/${id}/invite`),
   revokeInvite: (id: string) => apiClient.delete(`/team/${id}/invite`),
@@ -336,8 +447,12 @@ export const teamAPI = {
 
 // 开放 API 市场（按量计费） API
 export const marketplaceAPI = {
-  createKey: (data: { name: string; quotaDaily?: number; scopes?: string[]; creditsEnabled?: boolean }) =>
-    apiClient.post('/marketplace/api-keys', data),
+  createKey: (data: {
+    name: string;
+    quotaDaily?: number;
+    scopes?: string[];
+    creditsEnabled?: boolean;
+  }) => apiClient.post('/marketplace/api-keys', data),
   listKeys: () => apiClient.get('/marketplace/api-keys'),
   revokeKey: (id: string) => apiClient.delete(`/marketplace/api-keys/${id}`),
   usage: () => apiClient.get('/marketplace/usage'),
@@ -346,7 +461,10 @@ export const marketplaceAPI = {
     apiClient.get('/marketplace/usage/report', { params: { from, to } }),
   /** 用量导出下载（CSV） */
   exportUsage: (from: string, to: string) =>
-    apiClient.get('/marketplace/usage/export', { params: { from, to, format: 'csv' }, responseType: 'blob' }),
+    apiClient.get('/marketplace/usage/export', {
+      params: { from, to, format: 'csv' },
+      responseType: 'blob',
+    }),
   /** 切换积分抵扣开关 */
   toggleCredits: (id: string) => apiClient.patch(`/marketplace/api-keys/${id}/toggle-credits`),
 };
@@ -379,7 +497,11 @@ export interface OpsSnapshot {
   activation: { activatedLast7d: number; activationRate: number };
   retention: { weeklyRetentionRate: number; returningCreators: number };
   revenue: { mrr: number; paidUsers: number; arpu: number; ordersLast7d: number };
-  referral: { referralSignupsLast7d: number; publicApiCallsLast7d: number; quotaHitsLast7d: number };
+  referral: {
+    referralSignupsLast7d: number;
+    publicApiCallsLast7d: number;
+    quotaHitsLast7d: number;
+  };
   trend: { week: string; wau: number }[];
 }
 
@@ -399,8 +521,7 @@ export const skillsAPI = {
   list: () => apiClient.get('/skills'),
   market: () => apiClient.get('/skills/market'),
   detail: (id: string) => apiClient.get(`/skills/${id}`),
-  invoke: (id: string, input: Record<string, any>) =>
-    apiClient.post(`/skills/${id}/invoke`, input),
+  invoke: (id: string, input: Record<string, any>) => apiClient.post(`/skills/${id}/invoke`, input),
   // 当前用户上传/安装的技能
   mine: () => apiClient.get('/skills/mine'),
   // 外部技能市场精选目录（公开）
@@ -488,19 +609,23 @@ export const revenueAPI = {
 // 推荐/分销 API
 export const referralAPI = {
   stats: () => apiClient.get('/referral/stats'),
-  list: (params?: { page?: number; pageSize?: number }) => apiClient.get('/referral/list', { params }),
-  commissions: (params?: { page?: number; pageSize?: number }) => apiClient.get('/referral/commissions', { params }),
+  list: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/referral/list', { params }),
+  commissions: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/referral/commissions', { params }),
   code: () => apiClient.get('/referral/code'),
   withdraw: (data: { amount: number; method: 'wechat' | 'alipay'; account?: string }) =>
     apiClient.post('/referral/withdraw', data),
-  withdrawals: (params?: { page?: number; pageSize?: number }) => apiClient.get('/referral/withdrawals', { params }),
+  withdrawals: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/referral/withdrawals', { params }),
 };
 
 // 积分/签到 API
 export const pointsAPI = {
   checkin: () => apiClient.post('/points/checkin'),
   checkinStatus: () => apiClient.get('/points/checkin/status'),
-  checkinHistory: (params?: { page?: number; pageSize?: number }) => apiClient.get('/points/checkin/history', { params }),
+  checkinHistory: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/points/checkin/history', { params }),
   tasks: () => apiClient.get('/points/tasks'),
   awardTask: (taskType: string) => apiClient.post('/points/task', { taskType }),
 };
@@ -548,8 +673,12 @@ export const accountAPI = {
   cancelDeletion: () => apiClient.post('/account/cancel-delete'),
   confirmDeletion: (token: string) => apiClient.delete(`/account/confirm-delete/${token}`),
   getConsents: () => apiClient.get('/account/consents'),
-  recordConsent: (data: { consentType: string; version: string; accepted: boolean; channel?: string }) =>
-    apiClient.post('/account/consent', data),
+  recordConsent: (data: {
+    consentType: string;
+    version: string;
+    accepted: boolean;
+    channel?: string;
+  }) => apiClient.post('/account/consent', data),
 };
 
 export const workflowAPI = {
@@ -559,4 +688,3 @@ export const workflowAPI = {
       responseType: download ? 'blob' : 'json',
     }),
 };
-

@@ -1,5 +1,7 @@
 # AI Agent Platform - 部署指南
 
+> **P0 PRODUCTION RULE:** `aibak.site` and `www.aibak.site` are permanently assigned to AI Agent Platform. Do not point either domain to another project, directory, or port. Read [`DEPLOYMENT-LOCK.md`](./DEPLOYMENT-LOCK.md) before changing Caddy, TLS, Docker, or deployment automation.
+
 ## 环境要求
 
 ### 必需

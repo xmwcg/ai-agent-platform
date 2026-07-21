@@ -16,7 +16,7 @@
     "test": "npm run test:server && npm run check:superpowers && npm run test:release && npm run test:client",
     "test:server": "cd server && npm test",
     "test:client": "cd client && npm test",
-    "test:release": "node --test deploy/*.test.mjs",
+    "test:release": "node --test deploy/release-contract.test.mjs deploy/verify-release.test.mjs",
     "check:superpowers": "node scripts/check-superpowers-sync.cjs",
     "auto:deploy": "node scripts/auto-deploy.cjs",
     "auto:start": "node scripts/auto-deploy.cjs start",

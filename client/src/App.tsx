@@ -1,18 +1,57 @@
 import { useEffect, useLayoutEffect, useCallback, useMemo, useState } from 'react';
 import {
-  Layout, Menu, Typography, Button, Avatar, Dropdown, Space, Tag,
-  Drawer, Breadcrumb, Badge, Tooltip, Switch, Divider,
+  Layout,
+  Menu,
+  Typography,
+  Button,
+  Avatar,
+  Dropdown,
+  Space,
+  Tag,
+  Drawer,
+  Breadcrumb,
+  Badge,
+  Tooltip,
+  Switch,
+  Divider,
 } from 'antd';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
-  HomeOutlined, BookOutlined, RobotOutlined, SettingOutlined,
-  CompassOutlined, CalendarOutlined, UserOutlined, LogoutOutlined,
-  LoginOutlined, CrownOutlined, CodeOutlined, ProfileOutlined,
-  ApiOutlined, CustomerServiceOutlined, ToolOutlined, RocketOutlined,
-  TeamOutlined, DashboardOutlined, AppstoreOutlined, NodeIndexOutlined,
-  ApartmentOutlined, EditOutlined, MenuOutlined, GiftOutlined, ShareAltOutlined, ShopOutlined,
-  SunOutlined, MoonOutlined, ThunderboltOutlined, PictureOutlined,
-  BarChartOutlined, ExperimentOutlined, BulbOutlined, SecurityScanOutlined, SearchOutlined,
+  HomeOutlined,
+  BookOutlined,
+  RobotOutlined,
+  SettingOutlined,
+  CompassOutlined,
+  CalendarOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  LoginOutlined,
+  CrownOutlined,
+  CodeOutlined,
+  ProfileOutlined,
+  ApiOutlined,
+  CustomerServiceOutlined,
+  ToolOutlined,
+  RocketOutlined,
+  TeamOutlined,
+  DashboardOutlined,
+  AppstoreOutlined,
+  NodeIndexOutlined,
+  ApartmentOutlined,
+  EditOutlined,
+  MenuOutlined,
+  GiftOutlined,
+  ShareAltOutlined,
+  ShopOutlined,
+  SunOutlined,
+  MoonOutlined,
+  ThunderboltOutlined,
+  PictureOutlined,
+  BarChartOutlined,
+  ExperimentOutlined,
+  BulbOutlined,
+  SecurityScanOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '@/stores/auth';
 import { useUIStore } from '@/stores/ui';
@@ -35,14 +74,30 @@ const { Text } = Typography;
 
 // ─── 全站功能注册表驱动菜单、面包屑和搜索 ───
 const FEATURE_ICONS: Record<string, React.ReactNode> = {
-  home: <HomeOutlined />, rocket: <RocketOutlined />, robot: <RobotOutlined />,
-  book: <BookOutlined />, code: <CodeOutlined />, experiment: <ExperimentOutlined />,
-  compass: <CompassOutlined />, bulb: <BulbOutlined />, tool: <ToolOutlined />,
-  chart: <BarChartOutlined />, calendar: <CalendarOutlined />, workflow: <NodeIndexOutlined />,
-  search: <SearchOutlined />, api: <ApiOutlined />, shop: <ShopOutlined />,
-  apps: <AppstoreOutlined />, setting: <SettingOutlined />, service: <CustomerServiceOutlined />,
-  team: <TeamOutlined />, dashboard: <DashboardOutlined />, security: <SecurityScanOutlined />,
-  crown: <CrownOutlined />, gift: <GiftOutlined />, share: <ShareAltOutlined />,
+  home: <HomeOutlined />,
+  rocket: <RocketOutlined />,
+  robot: <RobotOutlined />,
+  book: <BookOutlined />,
+  code: <CodeOutlined />,
+  experiment: <ExperimentOutlined />,
+  compass: <CompassOutlined />,
+  bulb: <BulbOutlined />,
+  tool: <ToolOutlined />,
+  chart: <BarChartOutlined />,
+  calendar: <CalendarOutlined />,
+  workflow: <NodeIndexOutlined />,
+  search: <SearchOutlined />,
+  api: <ApiOutlined />,
+  shop: <ShopOutlined />,
+  apps: <AppstoreOutlined />,
+  setting: <SettingOutlined />,
+  service: <CustomerServiceOutlined />,
+  team: <TeamOutlined />,
+  dashboard: <DashboardOutlined />,
+  security: <SecurityScanOutlined />,
+  crown: <CrownOutlined />,
+  gift: <GiftOutlined />,
+  share: <ShareAltOutlined />,
   profile: <ProfileOutlined />,
 };
 
@@ -55,12 +110,16 @@ const MENU_GROUPS = (role?: string) => {
     children: group.featureIds
       .map((id) => visible.get(id))
       .filter((feature): feature is NonNullable<typeof feature> => Boolean(feature))
-      .map((feature) => ({ key: feature.path, label: feature.title, icon: FEATURE_ICONS[feature.icon] })),
+      .map((feature) => ({
+        key: feature.path,
+        label: feature.title,
+        icon: FEATURE_ICONS[feature.icon],
+      })),
   })).filter((group) => group.children.length > 0);
 };
 
 const ALL_MENU_FLAT: Record<string, string> = Object.fromEntries(
-  SITE_FEATURES.map((feature) => [feature.path, feature.title]),
+  SITE_FEATURES.map((feature) => [feature.path, feature.title])
 );
 
 const PLAN_TAGS: Record<string, { text: string; color: string }> = {
@@ -77,12 +136,12 @@ function useBreadcrumbs() {
   useEffect(() => {
     // 自管理滚动的页面跳过全局 scrollTo（避免与页面内部滚动冲突）
     const SELF_SCROLL_PAGES = ['/ai-chat', '/aibak-chat', '/sandbox'];
-    if (SELF_SCROLL_PAGES.some(p => location.pathname.startsWith(p))) return;
+    if (SELF_SCROLL_PAGES.some((p) => location.pathname.startsWith(p))) return;
     // 延迟执行以确保页面 DOM 已更新
-    var timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'instant' });
       // 也处理可滚动的容器元素
-      var mainContent = document.querySelector('.ant-layout-content');
+      const mainContent = document.querySelector('.ant-layout-content');
       if (mainContent) mainContent.scrollTop = 0;
     }, 50);
     return () => clearTimeout(timer);
@@ -100,9 +159,12 @@ function useBreadcrumbs() {
       if (matched) {
         crumbs.push({ label: matched, path: accumulated });
       } else if (i === parts.length - 1) {
-      // 最后一个未匹配的 segment，显示原始值
+        // 最后一个未匹配的 segment，显示原始值
         const decoded = decodeURIComponent(part);
-        crumbs.push({ label: decoded.length > 16 ? decoded.slice(0, 16) + "..." : decoded, path: accumulated });
+        crumbs.push({
+          label: decoded.length > 16 ? decoded.slice(0, 16) + '...' : decoded,
+          path: accumulated,
+        });
       }
     });
     return crumbs;
@@ -123,22 +185,42 @@ function BottomTabBar({ onMenuOpen }: { onMenuOpen: () => void }) {
   ];
 
   return (
-    <div className="hide-on-desktop" style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
-      background: 'var(--bg-container)', borderTop: '1px solid var(--border)',
-      display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-      height: 56, paddingBottom: 'env(safe-area-inset-bottom, 0)',
-    }}>
+    <div
+      className="hide-on-desktop"
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        background: 'var(--bg-container)',
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        height: 56,
+        paddingBottom: 'env(safe-area-inset-bottom, 0)',
+      }}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.key}
           onClick={() => (tab.key === '/more' ? onMenuOpen() : navigate(tab.key))}
           style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', gap: 2, border: 'none', background: 'transparent',
-            cursor: 'pointer', padding: '6px 0',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            padding: '6px 0',
             color: currentPath === tab.key ? 'var(--brand-primary)' : 'var(--text-tertiary)',
-            fontSize: 10, lineHeight: 1.2, transition: 'color 0.2s',
+            fontSize: 10,
+            lineHeight: 1.2,
+            transition: 'color 0.2s',
           }}
         >
           <span style={{ fontSize: 20 }}>{tab.icon}</span>
@@ -148,13 +230,24 @@ function BottomTabBar({ onMenuOpen }: { onMenuOpen: () => void }) {
       <button
         onClick={onMenuOpen}
         style={{
-          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', gap: 2, border: 'none', background: 'transparent',
-          cursor: 'pointer', padding: '6px 0',
-          color: 'var(--text-tertiary)', fontSize: 10, lineHeight: 1.2,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 2,
+          border: 'none',
+          background: 'transparent',
+          cursor: 'pointer',
+          padding: '6px 0',
+          color: 'var(--text-tertiary)',
+          fontSize: 10,
+          lineHeight: 1.2,
         }}
       >
-        <span style={{ fontSize: 20 }}><MenuOutlined /></span>
+        <span style={{ fontSize: 20 }}>
+          <MenuOutlined />
+        </span>
         <span>更多</span>
       </button>
     </div>
@@ -182,7 +275,7 @@ function RouteScrollRestoration() {
     let hashAttempts = 0;
 
     // 跳过自管理滚动的页面（AI对话/沙盒等有独立滚动容器）
-    if (SELF_SCROLL_PAGES.some(p => location.pathname.startsWith(p))) return;
+    if (SELF_SCROLL_PAGES.some((p) => location.pathname.startsWith(p))) return;
     // 立即同步滚动一次：useLayoutEffect 在 paint 前同步执行，
     // 保证浏览器以 scrollY=0 渲染新页面，避免先看到旧位置再跳的闪烁。
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -215,13 +308,22 @@ function RouteScrollRestoration() {
       // 有 hash 的页面导航：只做 hash 定位，不并行强制回到顶部。
       frame = window.requestAnimationFrame(scrollToLocation);
     } else {
-      if (SELF_SCROLL_PAGES.some(p => location.pathname.startsWith(p))) return;
+      if (SELF_SCROLL_PAGES.some((p) => location.pathname.startsWith(p))) return;
       // 无 hash 的普通导航：仅做一次延迟校正，避免多帧重复滚动导致的页面弹跳。
       // useLayoutEffect 的同步 scrollTo 已确保首帧在顶部；
       // 无 hash 导航：多次校正确保始终回到顶部，防止异步加载内容导致页面弹跳
-      const t1 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }), 100);
-      const t2 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }), 500);
-      const t3 = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }), 1000);
+      const t1 = window.setTimeout(
+        () => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }),
+        100
+      );
+      const t2 = window.setTimeout(
+        () => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }),
+        500
+      );
+      const t3 = window.setTimeout(
+        () => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }),
+        1000
+      );
 
       return () => {
         window.clearTimeout(t1);
@@ -307,33 +409,62 @@ function App() {
     if (isMobile) setSidebarMobileOpen(false);
   };
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   // ─── 渲染 Logo（左上角品牌，悬浮锁定；点击回首页） ───
   const renderLogo = (collapsed: boolean) => (
     <div
-      onClick={() => { navigate('/'); window.scrollTo({ top: 0, behavior: 'smooth' }); if (isMobile) setSidebarMobileOpen(false); }}
+      onClick={() => {
+        navigate('/');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (isMobile) setSidebarMobileOpen(false);
+      }}
       title={`${BRAND_NAME} · ${BRAND_SLOGAN}`}
       style={{
-        position: 'sticky', top: 0, zIndex: 5,
-        height: collapsed ? 56 : 64, padding: collapsed ? '12px 0' : '12px 16px',
-        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+        position: 'sticky',
+        top: 0,
+        zIndex: 5,
+        height: collapsed ? 56 : 64,
+        padding: collapsed ? '12px 0' : '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        cursor: 'pointer',
         transition: 'all 0.2s ease',
         background: 'var(--bg-sidebar)',
         borderBottom: '1px solid var(--border-light)',
       }}
     >
-      <div style={{
-        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-        background: 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: '0 2px 8px rgba(108,92,231,0.3)',
-      }}>
+      <div
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 10,
+          flexShrink: 0,
+          background: 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(108,92,231,0.3)',
+        }}
+      >
         <ThunderboltOutlined style={{ color: '#fff', fontSize: 17 }} />
       </div>
       {!collapsed && (
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, overflow: 'hidden' }}>
-          <span style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+        <div
+          style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, overflow: 'hidden' }}
+        >
+          <span
+            style={{
+              fontWeight: 800,
+              fontSize: 18,
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.3px',
+            }}
+          >
             {BRAND_NAME}
           </span>
           <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
@@ -352,17 +483,24 @@ function App() {
       defaultOpenKeys={defaultOpenKeys}
       onClick={({ key }) => handleMenuClick(key)}
       style={{
-        background: 'transparent', borderInlineEnd: 0,
-        color: 'var(--text-secondary)', fontWeight: 500,
+        background: 'transparent',
+        borderInlineEnd: 0,
+        color: 'var(--text-secondary)',
+        fontWeight: 500,
       }}
       items={menuGroups.map((group) => ({
         type: 'group' as const,
         key: group.key,
         label: sidebarCollapsed ? undefined : (
-          <span style={{
-            fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
-            color: 'var(--text-tertiary)', textTransform: 'uppercase',
-          }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              color: 'var(--text-tertiary)',
+              textTransform: 'uppercase',
+            }}
+          >
             {group.label}
           </span>
         ),
@@ -370,7 +508,11 @@ function App() {
           const isPrimary = item.key === '/' || item.key === '/ai-chat';
           return {
             key: item.key,
-            icon: <span style={{ fontSize: 18, color: isPrimary ? 'var(--brand-primary)' : undefined }}>{item.icon}</span>,
+            icon: (
+              <span style={{ fontSize: 18, color: isPrimary ? 'var(--brand-primary)' : undefined }}>
+                {item.icon}
+              </span>
+            ),
             label: item.label,
             style: isPrimary ? { fontWeight: 600 } : undefined,
           };
@@ -384,7 +526,12 @@ function App() {
     if (status === 'loading') return <div style={{ width: 80 }} />;
     if (!user) {
       return (
-        <Button type="primary" icon={<LoginOutlined />} onClick={() => navigate('/login')} size={isMobile ? 'small' : 'middle'}>
+        <Button
+          type="primary"
+          icon={<LoginOutlined />}
+          onClick={() => navigate('/login')}
+          size={isMobile ? 'small' : 'middle'}
+        >
           登录
         </Button>
       );
@@ -395,7 +542,9 @@ function App() {
           items: [
             { key: 'profile', icon: <UserOutlined />, label: '个人中心' },
             { key: 'points-center', icon: <GiftOutlined />, label: '积分中心' },
-            ...(user.plan && user.plan !== 'free' ? [{ key: 'pricing', icon: <CrownOutlined />, label: '管理订阅' }] : []),
+            ...(user.plan && user.plan !== 'free'
+              ? [{ key: 'pricing', icon: <CrownOutlined />, label: '管理订阅' }]
+              : []),
             { type: 'divider' as const },
             { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true },
           ],
@@ -408,13 +557,23 @@ function App() {
         }}
         placement="bottomRight"
       >
-        <Button type="text" style={{
-          height: isMobile ? 36 : 44, padding: '0 8px', borderRadius: 12,
-        }}>
+        <Button
+          type="text"
+          style={{
+            height: isMobile ? 36 : 44,
+            padding: '0 8px',
+            borderRadius: 12,
+          }}
+        >
           <Space size={8}>
-            <Avatar size={isMobile ? 28 : 32} icon={<UserOutlined />}
-              style={{ background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)' }} />
-            {!isMobile && <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{user.name}</span>}
+            <Avatar
+              size={isMobile ? 28 : 32}
+              icon={<UserOutlined />}
+              style={{ background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)' }}
+            />
+            {!isMobile && (
+              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{user.name}</span>
+            )}
             {user.plan && user.plan !== 'free' && !isMobile && (
               <Tag color={PLAN_TAGS[user.plan]?.color} style={{ marginInlineEnd: 0 }}>
                 {PLAN_TAGS[user.plan]?.text}
@@ -432,7 +591,8 @@ function App() {
     return (
       <Breadcrumb
         items={breadcrumbs.map((crumb, i) => ({
-          title: i === breadcrumbs.length - 1 ? crumb.label : <Link to={crumb.path}>{crumb.label}</Link>,
+          title:
+            i === breadcrumbs.length - 1 ? crumb.label : <Link to={crumb.path}>{crumb.label}</Link>,
         }))}
         style={{ fontSize: 13 }}
       />
@@ -456,23 +616,23 @@ function App() {
       }}
     >
       {renderLogo(sidebarCollapsed)}
-      <div style={{ paddingBottom: 20 }}>
-        {renderSideMenu()}
-      </div>
+      <div style={{ paddingBottom: 20 }}>{renderSideMenu()}</div>
     </Sider>
   );
 
   // ─── 桌面/平板：经典侧边栏 ───
   // ─── 移动端：Drawer ───
   const sidebarContent = (
-    <div style={{
-      height: '100%', display: 'flex', flexDirection: 'column',
-      background: 'var(--bg-sidebar)',
-    }}>
+    <div
+      style={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--bg-sidebar)',
+      }}
+    >
       {renderLogo(false)}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {renderSideMenu()}
-      </div>
+      <div style={{ flex: 1, overflowY: 'auto' }}>{renderSideMenu()}</div>
     </div>
   );
 
@@ -482,127 +642,172 @@ function App() {
     <>
       <RouteScrollRestoration />
       <Layout style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
-      {/* 桌面 / 平板侧边栏*/}
-      {!isMobile && sidebarSider}
+        {/* 桌面 / 平板侧边栏*/}
+        {!isMobile && sidebarSider}
 
-      {/* 移动端 Drawer */}
-      {isMobile && (
-        <Drawer
-          placement="left"
-          open={sidebarMobileOpen}
-          onClose={() => setSidebarMobileOpen(false)}
-          width={280}
-          bodyStyle={{ padding: 0 }}
-          headerStyle={{ display: 'none' }}
-          closable={false}
-        >
-          {sidebarContent}
-        </Drawer>
-      )}
-
-      {/* 主区域*/}
-      <Layout style={{ background: 'var(--bg-base)' }}>
-        {/* ─── 顶栏 ─── */}
-        <Header style={{
-          height: isMobile ? 48 : 56,
-          padding: isMobile ? '0 12px' : '0 24px',
-          background: 'var(--header-bg)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          borderBottom: '1px solid var(--border)',
-          position: 'sticky', top: 0, zIndex: 50,
-          transition: 'background 0.3s',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 12, flex: 1, minWidth: 0 }}>
-            {isMobile ? (
-              <Button type="text" icon={<MenuOutlined />} onClick={() => setSidebarMobileOpen(true)} style={{ fontSize: 18, width: 36, height: 36, flexShrink: 0 }} />
-            ) : (
-              <Button type="text" icon={<MenuOutlined />} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} style={{ fontSize: 16, width: 36, height: 36, flexShrink: 0 }} />
-            )}
-            <a
-              href={BRAND_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="访问官网 aibak.site"
-              style={{ display: 'flex', alignItems: 'baseline', gap: 8, textDecoration: 'none', flexShrink: 0 }}
-            >
-              <span style={{ fontWeight: 800, fontSize: isMobile ? 16 : 19, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
-                {BRAND_NAME}
-              </span>
-              {!isMobile && !isTablet && (
-                <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--text-tertiary)' }}>{BRAND_SLOGAN}</span>
-              )}
-            </a>
-            <GlobalSearch compact={isMobile || isTablet} />
-            <SiteQueryMenu compact={isMobile || isTablet} />
-          </div>
-
-          <Space size={4}>
-            {/* 移动端为搜索与查询入口让出空间，主题切换保留在桌面端 */}
-            {!isMobile && <Tooltip title={themeMode === 'dark' ? '切换亮色' : '切换暗色'}>
-              <Button
-                type="text"
-                icon={themeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
-                onClick={toggleTheme}
-                style={{ width: 36, height: 36, fontSize: 16, borderRadius: 10 }}
-              />
-            </Tooltip>}
-
-            {/* 系统状态*/}
-            {!isMobile && <Tooltip title="系统运行正常">
-              <Badge dot status="success" offset={[-2, 2]}>
-                <Button type="text" icon={<DashboardOutlined />}
-                  style={{ width: 36, height: 36, borderRadius: 10 }} />
-              </Badge>
-            </Tooltip>}
-
-            {renderUserArea()}
-          </Space>
-        </Header>
-
-        {/* ─── 内容区─── */}
-        <Content
-          style={{
-            margin: isMobile ? '8px' : '16px',
-            paddingBottom: isMobile ? 64 : 0, // 为底部 TabBar 留空间
-          }}
-        >
-          {!isMobile && breadcrumbs.length > 1 && (
-            <div style={{ margin: '0 4px 12px', minHeight: 24 }}>{renderBreadcrumb()}</div>
-          )}
-          <div style={{
-            padding: isMobile ? 16 : 24,
-            minHeight: 360,
-            background: 'var(--bg-container)',
-            borderRadius: 16,
-            border: '1px solid var(--border-light)',
-            boxShadow: '0 1px 2px var(--shadow-color)',
-          }}>
-            <div key={location.pathname} className="page-enter">
-              <Outlet />
-            </div>
-          </div>
-          {/* ─── 全局页脚 ─── */}
-          <AppFooter />
-        </Content>
-
-      {/* ─── 移动端底部 TabBar ─── */}
+        {/* 移动端 Drawer */}
         {isMobile && (
-          <BottomTabBar onMenuOpen={() => setSidebarMobileOpen(true)} />
+          <Drawer
+            placement="left"
+            open={sidebarMobileOpen}
+            onClose={() => setSidebarMobileOpen(false)}
+            width={280}
+            bodyStyle={{ padding: 0 }}
+            headerStyle={{ display: 'none' }}
+            closable={false}
+          >
+            {sidebarContent}
+          </Drawer>
         )}
-      <CookieConsentBanner />
-      </Layout>
 
-      {/* 全局左侧悬浮入口：免费体验 AI 工具（ 个免费模型） */}
-      <FreeExperienceFab />
+        {/* 主区域*/}
+        <Layout style={{ background: 'var(--bg-base)' }}>
+          {/* ─── 顶栏 ─── */}
+          <Header
+            style={{
+              height: isMobile ? 48 : 56,
+              padding: isMobile ? '0 12px' : '0 24px',
+              background: 'var(--header-bg)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid var(--border)',
+              position: 'sticky',
+              top: 0,
+              zIndex: 50,
+              transition: 'background 0.3s',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: isMobile ? 4 : 12,
+                flex: 1,
+                minWidth: 0,
+              }}
+            >
+              {isMobile ? (
+                <Button
+                  type="text"
+                  icon={<MenuOutlined />}
+                  onClick={() => setSidebarMobileOpen(true)}
+                  style={{ fontSize: 18, width: 36, height: 36, flexShrink: 0 }}
+                />
+              ) : (
+                <Button
+                  type="text"
+                  icon={<MenuOutlined />}
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  style={{ fontSize: 16, width: 36, height: 36, flexShrink: 0 }}
+                />
+              )}
+              <a
+                href={BRAND_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="访问官网 aibak.site"
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 8,
+                  textDecoration: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: 800,
+                    fontSize: isMobile ? 16 : 19,
+                    color: 'var(--text-primary)',
+                    letterSpacing: '-0.3px',
+                  }}
+                >
+                  {BRAND_NAME}
+                </span>
+                {!isMobile && !isTablet && (
+                  <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--text-tertiary)' }}>
+                    {BRAND_SLOGAN}
+                  </span>
+                )}
+              </a>
+              <GlobalSearch compact={isMobile || isTablet} />
+              <SiteQueryMenu compact={isMobile || isTablet} />
+            </div>
 
-      {/* 右下角悬浮工具条：返回顶部 / 返回首页 / 上下翻页 */}
-      <ScrollFab />
+            <Space size={4}>
+              {/* 移动端为搜索与查询入口让出空间，主题切换保留在桌面端 */}
+              {!isMobile && (
+                <Tooltip title={themeMode === 'dark' ? '切换亮色' : '切换暗色'}>
+                  <Button
+                    type="text"
+                    icon={themeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+                    onClick={toggleTheme}
+                    style={{ width: 36, height: 36, fontSize: 16, borderRadius: 10 }}
+                  />
+                </Tooltip>
+              )}
 
-      {/* 左下角自动客服弹窗（接入云函数 4 模型，售前售后问答） */}
-      <CustomerServiceFab />
-      <CookieConsentBanner />
+              {/* 系统状态*/}
+              {!isMobile && (
+                <Tooltip title="系统运行正常">
+                  <Badge dot status="success" offset={[-2, 2]}>
+                    <Button
+                      type="text"
+                      icon={<DashboardOutlined />}
+                      style={{ width: 36, height: 36, borderRadius: 10 }}
+                    />
+                  </Badge>
+                </Tooltip>
+              )}
+
+              {renderUserArea()}
+            </Space>
+          </Header>
+
+          {/* ─── 内容区─── */}
+          <Content
+            style={{
+              margin: isMobile ? '8px' : '16px',
+              paddingBottom: isMobile ? 64 : 0, // 为底部 TabBar 留空间
+            }}
+          >
+            {!isMobile && breadcrumbs.length > 1 && (
+              <div style={{ margin: '0 4px 12px', minHeight: 24 }}>{renderBreadcrumb()}</div>
+            )}
+            <div
+              style={{
+                padding: isMobile ? 16 : 24,
+                minHeight: 360,
+                background: 'var(--bg-container)',
+                borderRadius: 16,
+                border: '1px solid var(--border-light)',
+                boxShadow: '0 1px 2px var(--shadow-color)',
+              }}
+            >
+              <div key={location.pathname} className="page-enter">
+                <Outlet />
+              </div>
+            </div>
+            {/* ─── 全局页脚 ─── */}
+            <AppFooter />
+          </Content>
+
+          {/* ─── 移动端底部 TabBar ─── */}
+          {isMobile && <BottomTabBar onMenuOpen={() => setSidebarMobileOpen(true)} />}
+        </Layout>
+
+        {/* 全局左侧悬浮入口：免费体验 AI 工具（ 个免费模型） */}
+        <FreeExperienceFab />
+
+        {/* 右下角悬浮工具条：返回顶部 / 返回首页 / 上下翻页 */}
+        <ScrollFab />
+
+        {/* 左下角自动客服弹窗（接入云函数 4 模型，售前售后问答） */}
+        <CustomerServiceFab />
+        <CookieConsentBanner />
       </Layout>
     </>
   );

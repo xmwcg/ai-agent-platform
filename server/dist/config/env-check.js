@@ -25,6 +25,8 @@ const AI_KEY_NAMES = [
     'DASHSCOPE_API_KEY',
     'DOUBAO_API_KEY',
     'ARK_API_KEY',
+    'AGNES_API_KEY',
+    'CLOUDBASE_FREE_API_KEY',
 ];
 const WECHAT_REQUIRED = [
     'WECHAT_MCH_ID',
