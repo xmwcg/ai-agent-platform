@@ -32,7 +32,7 @@ import authPasswordRoutes from './routes/auth-password';
 import adminSecurityRoutes from './routes/admin-security';
 import mcpRoutes from './routes/mcp';
 import compareRoutes from './routes/compare';
-import projectGradeRoutes from './routes/project-grade';
+// import projectGradeRoutes from './routes/project-grade'; // WIP: projectGrade 开发中
 import text2imgRoutes from './routes/text2img';
 import mediaByokRoutes from './routes/media-byok';
 import billingRoutes from './routes/billing';
@@ -155,7 +155,7 @@ app.use('/api/auth', authVerifyRoutes);
 app.use('/api/auth', authPasswordRoutes);
 app.use('/api', adminSecurityRoutes);
 app.use('/api/compare', compareRoutes);
-app.use('/api/project-grade', projectGradeRoutes);
+// app.use('/api/project-grade', projectGradeRoutes); // WIP: projectGrade 开发中
 app.use('/api/ai', aiLimiter(), aiRoutes);           // AI 端点：按用户级别限流
 app.use('/api/aibak', aiLimiter(), aibakChatRoutes);  // CloudBase 免费 AI：同样限流
 app.use('/api/knowledge', knowledgeRoutes);

@@ -268,7 +268,7 @@ router.get('/status', async (_req, res: Response) => {
       // jymkj-knowlage 网关状态
       knowledgeGateway: {
         available: gatewayInfo.available,
-        url: gatewayInfo.url,
+        method: gatewayInfo.method,
         models: gatewayInfo.models,
         env: gatewayInfo.env,
       },
@@ -286,7 +286,7 @@ router.get('/status', async (_req, res: Response) => {
       quotaSource: '小程序成长计划免费额度',
       knowledgeGateway: {
         available: gatewayInfo.available,
-        url: gatewayInfo.url,
+        method: gatewayInfo.method,
         models: gatewayInfo.models,
         env: gatewayInfo.env,
       },
