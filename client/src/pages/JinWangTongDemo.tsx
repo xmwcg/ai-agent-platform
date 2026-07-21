@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Modal, message } from 'antd';
 import { useAuthStore } from '@/stores/auth';
 import { useNavigate } from 'react-router-dom';
@@ -12,8 +12,14 @@ import {
   PlayCircleOutlined, DownloadOutlined, CrownOutlined, CheckCircleOutlined,
   ClockCircleOutlined, CloseCircleOutlined, ClusterOutlined,
   AppstoreOutlined, CodeOutlined, AuditOutlined, GlobalOutlined,
-  FileProtectOutlined, SwapOutlined, ShoppingCartOutlined,
+  FileProtectOutlined, SwapOutlined, ShoppingCartOutlined, WechatOutlined,
 } from '@ant-design/icons';
+import { QRCodeSVG } from 'qrcode.react';
+import { billingAPI, extractApiError } from '@/services/api';
+
+const WEWORK_KF_URL = 'https://work.weixin.qq.com/kfid/kfce20d584b0179916f';
+const PERSONAL_WECHAT_QR = '/wechat-qr.png';
+const SERVICE_PHONE = '13599530881';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -74,6 +80,80 @@ export default function JinWangTongDemo() {
   const [activeTab, setActiveTab] = useState('hardware');
   const [scanProgress, setScanProgress] = useState(0);
   const [scanning, setScanning] = useState(false);
+  const [buyLoading, setBuyLoading] = useState(false);
+  const [payQr, setPayQr] = useState<{ open: boolean; value: string; orderNo: string } | null>(null);
+  const pollRef = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+
+  const startPolling = (orderNo: string) => {
+    stopPolling();
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const r: any = await billingAPI.getOrderStatus(orderNo);
+        if (r?.data?.status === 'paid') {
+          stopPolling();
+          setPayQr((prev) => prev ? { ...prev, open: false } : null);
+          message.success('支付成功！License 已自动签发到您的账号，可前往个人中心下载');
+        } else if (r?.data?.status === 'expired') {
+          stopPolling();
+          message.warning('订单已过期，请重新下单');
+          setPayQr(null);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+  };
+
+  const closePayQr = () => {
+    stopPolling();
+    setPayQr(null);
+  };
+
+  const handleBuy = async () => {
+    if (!user) {
+      Modal.confirm({ title: '请先登录', content: '购买金网通需要登录 AIbak 账号。', okText: '去登录', cancelText: '取消', onOk: () => nav('/login') });
+      return;
+    }
+    setBuyLoading(true);
+    try {
+      const res: any = await billingAPI.createPrivateLicenseOrder({ packageId: 'ent-standard', provider: 'wechat' as any });
+      const payUrl = res?.data?.payParams?.code_url || res?.data?.payParams?.codeUrl || res?.data?.payUrl;
+      const orderNo = res?.data?.orderNo as string;
+      if (payUrl && orderNo) {
+        setPayQr({ open: true, value: payUrl, orderNo });
+        startPolling(orderNo);
+      } else {
+        message.success('已创建订单，请在订单管理中完成支付');
+        nav('/profile?tab=orders');
+      }
+    } catch (err) { message.error(extractApiError(err, '创建订单失败，请稍后重试')); }
+    finally { setBuyLoading(false); }
+  };
+
+  const openWechatService = () => {
+    Modal.info({
+      title: '联系客服',
+      content: (
+        <div style={{ textAlign: 'center' }}>
+          <Paragraph>选择您方便的客服方式</Paragraph>
+          <Button type="primary" icon={<WechatOutlined />} block size="large"
+            onClick={() => window.open(WEWORK_KF_URL, '_blank')}
+            style={{ marginBottom: 12, background: '#07c160', borderColor: '#07c160', borderRadius: 10, height: 44 }}>
+            打开企业微信客服
+          </Button>
+          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>扫码添加个人微信</Paragraph>
+          <img src={PERSONAL_WECHAT_QR} alt="个人微信二维码" style={{ width: 180, height: 180, borderRadius: 8, border: '1px solid #eee' }} />
+          <Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>服务热线：{SERVICE_PHONE}</Paragraph>
+        </div>
+      ),
+      width: 340,
+      okButtonProps: { style: { display: 'none' } },
+      cancelText: '关闭',
+      onCancel: () => {},
+    });
+  };
 
   const startDemoScan = () => {
     setScanning(true);
@@ -232,13 +312,13 @@ export default function JinWangTongDemo() {
               boxShadow: "0 4px 20px rgba(99,102,241,0.4)" }}>
             在线体验（免费演示）
           </Button>
-          <Button size="large" icon={<ShoppingCartOutlined />}
-            onClick={() => nav("/jinwangtong#pricing")}
+          <Button size="large" icon={<ShoppingCartOutlined />} loading={buyLoading}
+            onClick={handleBuy}
             style={{ borderRadius: 10, height: 48, padding: "0 28px", fontSize: 15, fontWeight: 600,
               background: "#fff", color: "#6366f1", border: "2px solid #6366f1" }}>
             立即购买 ¥299起
           </Button>
-          <Button size="large" ghost onClick={() => nav('/contact')}
+          <Button size="large" ghost icon={<WechatOutlined />} onClick={openWechatService}
             style={{ borderRadius: 10, height: 48, padding: '0 28px', fontSize: 15, color: '#07c160', borderColor: '#07c160' }}>
             联系客服
           </Button>
@@ -257,6 +337,7 @@ export default function JinWangTongDemo() {
       <Card style={{ borderRadius: 14, marginBottom: 24 }} title="📦 如何使用">
         <Steps direction="vertical" current={-1} items={[
           { title: '在线体验（无需下载）', description: '点击上方按钮进入 Web 在线演示，无需安装' },
+          { title: '在线购买并支付', description: '点击「立即购买」直接生成订单，扫码完成微信支付' },
           { title: '环境体检', description: '右键 PowerShell → 以管理员运行 .\\compat-check.ps1' },
           { title: '一键修复', description: '如有问题运行 .\\perms-fix.ps1 自动修复' },
           { title: '开始扫描', description: '运行 .\\wizard.ps1 打开交互式配置向导，选择需要的功能' },
@@ -273,7 +354,7 @@ export default function JinWangTongDemo() {
           在线体验满意后购买 · 永久买断 ¥299起 · 支付成功自动签发License · 立即下载安装包
         </Paragraph>
         <Space size={16}>
-          <Button size="large" onClick={() => nav('/jinwangtong#pricing')}
+          <Button size="large" icon={<ShoppingCartOutlined />} loading={buyLoading} onClick={handleBuy}
             style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>
             立即购买
           </Button>
@@ -283,6 +364,18 @@ export default function JinWangTongDemo() {
           </Button>
         </Space>
       </div>
+
+      {/* 微信支付二维码弹窗 */}
+      {payQr?.open && (
+        <Modal open={payQr.open} title="微信支付 · 金网通专业版" footer={null} onCancel={closePayQr} width={360} centered>
+          <div style={{ textAlign: 'center' }}>
+            <Paragraph>请使用微信扫描下方二维码完成支付</Paragraph>
+            <QRCodeSVG value={payQr.value} size={200} style={{ margin: '0 auto' }} />
+            <Paragraph type="secondary" style={{ marginTop: 12, fontSize: 12 }}>支付完成后 License 将自动签发到您的账号</Paragraph>
+            <Paragraph type="secondary" style={{ fontSize: 12 }}>订单号：{payQr.orderNo}</Paragraph>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

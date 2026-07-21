@@ -521,7 +521,8 @@ export const skillsAPI = {
   list: () => apiClient.get('/skills'),
   market: () => apiClient.get('/skills/market'),
   detail: (id: string) => apiClient.get(`/skills/${id}`),
-  invoke: (id: string, input: Record<string, any>) => apiClient.post(`/skills/${id}/invoke`, input),
+  invoke: (id: string, input: Record<string, any>, config?: { timeout?: number }) =>
+    apiClient.post(`/skills/${id}/invoke`, input, config),
   // 当前用户上传/安装的技能
   mine: () => apiClient.get('/skills/mine'),
   // 外部技能市场精选目录（公开）

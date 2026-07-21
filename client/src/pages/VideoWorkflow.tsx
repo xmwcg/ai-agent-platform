@@ -122,7 +122,7 @@ export default function VideoWorkflow() {
         payload.provider = model.slice(0, idx);
         payload.model = model;
       }
-      const res: any = await skillsAPI.invoke('video-pipeline', payload);
+      const res: any = await skillsAPI.invoke('video-pipeline', payload, { timeout: 300000 });
       const skillResult = res?.data?.result || res?.result || res?.data || res;
       if (skillResult?.ok === false) {
         setError(skillResult.error || '视频流水线执行失败');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Typography, Card, Tag, Button, Space, Row, Col, message, Modal, Divider, Steps, Descriptions } from 'antd';
 import {
@@ -10,12 +10,17 @@ import {
   WindowsOutlined, AppleOutlined, LinuxOutlined, SettingOutlined,
   TeamOutlined, AuditOutlined, RadarChartOutlined, WechatOutlined, ShoppingCartOutlined,
 } from '@ant-design/icons';
+import { QRCodeSVG } from 'qrcode.react';
 import { usePurchaseIntent } from '@/hooks/usePurchaseIntent';
 import { SalesCoach } from '@/components/SalesCoach';
 import { billingAPI, extractApiError } from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
 
 const { Title, Paragraph, Text } = Typography;
+
+const WEWORK_KF_URL = 'https://work.weixin.qq.com/kfid/kfce20d584b0179916f';
+const PERSONAL_WECHAT_QR = '/wechat-qr.png';
+const SERVICE_PHONE = '13599530881';
 
 const FEATURES = [
   { icon: <ScanOutlined />, name: '硬件全扫描', desc: '一键采集CPU/主板/内存/硬盘/GPU/网卡/显示器/BIOS完整资产信息，支持Windows/Linux/macOS', color: '#6366f1' },
@@ -66,9 +71,38 @@ const FAQ_ITEMS = [
 
 const JinWangTongPage: React.FC = () => {
   const [buyLoading, setBuyLoading] = useState<string | null>(null);
+  const [payQr, setPayQr] = useState<{ open: boolean; value: string; orderNo: string; pkgName: string } | null>(null);
+  const pollRef = useRef<number | null>(null);
   const { trackAction, tips, showPanel, dismissTips } = usePurchaseIntent('jinwangtong', '金网通计算机管理系统');
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+
+  const startPolling = (orderNo: string) => {
+    stopPolling();
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const r: any = await billingAPI.getOrderStatus(orderNo);
+        if (r?.data?.status === 'paid') {
+          stopPolling();
+          setPayQr((prev) => prev ? { ...prev, open: false } : null);
+          message.success('支付成功！License 已自动签发到您的账号');
+        } else if (r?.data?.status === 'expired') {
+          stopPolling();
+          message.warning('订单已过期，请重新下单');
+          setPayQr(null);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+  };
+
+  const closePayQr = () => {
+    stopPolling();
+    setPayQr(null);
+  };
 
   const handleBuy = async (pkgId: string, pkgName: string) => {
     trackAction('click_pricing', { comparedPlans: [pkgId] });
@@ -79,19 +113,40 @@ const JinWangTongPage: React.FC = () => {
     setBuyLoading(pkgId);
     try {
       const res: any = await billingAPI.createPrivateLicenseOrder({ packageId: pkgId, provider: 'wechat' as any });
-      const payUrl = (res as any)?.data?.payParams?.code_url || (res as any)?.data?.payUrl;
-      if (payUrl) {
-        Modal.info({
-          title: '请扫码支付',
-          content: <div style={{ textAlign: 'center' }}><Paragraph>请使用微信扫描下方二维码完成支付</Paragraph><img src={'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(payUrl)} alt="支付二维码" style={{ width: 200, height: 200 }} /><Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>支付完成后 License 将自动签发到您的账号</Paragraph></div>,
-          width: 360,
-        });
+      const payUrl = res?.data?.payParams?.code_url || res?.data?.payParams?.codeUrl || res?.data?.payUrl;
+      const orderNo = res?.data?.orderNo as string;
+      if (payUrl && orderNo) {
+        setPayQr({ open: true, value: payUrl, orderNo, pkgName });
+        startPolling(orderNo);
       } else {
         message.success('已创建 ' + pkgName + ' 订单，请在订单管理中完成支付');
         navigate('/profile?tab=orders');
       }
     } catch (err) { message.error(extractApiError(err, '创建订单失败，请稍后重试')); }
     finally { setBuyLoading(null); }
+  };
+
+  const openWechatService = () => {
+    Modal.info({
+      title: '联系客服',
+      content: (
+        <div style={{ textAlign: 'center' }}>
+          <Paragraph>选择您方便的客服方式</Paragraph>
+          <Button type="primary" icon={<WechatOutlined />} block size="large"
+            onClick={() => window.open(WEWORK_KF_URL, '_blank')}
+            style={{ marginBottom: 12, background: '#07c160', borderColor: '#07c160', borderRadius: 10, height: 44 }}>
+            打开企业微信客服
+          </Button>
+          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>扫码添加个人微信</Paragraph>
+          <img src={PERSONAL_WECHAT_QR} alt="个人微信二维码" style={{ width: 180, height: 180, borderRadius: 8, border: '1px solid #eee' }} />
+          <Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>服务热线：{SERVICE_PHONE}</Paragraph>
+        </div>
+      ),
+      width: 340,
+      okButtonProps: { style: { display: 'none' } },
+      cancelText: '关闭',
+      onCancel: () => {},
+    });
   };
 
   // 不再提供免费下载试用版。用户先在线体验，满意后购买 → 支付 → 自动签发 License → 下载安装包
@@ -187,12 +242,30 @@ const JinWangTongPage: React.FC = () => {
       <div style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', borderRadius: 16, padding: '48px 32px', textAlign: 'center', marginBottom: 24 }}>
         <Title level={2} style={{ color: '#fff', marginBottom: 8 }}>开始管理您的企业网络</Title>
         <Paragraph style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, marginBottom: 24 }}>在线体验满意后购买 · 永久买断 ¥299起 · 支付成功自动签发License</Paragraph>
-        <Space size={16}><Button size="large" icon={<DownloadOutlined />} onClick={handleViewDemo} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>免费下载试用</Button><Button size="large" ghost onClick={() => navigate('/contact')} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}>联系客服</Button></Space>
+        <Space size={16}>
+          <Button size="large" icon={<PlayCircleOutlined />} onClick={handleViewDemo} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: '#fff', color: '#6366f1', border: 'none' }}>在线体验</Button>
+          <Button size="large" icon={<CrownOutlined />} loading={buyLoading === 'ent-standard'} onClick={() => handleBuy('ent-standard', '专业版')} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 16, fontWeight: 600, background: '#10b981', color: '#fff', border: 'none' }}>立即购买 ¥299起</Button>
+          <Button size="large" ghost icon={<WechatOutlined />} onClick={openWechatService} style={{ borderRadius: 10, height: 48, padding: '0 32px', fontSize: 15, color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}>联系客服</Button>
+        </Space>
       </div>
 
       <div style={{ textAlign: 'center', padding: '16px 0 32px' }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>金网通计算机管理系统 V2 · AIbak 旗下产品 · <a onClick={() => navigate('/contact')} style={{ cursor: 'pointer' }}>技术支持</a> · <a onClick={() => navigate('/pricing')} style={{ cursor: 'pointer' }}>查看定价</a> · </Text>
-      </div>      <SalesCoach tips={tips} visible={showPanel} onDismiss={dismissTips} productName="金网通计算机管理系统" />
+        <Text type="secondary" style={{ fontSize: 12 }}>金网通计算机管理系统 V2 · AIbak 旗下产品 · <a onClick={openWechatService} style={{ cursor: 'pointer' }}>技术支持</a> · <a onClick={() => navigate('/pricing')} style={{ cursor: 'pointer' }}>查看定价</a></Text>
+      </div>
+
+      {/* 微信支付二维码弹窗 */}
+      {payQr?.open && (
+        <Modal open={payQr.open} title={`微信支付 · ${payQr.pkgName}`} footer={null} onCancel={closePayQr} width={360} centered>
+          <div style={{ textAlign: 'center' }}>
+            <Paragraph>请使用微信扫描下方二维码完成支付</Paragraph>
+            <QRCodeSVG value={payQr.value} size={200} style={{ margin: '0 auto' }} />
+            <Paragraph type="secondary" style={{ marginTop: 12, fontSize: 12 }}>支付完成后 License 将自动签发到您的账号</Paragraph>
+            <Paragraph type="secondary" style={{ fontSize: 12 }}>订单号：{payQr.orderNo}</Paragraph>
+          </div>
+        </Modal>
+      )}
+
+      <SalesCoach tips={tips} visible={showPanel} onDismiss={dismissTips} productName="金网通计算机管理系统" />
 
     </div>
   );
