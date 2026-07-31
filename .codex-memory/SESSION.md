@@ -1,7 +1,7 @@
 # 当前任务状态
 
 **项目**: NexMind Platform (ai-agent-platform)
-**分支**: main（代码提交 c625ffb；本地工作树仅保留审计生成的未跟踪文件）
+**分支**: main（运行时代码提交 c625ffb；最终会话记录提交 eb1cb8a；本地工作树仅保留审计生成的未跟踪文件）
 **日期**: 2026-07-31
 
 ## 当前任务
@@ -10,8 +10,8 @@
 ## 最新进度
 
 ### 2026-07-31 全站默认模型收敛与三端生产烟测
-- 本地 `main` / CNB `main` / CNB `deploy/production` 均为 `c625ffb`；生产源码、镜像 revision、`/opt/.cnb-deploy-sha` 均为 `c625ffb`。
-- GitHub `main`=`4493b870`、`deploy/production`=`f990d57c`，两分支 tree 均与本地 `HEAD` tree=`b8d29ce8` 完全一致；使用无父安全内容快照，避免历史密钥触发 GitHub Push Protection。
+- 运行时代码提交为 `c625ffb`，最终会话记录提交为 `eb1cb8a`；本地/CNB main/deploy、生产源码与 `/opt/.cnb-deploy-sha` 均为 `eb1cb8a`，server/client 镜像仍是由同一代码内容构建的 `c625ffb` 镜像。
+- GitHub `main`=`f17fe1ae`、`deploy/production`=`f17fe1ae`，两分支 tree=`df12602b` 与本地 `HEAD` tree 完全一致；使用无父安全内容快照，避免历史密钥触发 GitHub Push Protection。
 - 生产 Docker server/client 均健康，Caddy 配置校验通过，`aibak.site` 与 `www.aibak.site` 首页和 86 个前端路由均 HTTP 200。
 - 三端源码默认文本模型固定为 `agnes25/agnes-2.5-flash`；新增 19 个关键入口一致性门禁 `scripts/verify-default-ai-model.mjs`。
 - CNB 构建 `cnb-e96-1jusmmjn8` 的代码、测试和配置门禁通过，但镜像推送阶段因 `docker.cnb.cool` 返回 403 失败；生产使用同一 c625ffb 在服务器本地构建镜像完成部署。
