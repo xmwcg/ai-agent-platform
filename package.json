@@ -1,0 +1,50 @@
+{
+  "name": "ai-agent-platform",
+  "version": "0.1.0",
+  "description": "AI Agent Platform with Knowledge Management, Learning Center, and Creative Workshop",
+  "main": "server/dist/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "lint": "cd client && npm run lint",
+    "format": "cd client && npm run format",
+    "test": "npm run verify:default-ai-model && npm run test:server && npm run check:superpowers && npm run test:release && npm run test:client",
+    "test:server": "cd server && npm test",
+    "test:client": "cd client && npm test",
+    "test:release": "node --test deploy/release-contract.test.mjs deploy/verify-release.test.mjs",
+    "check:superpowers": "node scripts/check-superpowers-sync.cjs",
+    "auto:deploy": "node scripts/auto-deploy.cjs",
+    "auto:start": "node scripts/auto-deploy.cjs start",
+    "auto:stop": "node scripts/auto-deploy.cjs stop",
+    "auto:status": "node scripts/auto-deploy.cjs status",
+    "auto:log": "node scripts/auto-deploy.cjs log",
+    "seo:ping": "node scripts/ping-seo.mjs",
+    "local:dev": "bash scripts/local-dev.sh",
+    "local:prod": "bash scripts/local-prod.sh",
+    "local:stop": "docker compose -f docker-compose.local.yml down",
+    "local:logs": "docker compose -f docker-compose.local.yml logs -f",
+    "local:dev:ps": "powershell -ExecutionPolicy Bypass -File scripts/local-dev.ps1",
+    "local:prod:ps": "powershell -ExecutionPolicy Bypass -File scripts/local-prod.ps1",
+    "verify:default-ai-model": "node scripts/verify-default-ai-model.mjs"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "rag",
+    "knowledge-management",
+    "learning"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

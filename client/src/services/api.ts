@@ -1,0 +1,969 @@
+import axios, { AxiosInstance, AxiosError, type AxiosResponse } from 'axios';
+import { message } from 'antd';
+import { triggerQuotaModal } from '@/components/QuotaExceededModal';
+import { clearStoredAuth } from '@/lib/auth-token';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    returnFullResponse?: boolean;
+  }
+  interface InternalAxiosRequestConfig {
+    returnFullResponse?: boolean;
+  }
+}
+
+interface ApiErrorPayload {
+  code?: string;
+  error?: string;
+  message?: string;
+  resource?: string;
+  used?: number;
+  limit?: number;
+  currentPlan?: string;
+  upgradeUrl?: string;
+}
+
+// 普通 CRUD 保持快速失败；AI、扫描、媒体等长耗时接口必须显式覆盖，避免统一 10 秒误杀。
+export const API_TIMEOUT_MS = {
+  default: 10_000,
+  probe: 45_000,
+  customerService: 30_000,
+  aiText: 90_000,
+  projectScan: 120_000,
+  media: 190_000,
+} as const;
+
+// 创建 axios 实例
+export const apiClient: AxiosInstance = axios.create({
+  baseURL: '/api',
+  timeout: API_TIMEOUT_MS.default,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+/**
+ * 统一从 axios 错误中提取可展示给用户的提示文案。
+ * 优先取后端统一错误体 { error } / { message }，其次网络层兜底。
+ */
+export function extractApiError(err: unknown, fallback = '操作失败，请稍后重试'): string {
+  if (axios.isAxiosError(err)) {
+    const e = err as AxiosError<{ error?: string; message?: string }>;
+    const data = e.response?.data;
+    if (data?.error) return data.error;
+    if (data?.message) return data.message;
+    if (e.code === 'ECONNABORTED' || /timeout/i.test(e.message || '')) {
+      return '请求处理时间较长，请稍后重试；请勿连续重复提交';
+    }
+    if (e.message) return e.message;
+  }
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
+
+// 请求拦截器
+apiClient.interceptors.request.use(
+  (config) => {
+    // 可以在这里添加 token
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+async function normalizeBlobErrorPayload(
+  err: AxiosError<ApiErrorPayload | Blob>
+): Promise<ApiErrorPayload | undefined> {
+  const response = err.response;
+  const responseData = response?.data;
+  if (!response || typeof Blob === 'undefined' || !(responseData instanceof Blob)) {
+    return responseData as ApiErrorPayload | undefined;
+  }
+  try {
+    const parsed = JSON.parse(await responseData.text()) as ApiErrorPayload;
+    (response as AxiosResponse<ApiErrorPayload>).data = parsed;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+// 响应拦截器：JSON 接口返回 data；文件交付可显式保留 headers 和状态码。
+apiClient.interceptors.response.use(
+  (response) => (response.config.returnFullResponse ? response : response.data),
+  async (error) => {
+    const err = error as AxiosError<ApiErrorPayload | Blob>;
+    const data = await normalizeBlobErrorPayload(err);
+    const status = err.response?.status;
+    // ─── 全局统一收口「无 Token / Token 失效 / 无授权」───
+    // 此前响应拦截器只 console.error，token 过期后所有请求拿 401 却无处理，
+    // 用户被卡在「无授权」死循环。这里统一清理登录态并跳转登录页。
+    if (status === 401) {
+      const path = window.location.pathname;
+      // 避免在公开页面因过期 token 而强制跳转登录（首页、定价、课程等无需登录即可访问）
+      const PUBLIC_PATHS = ['/', '/login', '/register', '/pricing', '/courses',
+        '/knowledge', '/tools', '/about', '/contact', '/terms', '/privacy',
+        '/platform-status', '/metrics', '/project-grade', '/project-grade/demo',
+        '/compare', '/learning-path', '/marketplace', '/skills', '/transync',
+        '/jinwangtong-demo', '/quickstart', '/sandbox', '/lab', '/code',
+        '/creative', '/video-workflow', '/text2img', '/studio', '/xhs',
+        '/workflows', '/team', '/points-center', '/referral', '/refund-policy',
+        '/refund-request', '/points-rules', '/cookies', '/calendar', '/plugins',
+        '/customer-service', '/distribution', '/partners', '/join', '/jinwangtong',
+        '/aibak-chat', '/ai-chat', '/model-config', '/query-center',
+        '/landing/saas', '/landing/ecommerce', '/landing/fintech'];
+      const isPublic = PUBLIC_PATHS.some(p => path === p || path.startsWith(p + '/'));
+      const requestHadToken = Boolean(err.config?.headers?.Authorization);
+      if (requestHadToken) {
+        clearStoredAuth();
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+      }
+      // 定价页购买属于强认证动作：旧 Token 失效时直接重新登录，不再误报“微信支付失败”。
+      const shouldRedirectToLogin = requestHadToken && (!isPublic || path === '/pricing');
+      if (shouldRedirectToLogin) {
+        message.error(path === '/pricing' ? '登录已过期，请重新登录后继续支付' : '登录已过期，请重新登录');
+        window.location.href = `/login?redirect=${encodeURIComponent(path + window.location.search)}`;
+        // 挂起该 Promise，避免支付弹窗 catch 再次显示后端 Token 错误
+        return new Promise(() => {});
+      }
+    }
+    // ─── 配额/成本/套餐 相关错误码：统一弹付费引导，打通「免费→付费」闭环 ───
+    const quotaCodes = [
+      'QUOTA_EXCEEDED',
+      'COST_BUDGET_EXCEEDED',
+      'PLAN_REQUIRED',
+      'API_QUOTA_EXCEEDED',
+      'ANON_MEDIA_QUOTA_EXCEEDED',
+      'ANON_FREE_LIMIT',
+      'PROJECT_GRADE_QUOTA_EXCEEDED',
+      'PROJECT_GRADE_REPORT_DOWNLOAD_PLAN_REQUIRED',
+      'PROJECT_GRADE_REPORT_PUBLISH_PLAN_REQUIRED',
+    ];
+    if (data?.code && quotaCodes.includes(data.code)) {
+      triggerQuotaModal({
+        code: data.code,
+        message: data.error || data.message,
+        resource: data.resource,
+        used: data.used,
+        limit: data.limit,
+        currentPlan: data.currentPlan,
+        upgradeUrl: data.upgradeUrl,
+      });
+      return Promise.reject(error);
+    }
+    console.error('❌ API Error:', extractApiError(error));
+    return Promise.reject(error);
+  }
+);
+
+// 知识文档 API
+export const knowledgeAPI = {
+  // 创建文档
+  create: (data: {
+    title: string;
+    content: string;
+    tags?: string[];
+    categories?: string[];
+    isPublic?: boolean;
+  }) => apiClient.post('/knowledge', data),
+
+  // 获取文档列表
+  list: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    tags?: string;
+    categories?: string;
+    sortBy?: string;
+    order?: 'asc' | 'desc';
+  }) => apiClient.get('/knowledge', { params }),
+
+  // 获取文档详情
+  getById: (id: string) => apiClient.get(`/knowledge/${id}`),
+
+  // 更新文档
+  update: (id: string, data: any) => apiClient.put(`/knowledge/${id}`, data),
+
+  // 删除文档
+  delete: (id: string) => apiClient.delete(`/knowledge/${id}`),
+
+  // 获取标签和分类
+  getMeta: () => apiClient.get('/knowledge/meta/tags-and-categories'),
+  // 业务分类树（知识库 v2 固定分类）
+  getCategoryTree: () => apiClient.get('/knowledge/meta/category-tree'),
+};
+
+// 知识图谱 API
+export const knowledgeGraphAPI = {
+  get: (params?: {
+    teamId?: string;
+    includeTags?: boolean;
+    includeCategories?: boolean;
+    minSharedTags?: number;
+    limit?: number;
+  }) => apiClient.get('/knowledge-graph', { params }),
+};
+
+// 实践沙盒 API
+export const sandboxAPI = {
+  run: (data: { language: string; code: string; mode?: string }) =>
+    apiClient.post('/sandbox/run', data, { timeout: 60000 }),
+  status: () => apiClient.get('/sandbox/status', { timeout: 15000 }),
+};
+
+// AI 聊天 API
+export const aiAPI = {
+  // 发送聊天消息
+  chat: (data: {
+    message: string;
+    history?: any[];
+    sessionId?: string;
+    provider?: string;
+    model?: string;
+    toolId?: string;
+    config?: { systemPrompt?: string; temperature?: number; maxTokens?: number };
+  }) => apiClient.post('/ai/chat', data, { timeout: 90000 }),
+
+  // 获取可用模型（旧：仅 provider 维度，保留兼容）
+  getModels: () => apiClient.get('/ai/models'),
+
+  // 测试 Provider 连接
+  testProvider: (provider: string) => apiClient.get(`/ai/test/${provider}`),
+
+  // 提示词优化（免费增值能力，平台免费模型执行，不消耗用户配额）
+  promptOptimize: (data: { prompt: string; direction?: string }) =>
+    apiClient.post('/ai/prompt-optimize', data, { timeout: 60000 }),
+};
+
+// AI 网关 API（统一模型选择器数据源：内置 + 第三方自定义模型）
+export const gatewayAPI = {
+  // 列出全部可选模型（内置厂商 + 用户自定义 mc_<id>）
+  getModels: () => apiClient.get('/gateway/models'),
+};
+
+export default apiClient;
+
+// 计费 / 订阅 API
+export type PaymentProvider = 'wechat';
+
+export interface CreateBillingOrderInput {
+  plan: 'free' | 'pro' | 'max' | 'team';
+  period: 'monthly' | 'yearly';
+  provider?: PaymentProvider;
+  /**
+   * 购买来源：通用平台 / 智评通 / 金网通 / TranSync。
+   * - platform/project_grade：通用 AI 平台与智评通的归因
+   * - jinwangtong/zhipingtong/transync：产品专用订阅，便于后续按 sourceProduct+packageId 履约
+   */
+  sourceProduct?: 'platform' | 'project_grade' | 'jinwangtong' | 'zhipingtong' | 'transync' | 'guard';
+  /**
+   * 产品专用套餐 id（如 zpt_enterprise / ts_team / jwt_pro）。
+   * 仅当 sourceProduct 是产品专用枚举时填写；后端会写入 Order.packageId 便于产品履约。
+   */
+  productPackageId?: string;
+  returnTo?: string;
+  idempotencyKey?: string;
+}
+
+export const billingAPI = {
+  getPlans: () => apiClient.get('/billing/plans'),
+  getSubscription: () => apiClient.get('/billing/subscription'),
+  getCreditsPackages: () => apiClient.get('/billing/credits-packages'),
+  createOrder: (data: CreateBillingOrderInput) => apiClient.post('/billing/orders', data),
+  createCreditsOrder: (data: { packageId: string; provider?: PaymentProvider }) =>
+    apiClient.post('/billing/credits-packages/order', data),
+  // 私有化授权包列表（企业版）
+  getPrivateLicensePackages: () => apiClient.get('/billing/private-license-packages'),
+  // 购买私有化授权（企业版），复用现有微信支付流程
+  createPrivateLicenseOrder: (data: { packageId: string; provider?: PaymentProvider }) =>
+    apiClient.post('/billing/private-license/order', data),
+  // 毛利看板（仅 Admin，后端 requireAdmin 守卫，不对客户开放）
+  getProfitSummary: (month?: string) =>
+    apiClient.get('/billing/profit-summary', { params: month ? { month } : {} }),
+  // 查询订单支付状态（前端扫码后轮询；真实网关会主动查单兜底激活）
+  getOrderStatus: (orderNo: string) => apiClient.get(`/billing/orders/${orderNo}/status`),
+  cancelSubscription: () => apiClient.post('/billing/subscription/cancel'),
+  getOrders: () => apiClient.get('/billing/orders/history'),
+  requestRefund: (data: { orderNo: string; reason: string; description?: string }) =>
+    apiClient.post('/billing/refunds', data),
+  getMyRefunds: () => apiClient.get('/billing/my-refunds'),
+  getOrderDetail: (orderNo: string) => apiClient.get(`/billing/orders/${orderNo}/detail`),
+  getPaymentStatus: () => apiClient.get('/billing/payment-status'),
+  // 已启用的支付方式（前端据此动态展示入口，缺密钥的渠道自动隐藏）
+  getPaymentMethods: () => apiClient.get('/billing/payment-methods'),
+  getWebhookEvents: (params?: { page?: number; limit?: number; status?: string }) =>
+    apiClient.get('/billing/webhook-events', { params }),
+};
+
+// 模型发布日历 API
+export const modelCalendarAPI = {
+  list: (params?: { vendor?: string; type?: string; from?: string; to?: string }) =>
+    apiClient.get('/model-calendar', { params }),
+  getById: (id: string) => apiClient.get(`/model-calendar/${id}`),
+  create: (data: {
+    modelName: string;
+    vendor: string;
+    releaseDate: string;
+    type?: 'release' | 'update' | 'deprecation';
+    description?: string;
+    highlights?: string[];
+  }) => apiClient.post('/model-calendar', data),
+};
+
+// 学习路径 API
+export const learningPathAPI = {
+  templates: (level: 'beginner' | 'intermediate' | 'advanced') =>
+    apiClient.get('/learning-path/templates', { params: { level } }),
+  generate: (data: {
+    level?: 'beginner' | 'intermediate' | 'advanced';
+    goal?: string;
+    interests?: string;
+  }) => apiClient.post('/learning-path/generate', data, { timeout: API_TIMEOUT_MS.aiText }),
+};
+
+export const projectGradeAPI = {
+  getRules: () => apiClient.get('/project-grade/rules'),
+  getBaseline: () => apiClient.get('/project-grade/baseline'),
+  // Temporary Batch 0 evaluation is deliberately non-persistent. Do not present it as an external scan.
+  evaluate: (payload: { projectName: string; projectType?: string; projectUrl?: string }) =>
+    apiClient.post('/project-grade/evaluate', payload),
+  // Authenticated commercial entitlement snapshot. The server remains the final authority.
+  getEntitlements: () => apiClient.get('/project-grade/entitlements'),
+  // Authenticated project workspace. The server remains the authority for RBAC and persistence scope.
+  listProjects: () => apiClient.get('/project-grade/projects'),
+  createProject: (payload: {
+    projectName: string;
+    projectType: 'website' | 'saas' | 'ai_application';
+    projectUrl?: string;
+    description?: string;
+  }) => apiClient.post('/project-grade/projects', payload),
+  listProjectRuns: (projectId: string, limit = 20) =>
+    apiClient.get(`/project-grade/projects/${projectId}/evaluations`, {
+      params: { limit },
+    }),
+  listProjectReports: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/reports`, {
+      params: { limit },
+    }),
+  publishProjectReport: (projectId: string, runId: string, payload?: { title?: string }) =>
+    apiClient.post(`/project-grade/projects/${projectId}/evaluations/${runId}/report`, payload),
+  revokeProjectReport: (projectId: string, publicId: string, reason: string) =>
+    apiClient.post(`/project-grade/projects/${projectId}/reports/${publicId}/revoke`, { reason }),
+  listProjectReportDeliveries: (projectId: string, publicId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/reports/${publicId}/deliveries`, {
+      params: { limit },
+    }),
+  downloadProjectReportPdf: (projectId: string, publicId: string) =>
+    apiClient.get<Blob>(`/project-grade/projects/${projectId}/reports/${publicId}/download.pdf`, {
+      responseType: 'blob',
+      timeout: 120000,
+      returnFullResponse: true,
+    }),
+  runProjectEvaluation: (projectId: string) =>
+    apiClient.post(`/project-grade/projects/${projectId}/evaluations`),
+  // Batch 1 quick scan always uses the URL already registered on the project.
+  runProjectUrlQuickScan: (projectId: string) =>
+    apiClient.post(`/project-grade/projects/${projectId}/url-scan`, undefined, { timeout: API_TIMEOUT_MS.projectScan }),
+  listProjectUrlScans: (projectId: string, limit = 20) =>
+    apiClient.get(`/project-grade/projects/${projectId}/url-scans`, {
+      params: { limit },
+    }),
+  // Batch 2 source scan accepts only the project identifier. The server selects the registered root.
+  runProjectSourceScan: (projectId: string) =>
+    apiClient.post(`/project-grade/projects/${projectId}/source-scan`, undefined, { timeout: API_TIMEOUT_MS.projectScan }),
+  listProjectSourceScans: (projectId: string, limit = 20) =>
+    apiClient.get(`/project-grade/projects/${projectId}/source-scans`, {
+      params: { limit },
+    }),
+  getProjectSourceEvidenceDraft: (projectId: string, sourceScanId: string) =>
+    apiClient.get(
+      `/project-grade/projects/${projectId}/source-scans/${sourceScanId}/evidence-draft`
+    ),
+  listProjectSourceEvidenceAdoptions: (projectId: string, limit = 20) =>
+    apiClient.get(`/project-grade/projects/${projectId}/source-evidence-adoptions`, {
+      params: { limit },
+    }),
+  adoptProjectSourceEvidence: (
+    projectId: string,
+    payload: {
+      sourceScanId: string;
+      expectedDraftSetHash: string;
+      adoptionVersion: 1;
+    }
+  ) => apiClient.post(`/project-grade/projects/${projectId}/source-evidence-adoptions`, payload),
+  runProjectSourceEvidenceEvaluation: (projectId: string, payload: { adoptionId: string }) =>
+    apiClient.post(`/project-grade/projects/${projectId}/evaluations/source-evidence`, payload),
+  getRun: (runId: string) => apiClient.get(`/project-grade/evaluations/${runId}`),
+  listProjectEvidence: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/evidence`, {
+      params: { limit },
+    }),
+  listProjectFindings: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/findings`, {
+      params: { limit },
+    }),
+  updateFindingWorkflow: (
+    projectId: string,
+    findingId: string,
+    payload: {
+      status:
+        | 'open'
+        | 'in_progress'
+        | 'ready_for_retest'
+        | 'verified'
+        | 'accepted_risk'
+        | 'false_positive';
+      note: string;
+    }
+  ) =>
+    apiClient.patch(`/project-grade/projects/${projectId}/findings/${findingId}/workflow`, payload),
+  listProjectRemediations: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/remediations`, {
+      params: { limit },
+    }),
+  createRemediation: (
+    projectId: string,
+    findingId: string,
+    payload?: { assigneeId?: string; dueAt?: string; slaHours?: number }
+  ) =>
+    apiClient.post(
+      `/project-grade/projects/${projectId}/findings/${findingId}/remediations`,
+      payload
+    ),
+  updateRemediation: (
+    projectId: string,
+    taskId: string,
+    payload: {
+      status?: 'open' | 'in_progress' | 'blocked' | 'ready_for_retest' | 'verified' | 'cancelled';
+      assigneeId?: string;
+      dueAt?: string;
+      slaHours?: number;
+      completionNote?: string;
+      retestRunId?: string;
+    }
+  ) => apiClient.patch(`/project-grade/projects/${projectId}/remediations/${taskId}`, payload),
+  listProjectAudit: (projectId: string, limit = 50) =>
+    apiClient.get(`/project-grade/projects/${projectId}/audit`, {
+      params: { limit },
+    }),
+  rebuildProjection: (runId: string) =>
+    apiClient.post(`/project-grade/evaluations/${runId}/projection/rebuild`),
+};
+
+// 代码解释 API
+export const codeAPI = {
+  explain: (data: {
+    code: string;
+    language: string;
+    level?: 'brief' | 'detailed' | 'teaching';
+    context?: string;
+  }) => apiClient.post('/code/explain', data, { timeout: 60000 }),
+  example: (data: { concept: string; language: string }) =>
+    apiClient.post('/code/example', data, { timeout: 60000 }),
+  languages: () => apiClient.get('/code/languages'),
+};
+
+// 个人中心 API
+export const profileAPI = {
+  get: () => apiClient.get('/auth/profile'),
+  update: (data: { name?: string; avatar?: string }) => apiClient.put('/auth/profile', data),
+};
+
+// 认证 API（微信/抖音 OAuth + 账号绑定/解绑）
+export const authAPI = {
+  // 登录方式可用状态
+  loginMethods: () => apiClient.get('/auth/login-methods'),
+  // 微信扫码登录
+  wechatQr: () => apiClient.get('/auth/wechat/qr'),
+  // 抖音扫码登录（PC）
+  douyinQr: () => apiClient.get('/auth/douyin/qr'),
+  // 抖音 H5 跳转登录（移动端）
+  douyinH5: () => apiClient.get('/auth/douyin/h5'),
+  // 账号绑定状态查询
+  getBindings: () => apiClient.get('/auth/bindings'),
+  // 绑定微信（传 OAuth code）
+  bindWechat: (code: string) => apiClient.post('/auth/bind/wechat', { code }),
+  // 绑定抖音
+  bindDouyin: (code: string) => apiClient.post('/auth/bind/douyin', { code }),
+  // 解绑微信（若最后登录方式则后端返回 400 + NEED_PASSWORD）
+  unbindWechat: () => apiClient.post('/auth/unbind/wechat', {}),
+  // 解绑抖音
+  unbindDouyin: () => apiClient.post('/auth/unbind/douyin', {}),
+  // 登录后修改密码（后端强制撤销其他设备会话）
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    apiClient.put('/auth/change-password', data),
+};
+
+// 大模型配置中心 API
+export const modelConfigAPI = {
+  list: () => apiClient.get('/model-config'),
+  available: () => apiClient.get('/model-config/available'),
+  create: (data: {
+    name: string;
+    provider: string;
+    baseURL: string;
+    apiKey: string;
+    models?: string[];
+    defaultModel: string;
+    description?: string;
+  }) => apiClient.post('/model-config', data),
+  update: (id: string, data: any) => apiClient.put(`/model-config/${id}`, data),
+  remove: (id: string) => apiClient.delete(`/model-config/${id}`),
+  setDefault: (id: string) => apiClient.post(`/model-config/${id}/set-default`, {}),
+  test: (id: string, model?: string) =>
+    apiClient.post(`/model-config/${id}/test`, model ? { model } : {}, { timeout: API_TIMEOUT_MS.probe }),
+  builtinProviders: () => apiClient.get('/model-config/providers/builtin'),
+  // 自动获取厂商模型清单（15s 超时 + 服务端缓存，修复慢/网络错误）
+  providerCatalog: () => apiClient.get('/model-config/providers/catalog'),
+  fetchModels: (data: { providerId: string; endpointId?: string; apiKey: string }) =>
+    apiClient.post('/model-config/providers/fetch-models', data, { timeout: 30000 }),
+  // 平台免费额度（云函数 4 个免费模型）元信息
+  aibakFree: () => apiClient.get('/model-config/providers/aibak-free'),
+};
+
+// 智能客服 API
+export const customerServiceAPI = {
+  list: () => apiClient.get('/customer-service'),
+  create: (data: any) => apiClient.post('/customer-service', data),
+  update: (id: string, data: any) => apiClient.put(`/customer-service/${id}`, data),
+  remove: (id: string) => apiClient.delete(`/customer-service/${id}`),
+  embedScript: (id: string) => apiClient.get(`/customer-service/${id}/embed-script`),
+  sessions: (id: string) => apiClient.get(`/customer-service/${id}/sessions`),
+  // 合规审计日志（可信客服差异化能力）
+  auditLogs: (
+    id: string,
+    params?: {
+      from?: string;
+      to?: string;
+      escalatedOnly?: boolean;
+      minSatisfaction?: number;
+      page?: number;
+      pageSize?: number;
+    }
+  ) => apiClient.get(`/customer-service/${id}/audit-logs`, { params }),
+  auditExport: (id: string, format: 'json' | 'csv' = 'csv') =>
+    apiClient.get(`/customer-service/${id}/audit-logs/export?format=${format}`, {
+      responseType: 'blob',
+    }),
+  auditStats: (id: string) => apiClient.get(`/customer-service/${id}/audit-stats`),
+  // 公开对话（嵌入脚本调用）
+  chatPublic: (
+    embedCode: string,
+    data: { message: string; visitorId?: string; sessionId?: string }
+  ) => apiClient.post(`/cs/chat/${embedCode}`, data, { timeout: API_TIMEOUT_MS.customerService }),
+};
+
+// 工具箱 API（翻译/方案/转换/媒体生成）
+export const toolsAPI = {
+  entitlements: () => apiClient.get('/tools/entitlements'),
+  languages: () => apiClient.get('/tools/translate/languages'),
+  translate: (data: { text: string; targetLang: string; sourceLang?: string }) =>
+    apiClient.post('/tools/translate', data, { timeout: API_TIMEOUT_MS.aiText }),
+  generatePlan: (data: {
+    topic: string;
+    type?: string;
+    audience?: string;
+    length?: string;
+    requirements?: string;
+  }) => apiClient.post('/tools/plan', data, { timeout: API_TIMEOUT_MS.aiText }),
+  convertFormats: () => apiClient.get('/tools/convert/formats'),
+  convert: (data: {
+    fileName: string;
+    sourceFormat: string;
+    targetFormat: string;
+    content?: string;
+  }) => apiClient.post('/tools/convert', data),
+  mediaTypes: () => apiClient.get('/tools/media/types'),
+  mediaGenerate: (data: {
+    type: 'image2image' | 'text2video' | 'image2video';
+    prompt: string;
+    imageBase64?: string;
+    negativePrompt?: string;
+    duration?: number;
+    size?: string;
+    style?: string;
+  }) => apiClient.post('/tools/media', data, { timeout: API_TIMEOUT_MS.media }),
+  mediaProviders: () => apiClient.get('/tools/media/providers'),
+  mediaTask: (provider: string, taskId: string) =>
+    apiClient.get(`/tools/media/task/${provider}/${taskId}`),
+};
+
+// 团队 RBAC API
+export const teamAPI = {
+  create: (data: { name: string; plan?: string }) => apiClient.post('/team', data),
+  mine: () => apiClient.get('/team/mine'),
+  get: (id: string) => apiClient.get(`/team/${id}`),
+  invite: (id: string, data: { userId: string; role?: string }) =>
+    apiClient.post(`/team/${id}/members`, data),
+  updateRole: (id: string, userId: string, data: { role: string }) =>
+    apiClient.put(`/team/${id}/members/${userId}`, data),
+  remove: (id: string, userId: string) => apiClient.delete(`/team/${id}/members/${userId}`),
+  removeTeam: (id: string) => apiClient.delete(`/team/${id}`),
+  generateInvite: (id: string) => apiClient.post(`/team/${id}/invite`),
+  revokeInvite: (id: string) => apiClient.delete(`/team/${id}/invite`),
+  joinViaInvite: (code: string) => apiClient.post(`/team/join/${code}`),
+  getAudit: (id: string, params?: { page?: number; pageSize?: number; action?: string }) =>
+    apiClient.get(`/team/${id}/audit`, { params }),
+};
+
+// 开放 API 市场（按量计费） API
+export const marketplaceAPI = {
+  createKey: (data: {
+    name: string;
+    quotaDaily?: number;
+    scopes?: string[];
+    creditsEnabled?: boolean;
+  }) => apiClient.post('/marketplace/api-keys', data),
+  listKeys: () => apiClient.get('/marketplace/api-keys'),
+  revokeKey: (id: string) => apiClient.delete(`/marketplace/api-keys/${id}`),
+  usage: () => apiClient.get('/marketplace/usage'),
+  /** 用量报表（按密钥每日聚合） */
+  usageReport: (from: string, to: string) =>
+    apiClient.get('/marketplace/usage/report', { params: { from, to } }),
+  /** 用量导出下载（CSV） */
+  exportUsage: (from: string, to: string) =>
+    apiClient.get('/marketplace/usage/export', {
+      params: { from, to, format: 'csv' },
+      responseType: 'blob',
+    }),
+  /** 切换积分抵扣开关 */
+  toggleCredits: (id: string) => apiClient.patch(`/marketplace/api-keys/${id}/toggle-credits`),
+};
+
+// 媒体生成 BYOK（用户自带 Key 管理）API
+export type MediaByokProvider = 'hunyuan' | 'keling' | 'jimeng';
+export interface MediaByokKey {
+  _id?: string;
+  provider: MediaByokProvider;
+  label: string;
+  secretIdMask?: string;
+  secretKeyMask: string;
+  enabled: boolean;
+  createdAt?: string;
+}
+export const byokAPI = {
+  list: () => apiClient.get('/media-keys'),
+  upsert: (data: { provider: string; secretId?: string; secretKey: string; enabled?: boolean }) =>
+    apiClient.post('/media-keys', data),
+  remove: (provider: string) => apiClient.delete(`/media-keys/${provider}`),
+};
+
+// 部署自检 / 健康看板 API
+export const diagnosticsAPI = {
+  check: () => apiClient.get('/diagnostics'),
+};
+export interface FunnelStage {
+  label: string;
+  key: string;
+  count: number;
+  rateFromPrevious: number;
+  rateFromTop: number;
+}
+
+export interface ConversionFunnelResponse {
+  period: { from: string; to: string; label: string };
+  stages: FunnelStage[];
+  summary: {
+    totalVisitors: number;
+    registeredUsers: number;
+    paidUsers: number;
+    reportPublishes: number;
+    overallConversionRate: number;
+    attributedRegistrations: number;
+    attributionRate: number;
+    avgTimeToRegisterMinutes: number;
+  };
+}
+
+
+export interface UserMyStats {
+  membership: { plan: string; expiresAt: string | null; credits: number; memberSince: string } | null;
+  projectStats: { total: number; active: number; archived: number; averageScore: number };
+  reportStats: { total: number; published: number; avgScore: string; latestVerdict: any };
+  orderStats: { total: number; paidOrders: number; totalSpentYuan: number };
+  recentReports: any[];
+  recentProjects: any[];
+}
+
+export interface OpsSnapshot {
+  northStar: { wau: number; wauTarget: number; wowGrowth: number };
+  acquisition: { signupsLast7d: number; newCreatorsLast7d: number };
+  activation: { activatedLast7d: number; activationRate: number };
+  retention: { weeklyRetentionRate: number; returningCreators: number };
+  revenue: { mrr: number; paidUsers: number; arpu: number; ordersLast7d: number };
+  referral: {
+    referralSignupsLast7d: number;
+    publicApiCallsLast7d: number;
+    quotaHitsLast7d: number;
+  };
+  trend: { week: string; wau: number }[];
+  revenueTrend: { month: string; mrr: number; paidUsers: number }[];
+  signupTrend: { month: string; count: number }[];
+  planBreakdown: { plan: string; count: number }[];
+}
+
+export interface PublicOpsMetrics {
+  totalCreators: number;
+  weeklyActiveCreators: number;
+  serviceOnline: boolean;
+}
+
+export interface OpsDashboardData {
+  system: {
+    cpu: number;
+    memory: { total: number; free: number; usedPercent: number };
+    disk: { path: string; totalGb: number; usedGb: number; availableGb: number; usedPercent: number } | null;
+    uptime: number;
+    platform: string;
+    hostname: string;
+  };
+  services: Record<string, { status: string; port: number | null }>;
+  models: { count: number; providers: string[] };
+  ops: Partial<OpsSnapshot>;
+  public: PublicOpsMetrics;
+  alerts: Array<{ level: 'critical' | 'warning' | 'info'; message: string; fix?: string }>;
+  usage: {
+    period: string;
+    requests: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    creditsDeducted: number;
+    costFen: number;
+    fallbackRequests: number;
+    byProvider: Array<{ provider: string; model: string; requests: number; totalTokens: number }>;
+    byTool: Array<{ toolId: string; requests: number; totalTokens: number; creditsDeducted: number }>;
+  };
+  members: {
+    totalUsers: number;
+    paidUsers: number;
+    freeUsers: number;
+    creditsBalance: number;
+    planBreakdown: Array<{ plan: string; count: number }>;
+  };
+  traffic: {
+    aiRequests24h: number;
+    apiRequests24h: number;
+    processRequests: { total: number; active: number; errors: number; errorRate: number };
+    successRate: number;
+    p95Ms: number;
+    p99Ms: number;
+    errors5xxToday: number;
+  };
+  topology: {
+    nodes: Array<{ id: string; label: string; status: string }>;
+    edges: string[][];
+  };
+  timestamp: string;
+}
+
+export const opsAPI = {
+  snapshot: () => apiClient.get<{ success: boolean; data: OpsSnapshot }>('/ops/snapshot'),
+  dashboard: () => apiClient.get<{ success: boolean; data: OpsDashboardData }>('/ops/dashboard'),
+  publicMetrics: () => apiClient.get<{ success: boolean; data: PublicOpsMetrics }>('/ops/public'),
+  myStats: () => apiClient.get<{ success: boolean; data: UserMyStats }>('/ops/my-stats'),
+};
+
+// 技能市场 API（agency-agents 风格名册 + 调用 + 导入导出 + 外部市场）
+export const skillsAPI = {
+  list: () => apiClient.get('/skills'),
+  market: () => apiClient.get('/skills/market'),
+  detail: (id: string) => apiClient.get(`/skills/${id}`),
+  invoke: (id: string, input: Record<string, any>, config?: { timeout?: number }) =>
+    apiClient.post(`/skills/${id}/invoke`, input, { timeout: API_TIMEOUT_MS.aiText, ...config }),
+  // 当前用户上传/安装的技能
+  mine: () => apiClient.get('/skills/mine'),
+  // 外部技能市场精选目录（公开）
+  catalog: () => apiClient.get('/skills/catalog'),
+  // 导入声明式技能包（单个对象 / 数组 / {skills:[...]}）
+  importPackage: (pkg: any) => apiClient.post('/skills/import', pkg),
+  // 导出技能为 JSON 包（download=true 触发文件下载）
+  exportPackage: (id: string, download = false) =>
+    apiClient.get(`/skills/export/${id}${download ? '?download=1' : ''}`, {
+      responseType: download ? 'blob' : 'json',
+    }),
+  // 一键安装外部目录条目
+  installCatalog: (id: string) => apiClient.post(`/skills/catalog/${id}/install`, {}),
+  // 删除自己的用户技能
+  remove: (id: string) => apiClient.delete(`/skills/${id}`),
+};
+
+// 快速启动模板 API
+export const quickstartAPI = {
+  templates: () => apiClient.get('/quickstart/templates'),
+  apply: (templateId: string) => apiClient.post('/quickstart/apply', { templateId }),
+};
+
+// 小红书爆款文案生成器 API（整合 ADP 应用包「小红书爆款文案生成器」）
+export const xhsAPI = {
+  // 获取可用专家角色（文案生成专家/系统架构师/前端开发助手/部署运维助手）
+  agents: () => apiClient.get('/xhs/agents'),
+  // 调用指定角色生成内容
+  generate: (data: {
+    role: 'copywriter' | 'architect' | 'frontend' | 'devops';
+    product: string;
+    audience?: string;
+    style?: string;
+    keywords?: string;
+    count?: number;
+  }) => apiClient.post('/xhs/generate', data, { timeout: API_TIMEOUT_MS.aiText }),
+};
+
+// MCP 插件管理 API（统一封装，避免页面散落裸调；后端 S2 已加 auth+quota 守卫）
+export const mcpAPI = {
+  // 服务器列表
+  list: () => apiClient.get('/mcp/servers'),
+  // 单个服务器详情
+  getById: (id: string) => apiClient.get(`/mcp/servers/${id}`),
+  // 注册服务器配置
+  create: (data: { id: string; name: string; transport: string; [k: string]: any }) =>
+    apiClient.post('/mcp/servers', data),
+  // 更新服务器配置
+  update: (id: string, data: any) => apiClient.put(`/mcp/servers/${id}`, data),
+  // 启停
+  setEnabled: (id: string, enabled: boolean) =>
+    apiClient.patch(`/mcp/servers/${id}/enabled`, { enabled }),
+  // 删除
+  remove: (id: string) => apiClient.delete(`/mcp/servers/${id}`),
+  // 连接
+  connect: (id: string) => apiClient.post(`/mcp/servers/${id}/connect`),
+  // 断开
+  disconnect: (id: string) => apiClient.post(`/mcp/servers/${id}/disconnect`),
+  // 调用工具
+  callTool: (id: string, tool: string, args?: Record<string, any>) =>
+    apiClient.post(`/mcp/servers/${id}/call`, { tool, args }),
+  // 可用工具清单（供 Agent 使用）
+  tools: () => apiClient.get('/mcp/tools'),
+  // 批量导入 MCP 服务器配置包
+  importServers: (pkg: any) => apiClient.post('/mcp/servers/import', pkg),
+  // 导出全部 MCP 服务器配置包
+  exportServers: (download = false) =>
+    apiClient.get(`/mcp/servers/export${download ? '?download=1' : ''}`, {
+      responseType: download ? 'blob' : 'json',
+    }),
+};
+
+// 🔥 API 市场收益 / 提现
+export const revenueAPI = {
+  stats: () => apiClient.get('/marketplace/revenue/stats'),
+  list: (params?: { status?: string; page?: number; pageSize?: number }) =>
+    apiClient.get('/marketplace/revenue/list', { params }),
+  byResource: () => apiClient.get('/marketplace/revenue/by-resource'),
+  withdraw: (data: { amount: number; method: 'wechat' | 'alipay'; account: string }) =>
+    apiClient.post('/marketplace/revenue/withdraw', data),
+  withdraws: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/marketplace/revenue/withdraws', { params }),
+};
+
+// 推荐/分销 API
+export const referralAPI = {
+  stats: () => apiClient.get('/referral/stats'),
+  list: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/referral/list', { params }),
+  commissions: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/referral/commissions', { params }),
+  code: () => apiClient.get('/referral/code'),
+  withdraw: (data: { amount: number; method: 'wechat' | 'alipay'; account?: string }) =>
+    apiClient.post('/referral/withdraw', data),
+  withdrawals: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/referral/withdrawals', { params }),
+};
+
+// 积分/签到 API
+export const pointsAPI = {
+  checkin: () => apiClient.post('/points/checkin'),
+  checkinStatus: () => apiClient.get('/points/checkin/status'),
+  checkinHistory: (params?: { page?: number; pageSize?: number }) =>
+    apiClient.get('/points/checkin/history', { params }),
+  tasks: () => apiClient.get('/points/tasks'),
+  awardTask: (taskType: string) => apiClient.post('/points/task', { taskType }),
+};
+
+// CloudBase AI 免费用量对话 / 图像生成（小程序成长计划免费额度）
+// ⚠️ 关键：全局 apiClient 超时为 10s，但后端 /aibak/chat 上限 60s、/aibak/image 上限 170s，
+// 若不单独放大超时，所有 AI 请求都会在前端 10s 被中断，表现为「请求频繁 / 超时 / 网络失败」。
+// 因此 chat / image 单独覆盖 timeout。
+// 管理员：用户权限管理
+export const adminAPI = {
+  listUsers: (params: { page?: number; limit?: number; search?: string }) =>
+    apiClient.get('/auth/admin/users', { params }),
+  setRole: (id: string, role: 'user' | 'admin') =>
+    apiClient.put(`/auth/admin/users/${id}/role`, { role }),
+  setBanned: (id: string, banned: boolean) =>
+    apiClient.put(`/auth/admin/users/${id}/ban`, { banned }),
+};
+
+export const aibakAPI = {
+  chat: (data: {
+    message?: string;
+    messages?: Array<{ role: string; content: string }>;
+    history?: Array<{ role: string; content: string }>;
+    model?: 'agnes25/agnes-2.5-flash' | 'hy3' | 'hy3-preview' | string;
+    stream?: boolean;
+  }) => apiClient.post('/aibak/chat', data, { timeout: 90000 }),
+  // 图像生成（文生图 / 图生图），model 为 HY-Image-* 系列
+  image: (data: {
+    model: string;
+    prompt: string;
+    size?: string;
+    imageBase64?: string;
+    imageUrl?: string;
+  }) => apiClient.post('/aibak/image', data, { timeout: 190000 }),
+  status: () => apiClient.get('/aibak/status', { timeout: 15000 }),
+};
+
+// 工作流（Agent 工具流）导入导出 API
+
+// 账户管理（数据导出、注销）
+export const accountAPI = {
+  requestDataExport: () => apiClient.post('/account/export-data'),
+  getDataExportLink: (token: string) => apiClient.get(`/account/export-data/${token}`),
+  requestDeletion: () => apiClient.post('/account/delete'),
+  cancelDeletion: () => apiClient.post('/account/cancel-delete'),
+  confirmDeletion: (token: string) => apiClient.delete(`/account/confirm-delete/${token}`),
+  getConsents: () => apiClient.get('/account/consents'),
+  recordConsent: (data: {
+    consentType: string;
+    version: string;
+    accepted: boolean;
+    channel?: string;
+  }) => apiClient.post('/account/consent', data),
+};
+
+export const workflowAPI = {
+  importPackage: (pkg: any) => apiClient.post('/wf/import', pkg),
+  exportPackage: (id: string, download = false) =>
+    apiClient.get(`/wf/${id}/export${download ? '?download=1' : ''}`, {
+      responseType: download ? 'blob' : 'json',
+    }),
+};
+
+
+// 金网通 API
+export const jinwangtongAPI = {
+  // License 相关
+  getEditions: () => apiClient.get('/jinwangtong/editions'),
+  requestTrial: (company?: string) => apiClient.post('/jinwangtong/license/trial', { company }),
+  getMyLicenses: () => apiClient.get('/jinwangtong/license/mine'),
+  getLicenseDetail: (licenseId: string) => apiClient.get(`/jinwangtong/license/${licenseId}`),
+  // 设备相关
+  registerDevice: (data: {
+    deviceId: string; licenseId: string; hostname: string; os: string;
+    osVersion?: string; cpuModel?: string; totalMemoryGB?: number;
+    macAddresses?: string[]; ipAddress?: string; agentVersion?: string;
+  }) => apiClient.post('/jinwangtong/devices/register', data),
+  deviceHeartbeat: (deviceId: string, agentVersion?: string) =>
+    apiClient.post('/jinwangtong/devices/heartbeat', { deviceId, agentVersion }),
+  getMyDevices: () => apiClient.get('/jinwangtong/devices/mine'),
+  getLicenseDevices: (licenseId: string) => apiClient.get(`/jinwangtong/devices/license/${licenseId}`),
+  // 下载相关
+  getLatestVersions: (platform?: string) =>
+    apiClient.get('/jinwangtong/downloads/latest', { params: platform ? { platform } : {} }),
+  recordDownload: (version: string, platform: string) =>
+    apiClient.post('/jinwangtong/downloads/record', { version, platform }),
+};

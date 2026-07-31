@@ -1,0 +1,698 @@
+#!/usr/bin/env bash
+# ============================================================
+# AIbak 服务器侧 CNB 生产发布 watcher
+# - 只监听通过门禁晋级的 deploy/production
+# - 默认从 CNB Registry 拉取 SHA 对应的不可变镜像摘要
+# - 显式 BUILD_MODE=local 时才允许服务器本地构建作为人工灾备
+# - 内外网全部探针成功后才写状态；失败自动回滚并通过真实渠道告警
+# ============================================================
+set -Eeuo pipefail
+
+REPO_URL=${REPO_URL:-https://cnb.cool/aibak.site/ai-agent-platform.git}
+# 生产 watcher 只消费通过 CI、镜像扫描和公网门禁后晋级的批准分支。
+RELEASE_BRANCH=${RELEASE_BRANCH:-deploy/production}
+GIT_DIR=${GIT_DIR:-/opt/ai-agent-platform.git}
+RUNTIME_DIR=${RUNTIME_DIR:-/usr/local/lib/aibak-deploy}
+RELEASES_DIR=${RELEASES_DIR:-$RUNTIME_DIR/releases}
+STATE_FILE=${STATE_FILE:-/opt/aibak-release.env}
+LEGACY_STATE_FILE=${LEGACY_STATE_FILE:-/opt/.cnb-deploy-sha}
+FAILED_STATE_FILE=${FAILED_STATE_FILE:-/opt/.cnb-deploy-failed}
+LOG=${LOG:-/var/log/cnb-watcher.log}
+DEPLOY_LOG=${DEPLOY_LOG:-/var/log/ai-platform-deploy.log}
+EVIDENCE_DIR=${EVIDENCE_DIR:-/var/log/aibak-release-evidence}
+LOCK_FILE=${LOCK_FILE:-/run/lock/cnb-watcher.lock}
+PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-https://aibak.site}
+# Caddy 永久服务此宿主目录；Client Registry 镜像只作为静态资产来源。
+STATIC_ROOT=${STATIC_ROOT:-/opt/ai-agent-platform/client/dist}
+STATIC_BACKUP_DIR=${STATIC_BACKUP_DIR:-/opt/aibak-static-backups}
+STATIC_BACKUP_KEEP=${STATIC_BACKUP_KEEP:-5}
+PRODUCTION_ENV_FILE=${PRODUCTION_ENV_FILE:-/etc/aibak/server.env}
+REGISTRY_AUTH_FILE=${REGISTRY_AUTH_FILE:-/etc/aibak/registry.env}
+REGISTRY=${REGISTRY:-docker.cnb.cool}
+IMAGE_REPOSITORY=${IMAGE_REPOSITORY:-$REGISTRY/aibak.site/ai-agent-platform}
+SERVER_IMAGE_REPOSITORY=${SERVER_IMAGE_REPOSITORY:-$IMAGE_REPOSITORY/server}
+CLIENT_IMAGE_REPOSITORY=${CLIENT_IMAGE_REPOSITORY:-$IMAGE_REPOSITORY/client}
+# 默认只拉取流水线发布的不可变 Registry 镜像；local 仅作人工灾备。
+BUILD_MODE=${BUILD_MODE:-registry}
+BUILD_DIR=${BUILD_DIR:-$RUNTIME_DIR/build}
+LOCAL_IMAGE_PREFIX=${LOCAL_IMAGE_PREFIX:-aibak-platform}
+COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-ai-agent-platform}
+MAX_ATTEMPTS=${MAX_ATTEMPTS:-3}
+RETRY_DELAY_SECONDS=${RETRY_DELAY_SECONDS:-30}
+FAILED_RETRY_COOLDOWN_SECONDS=${FAILED_RETRY_COOLDOWN_SECONDS:-900}
+VERIFY_TIMEOUT_SECONDS=${VERIFY_TIMEOUT_SECONDS:-180}
+REMOTE_CHECK_ATTEMPTS=${REMOTE_CHECK_ATTEMPTS:-3}
+REMOTE_CHECK_RETRY_SECONDS=${REMOTE_CHECK_RETRY_SECONDS:-10}
+REQUIRE_DEPLOY_ALERTS=${REQUIRE_DEPLOY_ALERTS:-true}
+DEPLOY_ALERT_FORMAT=${DEPLOY_ALERT_FORMAT:-wecom}
+
+mkdir -p \
+  "$(dirname "$GIT_DIR")" "$RELEASES_DIR" "$EVIDENCE_DIR" \
+  "$(dirname "$STATE_FILE")" "$(dirname "$FAILED_STATE_FILE")" \
+  "$(dirname "$LOG")" "$(dirname "$LOCK_FILE")" \
+  "$(dirname "$STATIC_ROOT")" "$STATIC_BACKUP_DIR"
+touch "$LOG" "$DEPLOY_LOG"
+chmod 0600 "$LOG" "$DEPLOY_LOG" 2>/dev/null || true
+
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"
+}
+
+atomic_write_text() {
+  local path=$1
+  local value=$2
+  local tmp="${path}.tmp.$$"
+  printf '%s\n' "$value" >"$tmp"
+  chmod 0600 "$tmp"
+  mv -f "$tmp" "$path"
+}
+
+send_alert() {
+  local level=$1
+  local message=$2
+  if [ -z "${DEPLOY_ALERT_WEBHOOK:-}" ]; then
+    log "真实告警渠道未配置，无法发送 ${level} 告警"
+    return 1
+  fi
+
+  local payload
+  payload=$(ALERT_LEVEL="$level" ALERT_MESSAGE="$message" ALERT_FORMAT="$DEPLOY_ALERT_FORMAT" node <<'NODE'
+const level = process.env.ALERT_LEVEL || 'INFO';
+const message = `[AIbak ${level}] ${process.env.ALERT_MESSAGE || ''}`;
+const payload = process.env.ALERT_FORMAT === 'wecom'
+  ? { msgtype: 'text', text: { content: message } }
+  : { level, text: message };
+process.stdout.write(JSON.stringify(payload));
+NODE
+  )
+
+  curl -fsS --max-time 10 -X POST \
+    -H 'Content-Type: application/json' \
+    --data "$payload" \
+    "$DEPLOY_ALERT_WEBHOOK" >>"$LOG" 2>&1
+}
+
+notify_failure() {
+  local message=$1
+  log "ALERT: $message"
+  send_alert FAILURE "$message" || log "生产失败告警发送失败"
+}
+
+notify_success() {
+  local message=$1
+  log "$message"
+  send_alert SUCCESS "$message" || log "生产成功通知发送失败（部署结果不受影响）"
+}
+
+require_alert_channel() {
+  if [ "$REQUIRE_DEPLOY_ALERTS" = "true" ] && [ -z "${DEPLOY_ALERT_WEBHOOK:-}" ]; then
+    log "阻止部署：REQUIRE_DEPLOY_ALERTS=true，但 DEPLOY_ALERT_WEBHOOK 未配置"
+    return 1
+  fi
+}
+
+# 防止 systemd timer 重叠执行。
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  log "已有部署任务运行，本轮跳过"
+  exit 0
+fi
+
+for command_name in git node curl flock docker awk sed grep find sort; do
+  command -v "$command_name" >/dev/null 2>&1 || {
+    log "缺少运行依赖: $command_name"
+    exit 1
+  }
+done
+
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE=(docker-compose)
+else
+  log "缺少 Docker Compose 插件或 docker-compose"
+  exit 1
+fi
+
+repo_git() {
+  command git --git-dir="$GIT_DIR" "$@"
+}
+
+ensure_git_repository() {
+  if [ ! -e "$GIT_DIR" ]; then
+    git init --bare "$GIT_DIR" >>"$LOG" 2>&1
+    return
+  fi
+  if [ ! -d "$GIT_DIR" ]; then
+    log "发布 Git 路径已存在但不是目录，拒绝覆盖: $GIT_DIR"
+    return 1
+  fi
+  if [ -z "$(find "$GIT_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+    git init --bare "$GIT_DIR" >>"$LOG" 2>&1
+    return
+  fi
+  if ! repo_git rev-parse --is-bare-repository >/dev/null 2>&1; then
+    log "发布 Git 目录已有内容但不是合法裸仓库，拒绝删除或覆盖: $GIT_DIR"
+    return 1
+  fi
+}
+
+remote_release_sha() {
+  git ls-remote "$REPO_URL" "refs/heads/$RELEASE_BRANCH" 2>/dev/null | awk '{print $1}'
+}
+
+resolve_remote_release_sha() {
+  local attempt sha
+  for attempt in $(seq 1 "$REMOTE_CHECK_ATTEMPTS"); do
+    sha=$(remote_release_sha || true)
+    if [[ "$sha" =~ ^[a-f0-9]{40}$ ]]; then
+      printf '%s\n' "$sha"
+      return 0
+    fi
+    log "无法获取 CNB $RELEASE_BRANCH（第 $attempt/$REMOTE_CHECK_ATTEMPTS 次）" >&2
+    if [ "$attempt" -lt "$REMOTE_CHECK_ATTEMPTS" ]; then
+      sleep "$REMOTE_CHECK_RETRY_SECONDS"
+    fi
+  done
+  return 1
+}
+
+fetch_release() {
+  local sha=$1
+  repo_git fetch --prune "$REPO_URL" "refs/heads/$RELEASE_BRANCH" >>"$LOG" 2>&1
+  repo_git cat-file -e "${sha}^{commit}" >>"$LOG" 2>&1
+  local fetched_sha
+  fetched_sha=$(repo_git rev-parse FETCH_HEAD)
+  [ "$fetched_sha" = "$sha" ] || {
+    log "CNB 分支在获取期间发生变化，expected=$sha actual=$fetched_sha"
+    return 1
+  }
+}
+
+extract_release_files() {
+  local sha=$1
+  local release_dir="$RELEASES_DIR/$sha"
+  local tmp_dir="${release_dir}.tmp.$$"
+  rm -rf "$tmp_dir"
+  mkdir -p "$tmp_dir"
+  repo_git show "${sha}:deploy/docker-compose.production.yml" >"$tmp_dir/docker-compose.production.yml"
+  repo_git show "${sha}:deploy/verify-release.mjs" >"$tmp_dir/verify-release.mjs"
+  repo_git show "${sha}:client/nginx.ssl.runtime.conf" >"$tmp_dir/nginx.ssl.runtime.conf"
+  chmod 0644 "$tmp_dir/docker-compose.production.yml" "$tmp_dir/nginx.ssl.runtime.conf"
+  chmod 0755 "$tmp_dir/verify-release.mjs"
+  rm -rf "$release_dir"
+  mv "$tmp_dir" "$release_dir"
+}
+
+registry_login() {
+  if [ ! -f "$REGISTRY_AUTH_FILE" ]; then
+    log "未发现独立 Registry 凭据文件，尝试使用服务器现有 Docker 登录状态"
+    return 0
+  fi
+  if find "$REGISTRY_AUTH_FILE" -perm /077 -print -quit | grep -q .; then
+    log "Registry 凭据文件权限过宽，必须仅 root 可读: $REGISTRY_AUTH_FILE"
+    return 1
+  fi
+
+  local registry_username registry_password
+  registry_username=$(sed -n 's/^REGISTRY_USERNAME=//p' "$REGISTRY_AUTH_FILE" | tail -n 1)
+  registry_password=$(sed -n 's/^REGISTRY_PASSWORD=//p' "$REGISTRY_AUTH_FILE" | tail -n 1)
+  [ -n "$registry_username" ] && [ -n "$registry_password" ] || {
+    log "Registry 凭据文件缺少 REGISTRY_USERNAME/REGISTRY_PASSWORD"
+    return 1
+  }
+  printf '%s' "$registry_password" | docker login "$REGISTRY" \
+    --username "$registry_username" --password-stdin >>"$LOG" 2>&1
+}
+
+pull_release_images() {
+  local sha=$1
+  local server_tag="$SERVER_IMAGE_REPOSITORY:$sha"
+  local client_tag="$CLIENT_IMAGE_REPOSITORY:$sha"
+
+  log "拉取 CNB Registry 不可变镜像：SHA=$sha"
+  docker pull "$server_tag" >>"$DEPLOY_LOG" 2>&1 || {
+    log "拉取 server 镜像失败: $server_tag"
+    return 1
+  }
+  docker pull "$client_tag" >>"$DEPLOY_LOG" 2>&1 || {
+    log "拉取 client 镜像失败: $client_tag"
+    return 1
+  }
+
+  local server_repo_digest client_repo_digest
+  server_repo_digest=$(docker image inspect --format='{{index .RepoDigests 0}}' "$server_tag" 2>/dev/null || true)
+  client_repo_digest=$(docker image inspect --format='{{index .RepoDigests 0}}' "$client_tag" 2>/dev/null || true)
+  [[ "$server_repo_digest" =~ @sha256:[a-f0-9]{64}$ ]] || {
+    log "server 镜像未返回不可变摘要: $server_tag"
+    return 1
+  }
+  [[ "$client_repo_digest" =~ @sha256:[a-f0-9]{64}$ ]] || {
+    log "client 镜像未返回不可变摘要: $client_tag"
+    return 1
+  }
+
+  BUILT_SERVER_IMAGE=$server_repo_digest
+  BUILT_CLIENT_IMAGE=$client_repo_digest
+  BUILT_SERVER_DIGEST=${server_repo_digest##*@}
+  BUILT_CLIENT_DIGEST=${client_repo_digest##*@}
+  log "Registry 镜像已锁定: server=$BUILT_SERVER_DIGEST client=$BUILT_CLIENT_DIGEST"
+}
+
+prepare_release_images() {
+  local sha=$1
+  case "$BUILD_MODE" in
+    registry) pull_release_images "$sha" ;;
+    local) build_local_images "$sha" ;;
+    *)
+      log "不支持的 BUILD_MODE: $BUILD_MODE（仅允许 registry/local）"
+      return 1
+      ;;
+  esac
+}
+
+# 在服务器本地构建镜像（替代从 registry 拉取不可变镜像）。
+# 全量导出 SHA 对应源码到 BUILD_DIR，用 docker-compose.build.yml 构建，
+# 镜像以 SHA 打标签（aibak-platform-server:<sha> / aibak-platform-client:<sha>），
+# 并取本地镜像 Id 作为不可变摘要写入发布状态，供 /api/health 验收比对。
+build_local_images() {
+  local sha=$1
+  local build_dir="${BUILD_DIR}/${sha}"
+  local build_compose="${build_dir}/docker-compose.build.yml"
+  rm -rf "$build_dir"
+  mkdir -p "$build_dir"
+
+  log "导出源码 $sha 到构建目录 $build_dir"
+  if ! repo_git archive --format=tar "$sha" 2>>"$LOG" | tar -x -C "$build_dir" >>"$LOG" 2>&1; then
+    log "导出源码失败: $sha"
+    return 1
+  fi
+  [ -f "$build_compose" ] || { log "构建用 compose 缺失: $build_compose"; return 1; }
+
+  log "本地 docker build（server + client）SHA=$sha"
+  if ! APP_COMMIT_SHA="$sha" "${COMPOSE[@]}" -f "$build_compose" build >>"$DEPLOY_LOG" 2>&1; then
+    log "docker build 失败: $sha"
+    return 1
+  fi
+
+  local server_tag="${LOCAL_IMAGE_PREFIX}-server:${sha}"
+  local client_tag="${LOCAL_IMAGE_PREFIX}-client:${sha}"
+  docker image inspect -f '{{.Id}}' "$server_tag" >/dev/null 2>&1 || { log "server 镜像未生成: $server_tag"; return 1; }
+  docker image inspect -f '{{.Id}}' "$client_tag" >/dev/null 2>&1 || { log "client 镜像未生成: $client_tag"; return 1; }
+
+  BUILT_SERVER_IMAGE="$server_tag"
+  BUILT_CLIENT_IMAGE="$client_tag"
+  BUILT_SERVER_DIGEST=$(docker image inspect -f '{{.Id}}' "$server_tag")
+  BUILT_CLIENT_DIGEST=$(docker image inspect -f '{{.Id}}' "$client_tag")
+  log "本地构建完成: $BUILT_SERVER_IMAGE / $BUILT_CLIENT_IMAGE"
+}
+
+reset_loaded_state() {
+  LOADED_APP_COMMIT_SHA=''
+  LOADED_SERVER_IMAGE=''
+  LOADED_CLIENT_IMAGE=''
+  LOADED_SERVER_IMAGE_DIGEST=''
+  LOADED_CLIENT_IMAGE_DIGEST=''
+  LOADED_RELEASE_COMPOSE_FILE=''
+  LOADED_NGINX_RUNTIME_CONFIG=''
+}
+
+load_state() {
+  local file=$1
+  reset_loaded_state
+  [ -f "$file" ] || return 1
+
+  local first_line
+  first_line=$(head -n 1 "$file" 2>/dev/null || true)
+  if [[ "$first_line" =~ ^[a-f0-9]{40}$ ]]; then
+    LOADED_APP_COMMIT_SHA="$first_line"
+    return 0
+  fi
+
+  local key value
+  while IFS='=' read -r key value; do
+    case "$key" in
+      APP_COMMIT_SHA) LOADED_APP_COMMIT_SHA=$value ;;
+      SERVER_IMAGE) LOADED_SERVER_IMAGE=$value ;;
+      CLIENT_IMAGE) LOADED_CLIENT_IMAGE=$value ;;
+      SERVER_IMAGE_DIGEST) LOADED_SERVER_IMAGE_DIGEST=$value ;;
+      CLIENT_IMAGE_DIGEST) LOADED_CLIENT_IMAGE_DIGEST=$value ;;
+      RELEASE_COMPOSE_FILE) LOADED_RELEASE_COMPOSE_FILE=$value ;;
+      NGINX_RUNTIME_CONFIG) LOADED_NGINX_RUNTIME_CONFIG=$value ;;
+    esac
+  done <"$file"
+}
+
+state_is_complete() {
+  [[ "$LOADED_APP_COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]] \
+    && image_ref_valid "$LOADED_SERVER_IMAGE" \
+    && image_ref_valid "$LOADED_CLIENT_IMAGE" \
+    && [[ "$LOADED_SERVER_IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] \
+    && [[ "$LOADED_CLIENT_IMAGE_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] \
+    && [ -f "$LOADED_RELEASE_COMPOSE_FILE" ] \
+    && [ -f "$LOADED_NGINX_RUNTIME_CONFIG" ]
+}
+
+# 镜像引用合法：不可变摘要（name@sha256:...）或本地标签（name:tag）
+image_ref_valid() {
+  [[ "$1" =~ ^([^[:space:]]+@)?sha256:[a-f0-9]{64}$ ]] \
+    || [[ "$1" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*:[a-zA-Z0-9._-]+$ ]]
+}
+
+write_release_state() {
+  local file=$1
+  local sha=$2
+  local server_image=$3
+  local client_image=$4
+  local server_digest=$5
+  local client_digest=$6
+  local compose_file=$7
+  local nginx_config=$8
+  local tmp="${file}.tmp.$$"
+  cat >"$tmp" <<EOF
+COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME
+APP_COMMIT_SHA=$sha
+SERVER_IMAGE=$server_image
+CLIENT_IMAGE=$client_image
+SERVER_IMAGE_DIGEST=$server_digest
+CLIENT_IMAGE_DIGEST=$client_digest
+PRODUCTION_ENV_FILE=$PRODUCTION_ENV_FILE
+RELEASE_COMPOSE_FILE=$compose_file
+NGINX_RUNTIME_CONFIG=$nginx_config
+EOF
+  chmod 0600 "$tmp"
+  mv -f "$tmp" "$file"
+}
+
+capture_running_release() {
+  local output_file=$1
+  local fallback_sha=$2
+  local compose_file=$3
+  local nginx_config=$4
+  local server_image client_image
+  server_image=$(docker inspect --format '{{.Image}}' ai-platform-server 2>/dev/null || true)
+  client_image=$(docker inspect --format '{{.Image}}' ai-platform-client 2>/dev/null || true)
+  if [[ ! "$fallback_sha" =~ ^[a-f0-9]{40}$ ]] \
+    || [[ ! "$server_image" =~ ^sha256:[a-f0-9]{64}$ ]] \
+    || [[ ! "$client_image" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+    return 1
+  fi
+  write_release_state "$output_file" "$fallback_sha" "$server_image" "$client_image" "$server_image" "$client_image" "$compose_file" "$nginx_config"
+}
+
+validate_production_configuration() {
+  local state_file=$1
+  load_state "$state_file"
+  state_is_complete || {
+    log "发布状态不完整，拒绝校验生产配置: $state_file"
+    return 1
+  }
+
+  log "使用候选 Server 镜像校验真实生产配置（不进行网络连接）"
+  docker run --rm \
+    --network none \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --env-file "$PRODUCTION_ENV_FILE" \
+    -e NODE_ENV=production \
+    -e PRODUCTION_ENV_FILE=/dev/null \
+    --entrypoint node \
+    "$LOADED_SERVER_IMAGE" \
+    dist/scripts/validate-production-config.js >>"$DEPLOY_LOG" 2>&1
+}
+
+compose_up() {
+  local state_file=$1
+  load_state "$state_file"
+  state_is_complete || {
+    log "发布状态不完整，拒绝执行 Compose: $state_file"
+    return 1
+  }
+  # 原子切换前只清理一次固定名称容器，避免 name conflict。
+  for c in ai-platform-server ai-platform-client; do
+    docker stop "$c" 2>/dev/null || true
+    docker rm "$c" 2>/dev/null || true
+  done
+  "${COMPOSE[@]}" --env-file "$state_file" -f "$LOADED_RELEASE_COMPOSE_FILE" \
+    -p "$COMPOSE_PROJECT_NAME" up -d --no-build >>"$DEPLOY_LOG" 2>&1
+}
+
+prune_static_backups() {
+  local keep=$STATIC_BACKUP_KEEP
+  [[ "$keep" =~ ^[0-9]+$ ]] || keep=5
+  local -a backups=()
+  mapfile -t backups < <(
+    find "$STATIC_BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null \
+      | sort -nr | awk '{ $1=""; sub(/^ /, ""); print }'
+  )
+  local index
+  for ((index=keep; index<${#backups[@]}; index++)); do
+    rm -rf -- "${backups[$index]}"
+  done
+}
+
+publish_client_assets() {
+  local state_file=$1
+  load_state "$state_file"
+  state_is_complete || {
+    log "发布状态不完整，拒绝更新 Caddy 静态文件: $state_file"
+    return 1
+  }
+
+  local parent staging previous container backup
+  parent=$(dirname "$STATIC_ROOT")
+  staging="${parent}/.dist-candidate-${LOADED_APP_COMMIT_SHA}-$$"
+  previous="${parent}/.dist-previous-$$"
+  container="aibak-client-assets-$$"
+  backup="${STATIC_BACKUP_DIR}/$(date '+%Y%m%d%H%M%S')-${LOADED_APP_COMMIT_SHA:0:12}-$$"
+
+  rm -rf -- "$staging" "$previous"
+  mkdir -p "$staging" "$STATIC_BACKUP_DIR"
+  docker rm -f "$container" >/dev/null 2>&1 || true
+
+  if ! docker create --name "$container" "$LOADED_CLIENT_IMAGE" >/dev/null; then
+    log "无法从 Client 镜像创建静态资产提取容器: $LOADED_CLIENT_IMAGE"
+    rm -rf -- "$staging"
+    return 1
+  fi
+  if ! docker cp "$container:/usr/share/nginx/html/." "$staging/" >>"$DEPLOY_LOG" 2>&1; then
+    log "从 Client 镜像提取静态资产失败: $LOADED_CLIENT_IMAGE"
+    docker rm -f "$container" >/dev/null 2>&1 || true
+    rm -rf -- "$staging"
+    return 1
+  fi
+  docker rm -f "$container" >/dev/null 2>&1 || true
+
+  [ -f "$staging/index.html" ] || {
+    log "Client 镜像缺少 /usr/share/nginx/html/index.html"
+    rm -rf -- "$staging"
+    return 1
+  }
+  grep -qi 'charset="UTF-8"' "$staging/index.html" || {
+    log "Client index.html 缺少 UTF-8 charset，拒绝发布"
+    rm -rf -- "$staging"
+    return 1
+  }
+  chmod -R a+rX "$staging"
+
+  if [ -e "$STATIC_ROOT" ]; then
+    mv "$STATIC_ROOT" "$previous" || {
+      log "无法暂存当前 Caddy 静态目录: $STATIC_ROOT"
+      rm -rf -- "$staging"
+      return 1
+    }
+  fi
+  if ! mv "$staging" "$STATIC_ROOT"; then
+    log "无法原子切换 Caddy 静态目录: $STATIC_ROOT"
+    [ -e "$previous" ] && mv "$previous" "$STATIC_ROOT" || true
+    rm -rf -- "$staging"
+    return 1
+  fi
+
+  if [ -e "$previous" ]; then
+    mv "$previous" "$backup" || {
+      log "静态目录已发布，但旧版本备份移动失败: $previous"
+      rm -rf -- "$previous"
+    }
+  fi
+  prune_static_backups
+  log "Caddy 静态资产已原子发布: SHA=$LOADED_APP_COMMIT_SHA root=$STATIC_ROOT"
+}
+
+verify_release() {
+  local state_file=$1
+  local scope=$2
+  load_state "$state_file"
+  state_is_complete || return 1
+  local verifier="$(dirname "$LOADED_RELEASE_COMPOSE_FILE")/verify-release.mjs"
+  [ -f "$verifier" ] || return 1
+
+  local base_url timeout evidence github_args=()
+  if [ "$scope" = 'internal' ]; then
+    base_url='http://127.0.0.1:3000'
+    timeout=$VERIFY_TIMEOUT_SECONDS
+    evidence="$EVIDENCE_DIR/${LOADED_APP_COMMIT_SHA}-internal.json"
+    github_args=(--skip-github)
+  else
+    base_url=$PUBLIC_BASE_URL
+    timeout=90
+    evidence="$EVIDENCE_DIR/${LOADED_APP_COMMIT_SHA}-public.json"
+    github_args=(--skip-github)
+  fi
+
+  node "$verifier" \
+    --base-url "$base_url" \
+    --expected-sha "$LOADED_APP_COMMIT_SHA" \
+    --expected-server-digest "$LOADED_SERVER_IMAGE_DIGEST" \
+    --expected-client-digest "$LOADED_CLIENT_IMAGE_DIGEST" \
+    --timeout-seconds "$timeout" \
+    --interval-seconds 5 \
+    --evidence-file "$evidence" \
+    "${github_args[@]}" >>"$DEPLOY_LOG" 2>&1
+}
+
+verify_rollback() {
+  local url
+  for url in 'http://127.0.0.1:3000/api/health' "$PUBLIC_BASE_URL/api/health"; do
+    curl -fsS --max-time 15 "$url" >/dev/null || return 1
+  done
+}
+
+rollback_to_state() {
+  local state_file=$1
+  load_state "$state_file"
+  local rollback_sha=$LOADED_APP_COMMIT_SHA
+  log "恢复上一成功版本 ${rollback_sha:-unknown}"
+  compose_up "$state_file" || return 1
+  verify_release "$state_file" internal || return 1
+  publish_client_assets "$state_file" || return 1
+  verify_release "$state_file" public || return 1
+  log "上一版本服务与 Caddy 静态资产恢复并通过完整验收: ${rollback_sha:-unknown}"
+}
+
+preflight() {
+  [ -f "$PRODUCTION_ENV_FILE" ] || {
+    log "生产环境文件不存在: $PRODUCTION_ENV_FILE"
+    return 1
+  }
+  [ -r "$PRODUCTION_ENV_FILE" ] || {
+    log "生产环境文件不可读: $PRODUCTION_ENV_FILE"
+    return 1
+  }
+  if find "$PRODUCTION_ENV_FILE" -perm /077 -print -quit | grep -q .; then
+    log "生产环境文件权限过宽，必须仅 root 可读: $PRODUCTION_ENV_FILE"
+    return 1
+  fi
+  require_alert_channel || return 1
+  docker info >/dev/null 2>&1 || {
+    log "Docker daemon 不可用"
+    return 1
+  }
+  case "$BUILD_MODE" in
+    registry) registry_login || return 1 ;;
+    local) log "显式启用 local 灾备构建模式" ;;
+    *) log "不支持的 BUILD_MODE: $BUILD_MODE"; return 1 ;;
+  esac
+}
+
+ensure_git_repository
+if ! REMOTE_SHA=$(resolve_remote_release_sha); then
+  notify_failure "连续 $REMOTE_CHECK_ATTEMPTS 次无法获取 CNB $RELEASE_BRANCH，发布链路已中断"
+  exit 1
+fi
+
+CURRENT_SHA=''
+if load_state "$STATE_FILE"; then
+  CURRENT_SHA=$LOADED_APP_COMMIT_SHA
+elif [ -f "$LEGACY_STATE_FILE" ]; then
+  CURRENT_SHA=$(head -n 1 "$LEGACY_STATE_FILE" 2>/dev/null || true)
+fi
+
+if [ "$REMOTE_SHA" = "$CURRENT_SHA" ]; then
+  rm -f "$FAILED_STATE_FILE"
+  exit 0
+fi
+
+FAILED_SHA=''
+FAILED_AT=''
+if [ -f "$FAILED_STATE_FILE" ]; then
+  read -r FAILED_SHA FAILED_AT <"$FAILED_STATE_FILE" || true
+fi
+if [ "$FAILED_SHA" = "$REMOTE_SHA" ] && [[ "$FAILED_AT" =~ ^[0-9]+$ ]]; then
+  NOW=$(date +%s)
+  ELAPSED=$((NOW - FAILED_AT))
+  if [ "$ELAPSED" -lt "$FAILED_RETRY_COOLDOWN_SECONDS" ]; then
+    REMAINING=$((FAILED_RETRY_COOLDOWN_SECONDS - ELAPSED))
+    log "版本 $REMOTE_SHA 已连续部署失败，冷却期剩余 ${REMAINING}s，本轮跳过"
+    exit 0
+  fi
+else
+  rm -f "$FAILED_STATE_FILE"
+fi
+
+log "发现待发布版本 $REMOTE_SHA（当前成功版本 ${CURRENT_SHA:-none}）"
+preflight || exit 1
+fetch_release "$REMOTE_SHA" || {
+  notify_failure "无法获取 CNB 发布提交 $REMOTE_SHA"
+  exit 1
+}
+extract_release_files "$REMOTE_SHA" || {
+  notify_failure "发布提交 $REMOTE_SHA 缺少生产 Compose、Nginx 或验收脚本"
+  exit 1
+}
+
+RELEASE_DIR="$RELEASES_DIR/$REMOTE_SHA"
+CANDIDATE_STATE="${STATE_FILE}.candidate"
+ROLLBACK_STATE="${STATE_FILE}.rollback"
+rm -f "$CANDIDATE_STATE" "$ROLLBACK_STATE"
+
+if load_state "$STATE_FILE" && state_is_complete; then
+  cp "$STATE_FILE" "$ROLLBACK_STATE"
+  chmod 0600 "$ROLLBACK_STATE"
+elif ! capture_running_release "$ROLLBACK_STATE" "$CURRENT_SHA" \
+  "$RELEASE_DIR/docker-compose.production.yml" "$RELEASE_DIR/nginx.ssl.runtime.conf"; then
+  log "未能生成旧版回滚快照；首次镜像化部署失败时可能需要人工恢复"
+fi
+
+for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+  log "部署尝试 $attempt/$MAX_ATTEMPTS：准备 $BUILD_MODE 镜像（SHA=$REMOTE_SHA）"
+  if prepare_release_images "$REMOTE_SHA" \
+    && write_release_state "$CANDIDATE_STATE" "$REMOTE_SHA" \
+       "$BUILT_SERVER_IMAGE" "$BUILT_CLIENT_IMAGE" "$BUILT_SERVER_DIGEST" "$BUILT_CLIENT_DIGEST" \
+       "$RELEASE_DIR/docker-compose.production.yml" "$RELEASE_DIR/nginx.ssl.runtime.conf" \
+    && if validate_production_configuration "$CANDIDATE_STATE"; then true; fi \
+    && compose_up "$CANDIDATE_STATE" \
+    && verify_release "$CANDIDATE_STATE" internal \
+    && publish_client_assets "$CANDIDATE_STATE" \
+    && verify_release "$CANDIDATE_STATE" public; then
+    mv -f "$CANDIDATE_STATE" "$STATE_FILE"
+    chmod 0600 "$STATE_FILE"
+    atomic_write_text "$LEGACY_STATE_FILE" "$REMOTE_SHA"
+    rm -f "$FAILED_STATE_FILE" "$ROLLBACK_STATE"
+    rm -rf "${BUILD_DIR}/${REMOTE_SHA}"
+    docker image prune -f >>"$DEPLOY_LOG" 2>&1 || true
+    notify_success "部署成功：SHA=$REMOTE_SHA server=${BUILT_SERVER_DIGEST##*@} client=${BUILT_CLIENT_DIGEST##*@}"
+    exit 0
+  fi
+
+  log "新版本部署或验收失败: $REMOTE_SHA"
+  if [ -f "$ROLLBACK_STATE" ]; then
+    if ! rollback_to_state "$ROLLBACK_STATE"; then
+      notify_failure "部署 $REMOTE_SHA 失败，且上一版本恢复失败，请立即人工处理"
+      exit 1
+    fi
+  else
+    notify_failure "部署 $REMOTE_SHA 失败，且没有可用回滚快照，请立即人工处理"
+    exit 1
+  fi
+
+  if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+    log "${RETRY_DELAY_SECONDS}s 后重试新版本"
+    sleep "$RETRY_DELAY_SECONDS"
+  fi
+done
+
+atomic_write_text "$FAILED_STATE_FILE" "$REMOTE_SHA $(date +%s)"
+notify_failure "部署 $REMOTE_SHA 连续失败 $MAX_ATTEMPTS 次；已恢复版本 ${CURRENT_SHA:-unknown}，进入 ${FAILED_RETRY_COOLDOWN_SECONDS}s 冷却期"
+exit 1

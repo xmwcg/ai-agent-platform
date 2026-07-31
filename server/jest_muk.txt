@@ -1,0 +1,11 @@
+PASS src/models/MediaUserKey.test.ts
+  MediaUserKey 模型（媒体 BYOK 凭据）
+    √ 定义 userId / provider / secretKeyEnc / enabled 字段 (3 ms)
+    √ userId + provider 唯一索引（upsert 语义，每个用户每厂商一条）
+
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        4.147 s
+Ran all test suites matching /MediaUserKey/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

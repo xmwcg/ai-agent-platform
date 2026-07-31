@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    # 测试所需的非敏感环境变量（仅为让 CI 能跑通登录/加密等逻辑，非生产密钥）
+    env:
+      NODE_ENV: test
+      JWT_SECRET: ci-test-secret-not-for-production-000000
+      ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+      NODE_OPTIONS: --max-old-space-size=4096
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: npm test
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      # client 依赖树庞大（antd/monaco/echarts 等），npm 在 GitHub runner 上
+      # 稳定 OOM 崩溃于 ~4 分钟（已验证 npm ci/install、--ignore-scripts、
+      # heap 4G/5G/6G、maxsockets 1~15、Node 20/22 均无效）。
+      # 改用 pnpm：硬链接安装，内存峰值低 2-3 倍，稳定规避 OOM。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install client deps (pnpm)
+        run: |
+          pnpm import  # convert package-lock.json → pnpm-lock.yaml
+          pnpm install --frozen-lockfile --no-optional
+          if [ ! -x node_modules/.bin/tsc ]; then
+            echo "::error::pnpm install failed - node_modules incomplete"
+            exit 1
+          fi
+      # 直接使用本地安装的 TypeScript（package-lock 锁定 5.9.3），
+      # 避免 `npx` 版本解析错乱（误装 tsc@2.0.4 或拉到 7.x）。
+      # tsconfig 已移除 baseUrl，任何 TS 版本都不会触发 TS5101 弃用错误。
+      - run: ./node_modules/.bin/tsc --noEmit
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+      - run: npm run lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+  superpowers-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/verify-default-ai-model.mjs
+      - run: node scripts/check-superpowers-sync.cjs

@@ -1,0 +1,109 @@
+{
+  "scenes": [
+    {
+      "id": "short-video",
+      "name": "短视频成片",
+      "tagline": "脚本→配音→字幕→配乐→竖屏成片",
+      "description": "输入主题或商品，自动生成口播脚本、AI 配音、抖音风格字幕与 BGM，一键导出 9:16 竖屏短视频。适合带货、知识、种草。",
+      "tier": "free",
+      "steps": ["script", "tts", "asr", "subtitle", "bgm", "export"],
+      "inputs": [
+        { "key": "topic", "label": "主题 / 商品", "type": "textarea", "required": true, "placeholder": "例如：夏日清爽护肤套装，主打补水不油腻", "help": "越具体，脚本越精准" },
+        { "key": "style", "label": "脚本风格", "type": "select", "options": ["种草带货", "知识科普", "情感共鸣", "搞笑段子", "测评对比"], "required": false },
+        { "key": "durationSec", "label": "预计时长(秒)", "type": "number", "min": 5, "max": 300, "required": false, "placeholder": "30" },
+        { "key": "voiceType", "label": "配音音色", "type": "select", "options": ["清脆女声", "知性女声", "沉稳男声", "活力男声"], "required": false },
+        { "key": "mediaUrl", "label": "背景视频/图片(可选)", "type": "url", "required": false, "help": "不填则使用纯色背景 + 字幕" },
+        { "key": "bgmMood", "label": "BGM 情绪", "type": "select", "options": ["轻快", "温馨", "科技感", "国风", "无BGM"], "required": false }
+      ]
+    },
+    {
+      "id": "digital-human",
+      "name": "数字人口播",
+      "tagline": "上传形象照，AI 替你出镜讲货",
+      "description": "提供一张真人形象照（或视频）与口播稿，云端数字人唇形同步生成口播视频，无需真人拍摄。需 pro 及以上或按次计费。",
+      "tier": "pro",
+      "steps": ["script", "tts", "digitalhuman", "subtitle", "bgm", "export"],
+      "inputs": [
+        { "key": "topic", "label": "口播主题 / 商品", "type": "textarea", "required": true },
+        { "key": "portraitUrl", "label": "形象照 URL", "type": "url", "required": true, "help": "正面、清晰、无遮挡的人像" },
+        { "key": "durationSec", "label": "预计时长(秒)", "type": "number", "min": 5, "max": 180, "required": false, "placeholder": "30" },
+        { "key": "voiceType", "label": "配音音色", "type": "select", "options": ["清脆女声", "知性女声", "沉稳男声", "活力男声"], "required": false }
+      ]
+    },
+    {
+      "id": "ecommerce",
+      "name": "电商图文",
+      "tagline": "一张商品图，生成整店详情页",
+      "description": "上传商品图，自动理解卖点、生成主图/场景图/详情页文案与图文 slide，直接用于淘宝、抖音、小红书店铺。",
+      "tier": "free",
+      "steps": ["vision", "text", "image"],
+      "inputs": [
+        { "key": "productImages", "label": "商品图 URL（逗号分隔，可多张）", "type": "text", "required": true, "help": "支持 http(s) 图片地址" },
+        { "key": "platform", "label": "目标平台", "type": "select", "options": ["淘宝", "抖音", "小红书", "京东", "独立站"], "required": false },
+        { "key": "imageCount", "label": "生成图数量", "type": "number", "min": 1, "max": 8, "required": false, "placeholder": "4" },
+        { "key": "tone", "label": "文案调性", "type": "select", "options": ["专业可信", "亲切种草", "高端 luxury", "年轻潮流"], "required": false }
+      ]
+    },
+    {
+      "id": "mixcut",
+      "name": "混剪视频",
+      "tagline": "多素材智能混剪，自动配乐转场",
+      "description": "上传多个视频/图片素材，AI 自动分析并规划混剪顺序，支持快剪/电影感/Vlog/幻灯片 4 种风格，一键合成配乐视频。",
+      "tier": "pro",
+      "steps": ["analyze", "plan", "compose"],
+      "inputs": [
+        { "key": "assets", "label": "素材 URL（每行一个）", "type": "textarea", "required": true, "help": "支持视频(.mp4)和图片(.jpg/.png) URL" },
+        { "key": "style", "label": "混剪风格", "type": "select", "options": ["快剪", "电影感", "Vlog", "幻灯片"], "required": false },
+        { "key": "targetDurationSec", "label": "目标时长(秒，0=自适应)", "type": "number", "min": 0, "max": 600, "required": false, "placeholder": "30" },
+        { "key": "bgmPath", "label": "BGM URL (可选)", "type": "url", "required": false, "help": "留空使用默认配乐库" }
+      ]
+    },
+    {
+      "id": "product-article",
+      "name": "商品详情页",
+      "tagline": "商品信息一键生成完整详情页",
+      "description": "输入商品名+卖点+图片，AI 自动生成 SEO 优化的商品详情页（Markdown），含多场景图文 slide，支持淘宝/抖音/小红书/京东/独立站模板。",
+      "tier": "free",
+      "steps": ["analyze", "generate-slides", "build-markdown", "seo-check"],
+      "inputs": [
+        { "key": "productName", "label": "商品名称", "type": "text", "required": true, "placeholder": "例如：智能蓝牙耳机 Pro" },
+        { "key": "sellingPoints", "label": "核心卖点（每行一个）", "type": "textarea", "required": true, "placeholder": "HiFi 音质\n40小时续航\n主动降噪" },
+        { "key": "productImages", "label": "商品图 URL（每行一个）", "type": "textarea", "required": true, "help": "支持 http(s) 图片地址" },
+        { "key": "platform", "label": "目标平台", "type": "select", "options": ["淘宝", "抖音", "小红书", "京东", "独立站"], "required": false },
+        { "key": "tone", "label": "文案调性", "type": "select", "options": ["专业可信", "亲切种草", "高端 luxury", "年轻潮流"], "required": false },
+        { "key": "imageCount", "label": "生成图数量", "type": "number", "min": 1, "max": 8, "required": false, "placeholder": "4" }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "id": "sv-default",
+      "sceneId": "short-video",
+      "name": "标准带货成片",
+      "description": "适合大多数带货短视频",
+      "defaults": { "style": "种草带货", "bgmStyle": "轻快", "voiceType": "清脆女声" },
+      "subtitleStyle": { "font": "Microsoft YaHei", "size": 14, "color": "&H00FFFFFF", "outline": "&H00000000", "position": "bottom" }
+    },
+    {
+      "id": "ec-default",
+      "sceneId": "ecommerce",
+      "name": "抖音小店详情包",
+      "description": "主图 + 场景图 + 详情页文案",
+      "defaults": { "platform": "抖音", "tone": "亲切种草", "imageCount": 4 }
+    },
+    {
+      "id": "mc-fast",
+      "sceneId": "mixcut",
+      "name": "快剪混剪模板",
+      "description": "快节奏 2.5s 片段 + 淡入淡出转场",
+      "defaults": { "style": "快剪", "targetDurationSec": 30 }
+    },
+    {
+      "id": "pa-taobao",
+      "sceneId": "product-article",
+      "name": "淘宝详情页模板",
+      "description": "含商品描述、卖点、规格、售后全模块",
+      "defaults": { "platform": "淘宝", "tone": "专业可信", "imageCount": 4 }
+    }
+  ]
+}

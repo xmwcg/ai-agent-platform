@@ -1,0 +1,9 @@
+{
+  "name": "ai-image",
+  "version": "1.0.0",
+  "description": "AI image generation cloud function for aibak.site",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "latest"
+  }
+}

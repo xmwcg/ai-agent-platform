@@ -1,0 +1,766 @@
+import { Router, Request, Response } from 'express';
+import { AuthRequest, requireAuth, requireAdmin } from '../middleware/auth';
+import { User } from '../models/User';
+import { Order, PaymentProvider, BillingPeriod, BillingSourceProduct, IOrder } from '../models/Order';
+import { PLANS, PlanId, getPlan } from '../config/billing';
+import { CREDITS_PACKAGES } from '../config/credits-pricing';
+import { PRIVATE_LICENSE_PACKAGES, getPrivateLicensePackage } from '../config/private-license';
+import { getGlobalCost } from '../services/cost-control.service';
+import { getPaymentGateway, isRealGateway, listPaymentMethods } from '../services/payment.service';
+import { resolveUserPlan, getQuotaUsage } from '../middleware/subscription';
+import { AppError, sendError } from '../lib/http-error';
+import { validate } from '../lib/validation';
+import { logger } from '../lib/logger';
+import { activateLicense } from '../services/private-license.service';
+import fs from 'fs';
+import path from 'path';
+import { activateSubscription, resolvePaymentProvider, genOrderNo, createOrderSchema, normalizeBillingReturnTo, resolveProductPackageId, resolveBillingSourceProduct } from './billing/logic';
+import webhookRoutes from './billing/webhook.routes';
+import refundRoutes from './billing/refund.routes';
+import reconciliationRoutes from './billing/reconciliation.routes';
+import { ensurePaymentConfirmedOutbox, fulfillOrder } from '../services/billing-order-fulfillment.service';
+
+const router = Router();
+// 根路由：返回可用端点列表
+router.get('/', (_req: Request, res: Response) => {
+  res.json({ 
+    success: true, 
+    name: 'billing',
+    endpoints: [
+      'GET /api/billing/plans',
+      'GET /api/billing/payment-methods', 
+      'GET /api/billing/credits-packages',
+      'POST /api/billing/credits-packages/order',
+      'POST /api/billing/orders',
+      'GET /api/billing/orders',
+      'GET /api/billing/orders/:orderNo',
+      'POST /api/billing/private-license/order',
+      'GET /api/billing/private-license-packages',
+      'GET /api/billing/cost-dashboard'
+    ]
+  });
+});
+
+
+// 套餐列表（公开）
+router.get('/plans', (_req: Request, res: Response) => {
+  res.json({ success: true, data: Object.values(PLANS) });
+});
+
+// 已启用的支付方式（公开，前端据此动态展示入口；缺密钥的渠道自动隐藏）
+router.get('/payment-methods', (_req: Request, res: Response) => {
+  res.json({ success: true, data: { methods: listPaymentMethods() } });
+});
+
+// 积分包列表（公开）
+router.get('/credits-packages', (_req: Request, res: Response) => {
+  res.json({ success: true, data: CREDITS_PACKAGES });
+});
+
+// 购买积分包（需登录）
+router.post('/credits-packages/order', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { packageId, provider } = req.body as { packageId?: string; provider?: PaymentProvider };
+    if (!packageId) {
+      return res.status(400).json({ success: false, error: '缺少 packageId' });
+    }
+    const pkg = CREDITS_PACKAGES.find((p) => p.id === packageId);
+    if (!pkg) {
+      return res.status(400).json({ success: false, error: '无效的积分包' });
+    }
+    const payProvider = resolvePaymentProvider(provider);
+    const orderNo = genOrderNo();
+    const order = await Order.create({
+      orderNo,
+      userId: req.user!.id,
+      orderType: 'credits_pack',
+      plan: 'free',
+      packageId,
+      period: 'monthly',
+      amount: pkg.price,
+      currency: 'CNY',
+      provider: payProvider,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    const gateway = getPaymentGateway(payProvider);
+    const result = await gateway.createOrder({
+      orderNo,
+      amount: pkg.price,
+      currency: 'CNY',
+      description: `AI Agent Platform - ${pkg.name}`,
+      clientIp: req.ip,
+    });
+
+    order.payParams = result.payParams;
+    if (result.paymentIntentId) {
+      order.paymentIntentId = result.paymentIntentId;
+    }
+    await order.save();
+
+    res.json({
+      success: true,
+      data: {
+        orderNo,
+        amount: pkg.price,
+        credits: pkg.credits,
+        currency: 'CNY',
+        provider: payProvider,
+        isReal: isRealGateway(payProvider),
+        payParams: result.payParams,
+        expiredAt: order.expiresAt,
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 私有化授权包列表（公开）
+router.get('/private-license-packages', (_req: Request, res: Response) => {
+  res.json({ success: true, data: PRIVATE_LICENSE_PACKAGES });
+});
+
+// 购买私有化授权（需登录）——复用现有微信支付下单流程，订单类型为 private_license
+router.post('/private-license/order', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { packageId, provider } = req.body as { packageId?: string; provider?: PaymentProvider };
+    if (!packageId) {
+      return res.status(400).json({ success: false, error: '缺少 packageId' });
+    }
+    const pkg = getPrivateLicensePackage(packageId);
+    if (!pkg) {
+      return res.status(400).json({ success: false, error: '无效的私有化授权包' });
+    }
+    const payProvider = resolvePaymentProvider(provider);
+    const orderNo = genOrderNo();
+    const order = await Order.create({
+      orderNo,
+      userId: req.user!.id,
+      orderType: 'private_license',
+      plan: 'free',
+      packageId,
+      licenseVersion: pkg.version,
+      period: 'monthly',
+      amount: pkg.price,
+      currency: 'CNY',
+      provider: payProvider,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    const gateway = getPaymentGateway(payProvider);
+    const result = await gateway.createOrder({
+      orderNo,
+      amount: pkg.price,
+      currency: 'CNY',
+      description: `AI Agent Platform - 私有化授权 ${pkg.name}`,
+      clientIp: req.ip,
+    });
+
+    order.payParams = result.payParams;
+    if (result.paymentIntentId) {
+      order.paymentIntentId = result.paymentIntentId;
+    }
+    await order.save();
+
+    res.json({
+      success: true,
+      data: {
+        orderNo,
+        amount: pkg.price,
+        currency: 'CNY',
+        provider: payProvider,
+        isReal: isRealGateway(payProvider),
+        payParams: result.payParams,
+        expiredAt: order.expiresAt,
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 我的订阅状态（需登录）
+router.get('/subscription', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user!.id)
+      .select('plan membershipExpiresAt subscriptionCancelAtPeriodEnd subscriptionCanceledAt credits')
+      .lean();
+    const { plan, expired } = await resolveUserPlan(req.user!.id);
+    const usage = await getQuotaUsage(req.user!.id);
+    res.json({
+      success: true,
+      data: {
+        plan,
+        expired,
+        membershipExpiresAt: user?.membershipExpiresAt || null,
+        cancelAtPeriodEnd: Boolean(user?.subscriptionCancelAtPeriodEnd),
+        cancelledAt: user?.subscriptionCanceledAt || null,
+        credits: user?.credits || 0,
+        usage,
+        plans: Object.values(PLANS),
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 创建订单（需登录）
+router.post('/orders', requireAuth, validate(createOrderSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const { plan, period, provider, sourceProduct, productPackageId, packageId, returnTo, idempotencyKey } = req.body as {
+      plan?: PlanId;
+      period?: BillingPeriod;
+      provider?: PaymentProvider;
+      sourceProduct?: BillingSourceProduct;
+      productPackageId?: string;
+      packageId?: string;
+      returnTo?: string;
+      idempotencyKey?: string;
+    };
+
+    const targetPlan: PlanId = plan || 'pro';
+    if (!PLANS[targetPlan]) {
+      return res.status(400).json({ success: false, error: '无效的套餐' });
+    }
+    const targetPeriod: BillingPeriod = period === 'yearly' ? 'yearly' : 'monthly';
+    const amount = targetPeriod === 'yearly' ? PLANS[targetPlan].priceYearly : PLANS[targetPlan].priceMonthly;
+    const payProvider = resolvePaymentProvider(provider);
+    // sourceProduct 归一化：product_grade 与产品专用枚举都允许；缺省为 platform
+    const targetSource = resolveBillingSourceProduct(sourceProduct);
+    const safeReturnTo = normalizeBillingReturnTo(returnTo, targetSource);
+    const clientKey = idempotencyKey?.trim();
+    // 产品专用订阅必须带套餐 id，否则无法识别具体购买的套餐。
+    const productPackage = resolveProductPackageId({ productPackageId, packageId });
+    if (targetSource !== 'platform' && targetSource !== 'project_grade' && !productPackage) {
+      throw new AppError(400, '产品订阅必须提供产品套餐 id', 'PRODUCT_PACKAGE_ID_REQUIRED');
+    }
+
+    // 免费套餐无需支付
+    if (amount === 0) {
+      await activateSubscription(req.user!.id, targetPlan, targetPeriod);
+      return res.json({ success: true, data: { free: true, plan: targetPlan, sourceProduct: targetSource, returnTo: safeReturnTo } });
+    }
+
+    const matchesPurchase = (order: IOrder) =>
+      order.orderType === 'subscription'
+      && order.plan === targetPlan
+      && order.period === targetPeriod
+      && order.provider === payProvider
+      && order.sourceProduct === targetSource
+      && (order.packageId || undefined) === (productPackage || undefined)
+      && (order.returnTo || undefined) === safeReturnTo;
+
+    const respondWithOrder = async (order: IOrder, idempotent = false) => {
+      if (!order.payParams) {
+        const gateway = getPaymentGateway(order.provider);
+        const result = await gateway.createOrder({
+          orderNo: order.orderNo,
+          amount: order.amount,
+          currency: order.currency,
+          description: `AI Agent Platform - ${PLANS[order.plan].name} (${order.period === 'yearly' ? '年付' : '月付'})`,
+          clientIp: req.ip,
+        });
+        order.payParams = result.payParams;
+        if (result.paymentIntentId) order.paymentIntentId = result.paymentIntentId;
+        order.paymentStatus = 'pending';
+        await order.save();
+      }
+      return res.json({
+        success: true,
+        data: {
+          orderNo: order.orderNo,
+          amount: order.amount,
+          currency: order.currency,
+          provider: order.provider,
+          isReal: isRealGateway(order.provider),
+          payParams: order.payParams,
+          expiredAt: order.expiresAt,
+          sourceProduct: order.sourceProduct,
+          returnTo: order.returnTo,
+          idempotent,
+        },
+      });
+    };
+
+    if (clientKey) {
+      const existing = await Order.findOne({ userId: req.user!.id, idempotencyKey: clientKey });
+      if (existing) {
+        if (!matchesPurchase(existing)) {
+          throw new AppError(409, '该幂等键已用于不同的订单参数', 'ORDER_IDEMPOTENCY_CONFLICT');
+        }
+        return await respondWithOrder(existing, true);
+      }
+    }
+
+    let order: IOrder;
+    try {
+      order = await Order.create({
+        orderNo: genOrderNo(),
+        userId: req.user!.id,
+        orderType: 'subscription',
+        plan: targetPlan,
+        // 产品专用 id（zpt_enterprise / ts_team / jwt_pro 等）写入 packageId，便于后续产品履约按 sourceProduct + packageId 决策
+        packageId: productPackage || undefined,
+        period: targetPeriod,
+        amount,
+        currency: 'CNY',
+        provider: payProvider,
+        sourceProduct: targetSource,
+        returnTo: safeReturnTo,
+        idempotencyKey: clientKey,
+        paymentStatus: 'created',
+        fulfillmentStatus: 'pending',
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      });
+    } catch (error) {
+      const duplicateKey = typeof error === 'object' && error !== null && 'code' in error && (error as { code?: number }).code === 11000;
+      if (!duplicateKey || !clientKey) throw error;
+      const existing = await Order.findOne({ userId: req.user!.id, idempotencyKey: clientKey });
+      if (!existing || !matchesPurchase(existing)) {
+        throw new AppError(409, '该幂等键已用于不同的订单参数', 'ORDER_IDEMPOTENCY_CONFLICT');
+      }
+      return await respondWithOrder(existing, true);
+    }
+
+    return await respondWithOrder(order);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 模拟支付成功（仅 mock 网关，便于开发/演示跑通完整链路）
+router.get('/orders/:orderNo/pay', requireAuth, async (req: AuthRequest, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ success: false, error: '接口不存在' });
+  }
+  try {
+    const order = await Order.findOne({ orderNo: req.params.orderNo });
+    if (!order) return res.status(404).json({ success: false, error: '订单不存在' });
+    if (order.userId.toString() !== req.user!.id) {
+      return res.status(403).json({ success: false, error: '无权操作他人订单' });
+    }
+
+    const alreadyPaid = order.paymentStatus === 'paid' || order.status === 'paid';
+    if (!alreadyPaid) {
+      order.status = 'paid';
+      order.paymentStatus = 'paid';
+      order.paidAt = new Date();
+      order.transactionId = `MOCK${Date.now()}`;
+      await order.save();
+    }
+
+    await ensurePaymentConfirmedOutbox(order.orderNo, { provider: 'mock', transactionId: order.transactionId });
+    const fulfillment = await (fulfillOrder as any)(order.orderNo);
+    const user = await User.findById(order.userId).select('plan credits').lean();
+    return res.json({
+      success: true,
+      data: {
+        paid: true,
+        alreadyPaid,
+        orderType: order.orderType,
+        plan: user?.plan,
+        credits: user?.credits,
+        fulfillmentStatus: fulfillment.order.fulfillmentStatus,
+        sourceProduct: fulfillment.order.sourceProduct,
+        returnTo: fulfillment.order.returnTo,
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 查询订单支付状态（前端扫码后轮询用）
+// 对真实网关（微信/支付宝）主动查单：即便公网回调延迟/未到，扫码付款后也能可靠到账
+router.get('/orders/:orderNo/status', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    let order = await Order.findOne({ orderNo: req.params.orderNo });
+    if (!order) return res.status(404).json({ success: false, error: '订单不存在' });
+    if (order.userId.toString() !== req.user!.id) {
+      return res.status(403).json({ success: false, error: '无权查看他人订单' });
+    }
+
+    const respondPaid = async () => {
+      await ensurePaymentConfirmedOutbox(order!.orderNo, { provider: order!.provider, transactionId: order!.transactionId });
+      try {
+        await (fulfillOrder as any)(order);
+      } catch (error) {
+        logger.warn('billing', `订单已支付但权益仍在履约: orderNo=${order!.orderNo} ${(error as Error).message}`);
+      }
+      order = await Order.findOne({ orderNo: order!.orderNo });
+      const user = await User.findById(order!.userId).select('plan credits').lean();
+      const fulfilled = order!.fulfillmentStatus === 'fulfilled';
+      return res.json({
+        success: true,
+        data: {
+          status: fulfilled ? 'paid' : 'fulfilling',
+          paymentStatus: order!.paymentStatus,
+          fulfillmentStatus: order!.fulfillmentStatus,
+          orderNo: order!.orderNo,
+          plan: user?.plan,
+          credits: user?.credits,
+          sourceProduct: order!.sourceProduct,
+          returnTo: order!.returnTo,
+        },
+      });
+    };
+
+    if (order.paymentStatus === 'paid' || order.status === 'paid') {
+      return await respondPaid();
+    }
+
+    const gateway = getPaymentGateway(order.provider);
+    if (isRealGateway(order.provider) && typeof gateway.queryOrder === 'function') {
+      try {
+        const q = await gateway.queryOrder(order.orderNo);
+        if ((q as any).paid) {
+          order = await Order.findOneAndUpdate(
+            { orderNo: order.orderNo },
+            {
+              $set: {
+                status: 'paid',
+                paymentStatus: 'paid',
+                paidAt: order.paidAt || new Date(),
+                transactionId: q.transactionId || order.transactionId,
+              },
+            },
+            { new: true }
+          );
+          logger.info('billing', `主动查单确认支付: orderNo=${order!.orderNo} provider=${order!.provider}`);
+          return await respondPaid();
+        }
+      } catch (error) {
+        logger.warn('billing', `主动查单失败: ${order.orderNo} ${(error as Error).message}`);
+      }
+    }
+
+    const expired = order.expiresAt && new Date(order.expiresAt).getTime() < Date.now();
+    return res.json({ success: true, data: { status: expired ? 'expired' : 'pending', orderNo: order.orderNo } });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 订单详情：订单本体 + 会员状态 + 当前积分余额 + 当日配额用量（AI 对话次数等）
+router.get('/orders/:orderNo/detail', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const order = await Order.findOne({ orderNo: req.params.orderNo });
+    if (!order) return res.status(404).json({ success: false, error: '订单不存在' });
+    if (order.userId.toString() !== req.user!.id) {
+      return res.status(403).json({ success: false, error: '无权查看他人订单' });
+    }
+    const user = await User.findById(order.userId).select('plan credits membershipExpiresAt').lean();
+    const { plan, expired } = await resolveUserPlan(order.userId.toString());
+    const usage = await getQuotaUsage(order.userId.toString());
+    res.json({
+      success: true,
+      data: {
+        order,
+        membership: { plan, expired, membershipExpiresAt: user?.membershipExpiresAt || null },
+        credits: user?.credits ?? 0,
+        usage,
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 支付 Webhook 回调与事件日志已抽离至 ./billing/webhook.routes.ts（含验签、幂等、重放防护、审计）
+
+// 取消订阅：仅取消下一周期续订；严禁篡改已付款周期的到期时间。
+router.post('/subscription/cancel', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user!.id).select(
+      'plan membershipExpiresAt subscriptionCancelAtPeriodEnd subscriptionCanceledAt'
+    );
+    if (!user) {
+      return res.status(404).json({ success: false, error: '用户不存在' });
+    }
+    if (user.plan === 'free') {
+      return res.json({ success: true, data: { cancelAtPeriodEnd: false }, message: '当前已是免费版' });
+    }
+
+    const now = new Date();
+    const expires = user.membershipExpiresAt?.getTime() || 0;
+    if (expires <= now.getTime()) {
+      // 历史/异常状态已过期，立即收敛为 free；正常的取消绝不走此分支。
+      await User.findByIdAndUpdate(req.user!.id, {
+        $set: {
+          plan: 'free',
+          subscriptionCancelAtPeriodEnd: false,
+          subscriptionCanceledAt: now,
+        },
+      });
+      return res.json({
+        success: true,
+        data: { cancelAtPeriodEnd: false, membershipExpiresAt: user.membershipExpiresAt || null },
+        message: '订阅已过期，已降级为免费版',
+      });
+    }
+
+    if (user.subscriptionCancelAtPeriodEnd) {
+      return res.json({
+        success: true,
+        data: {
+          cancelAtPeriodEnd: true,
+          originalExpiresAt: user.membershipExpiresAt,
+          cancelledAt: user.subscriptionCanceledAt || null,
+        },
+        message: '已取消续订，当前周期权益保留至到期日',
+      });
+    }
+
+    await User.findByIdAndUpdate(req.user!.id, {
+      $set: {
+        subscriptionCancelAtPeriodEnd: true,
+        subscriptionCanceledAt: now,
+      },
+    });
+    res.json({
+      success: true,
+      data: {
+        cancelAtPeriodEnd: true,
+        originalExpiresAt: user.membershipExpiresAt,
+        cancelledAt: now,
+      },
+      message: '已取消续订，当前周期权益保留至到期日',
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 支付状态诊断（Admin 面板用：查看当前支付渠道配置状态）
+router.get('/payment-status', requireAuth, async (_req: AuthRequest, res: Response) => {
+  const mask = (s: string | undefined) => {
+    if (!s) return '未配置';
+    if (s.length <= 8) return '****';
+    return s.slice(0, 4) + '****' + s.slice(-4);
+  };
+  const defaultProvider = process.env.DEFAULT_PAY_PROVIDER || (process.env.NODE_ENV === 'production' ? 'wechat' : 'mock');
+  res.json({
+    success: true,
+    data: {
+      defaultProvider,
+      isReal: defaultProvider !== 'mock',
+      wechat: {
+        configured: !!(process.env.WECHAT_MCH_ID && process.env.WECHAT_APP_ID && process.env.WECHAT_API_V3_KEY && process.env.WECHAT_CERT_SERIAL && process.env.WECHAT_PRIVATE_KEY && process.env.WECHAT_PLATFORM_CERT),
+        mchId: mask(process.env.WECHAT_MCH_ID),
+        appId: mask(process.env.WECHAT_APP_ID),
+        hasApiKey: !!process.env.WECHAT_API_V3_KEY,
+        hasPlatformCert: !!process.env.WECHAT_PLATFORM_CERT,
+        notifyUrl: process.env.WECHAT_NOTIFY_URL || process.env.PUBLIC_BASE_URL ? `${process.env.PUBLIC_BASE_URL}/api/billing/webhook/wechat` : '未配置',
+      },
+      alipay: {
+        configured: !!(process.env.ALIPAY_APP_ID && process.env.ALIPAY_PRIVATE_KEY),
+        appId: mask(process.env.ALIPAY_APP_ID),
+        hasPrivateKey: !!process.env.ALIPAY_PRIVATE_KEY,
+        hasPublicKey: !!process.env.ALIPAY_PUBLIC_KEY,
+        notifyUrl: process.env.PUBLIC_BASE_URL ? `${process.env.PUBLIC_BASE_URL}/api/billing/webhook/alipay` : '未配置',
+      },
+      stripe: {
+        configured: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
+        hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
+        hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+      },
+      publicBaseUrl: process.env.PUBLIC_BASE_URL || '未配置',
+    },
+  });
+});
+
+// Webhook 事件日志已抽离至 ./billing/webhook.routes.ts
+
+// 我的订单历史（需登录）
+router.get('/orders/history', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const orders = await Order.find({ userId: req.user!.id })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({ success: true, data: orders });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+// 支付 Webhook 子模块（回调验签 + 事件日志），独立维护以降低单文件复杂度
+router.use(webhookRoutes);
+
+// 退款与权益回收子模块
+router.use(refundRoutes);
+
+
+// 对账子模块
+router.use(reconciliationRoutes);
+
+/* ============================================================
+ * 毛利看板（仅 Admin 内部，绝不对客户开放）
+ * 聚合：∑已支付收入（按订单类型/月份） − ∑全站 AI 成本（按日汇总）
+ * ============================================================ */
+router.get('/profit-summary', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const month = (req.query.month as string) || new Date().toISOString().slice(0, 7); // YYYY-MM
+    const monthStart = `${month}-01`;
+    const nextMonth = new Date(`${month}-01`);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const monthEnd = nextMonth.toISOString().slice(0, 10);
+
+    // 1) 收入：按订单类型聚合当月已支付订单金额（分）
+    const paidOrders = await Order.find({
+      paymentStatus: 'paid',
+      paidAt: { $gte: new Date(monthStart), $lt: nextMonth },
+    }).lean();
+
+    const revenue = { subscription: 0, credits_pack: 0, private_license: 0, total: 0 };
+    for (const o of paidOrders as any[]) {
+      const t = o.orderType as keyof typeof revenue;
+      if (t in revenue) {
+        (revenue as any)[t] += o.amount || 0;
+        revenue.total += o.amount || 0;
+      }
+    }
+
+    // 2) 成本：聚合当月每日全站 AI 成本（分）
+    let costTotal = 0;
+    const days: number[] = [];
+    const d = new Date(monthStart);
+    while (d.toISOString().slice(0, 7) === month) {
+      days.push(Number(await getGlobalCost(d.toISOString().slice(0, 10))));
+      d.setDate(d.getDate() + 1);
+    }
+    costTotal = days.reduce((s, v) => s + v, 0);
+
+    // 3) 毛利
+    const grossProfit = revenue.total - costTotal;
+    const margin = revenue.total > 0 ? Math.round((grossProfit / revenue.total) * 1000) / 10 : 0;
+
+    res.json({
+      success: true,
+      data: {
+        month,
+        revenue,              // 分
+        cost: costTotal,       // 分
+        grossProfit,          // 分
+        margin,               // 毛利率 %
+        dailyCost: days,       // 当月每日成本（分），供折线图
+        orderCount: paidOrders.length,
+        note: '内部毛利看板，仅管理员可见，不对客户开放',
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+
+// 金网通下载（需登录验证）+ 已购买用户可下载完整版
+router.get('/private-license/download', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const type = (req.query.type as string) || 'trial';
+    const zipPath = path.join(process.cwd(), 'uploads', 'JinWangTong-Trial-v1.0.zip');
+
+    // 完整版需要登录
+    if (type === 'full') {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ success: false, error: '完整版下载需登录验证' });
+      }
+      try {
+        const jwt = require('jsonwebtoken');
+        const secret = process.env.JWT_SECRET || 'dev-secret';
+        jwt.verify(authHeader.slice(7), secret);
+      } catch {
+        return res.status(401).json({ success: false, error: '登录已过期，请重新登录' });
+      }
+    }
+
+    if (!fs.existsSync(zipPath)) {
+      logger.warn('private-license', 'Download ZIP not found: ' + zipPath);
+      return res.status(404).json({ success: false, error: '安装包暂不可用，请联系客服' });
+    }
+
+    const filename = 'JinWangTong-Trial-v1.0.zip';
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    logger.info('private-license', `Download: type=${type} ip=${ip}`);
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    fs.createReadStream(zipPath).pipe(res);
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+
+// 金网通 License 激活（客户端调用，绑定机器指纹）
+router.post('/private-license/activate', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { licenseSign, fingerprint } = req.body as { licenseSign?: string; fingerprint?: string };
+    if (!licenseSign || !fingerprint) {
+      return res.status(400).json({ success: false, error: '缺少 licenseSign 或 fingerprint' });
+    }
+    // 查找该用户的订单
+    const order = await Order.findOne({
+      userId: req.user!.id,
+      orderType: 'private_license',
+      'licensePayload.sign': licenseSign,
+      paymentStatus: 'paid',
+    }).sort({ createdAt: -1 }).lean();
+
+    if (!order || !(order as any).licensePayload) {
+      return res.status(404).json({ success: false, error: '未找到对应 License，请确认已购买' });
+    }
+
+    const existingLicense = (order as any).licensePayload;
+    if (existingLicense.fingerprint && existingLicense.fingerprint !== 'PENDING_ACTIVATION') {
+      return res.status(400).json({ success: false, error: '该 License 已激活，如需迁移请联系客服' });
+    }
+
+    const activated = activateLicense(existingLicense, fingerprint);
+    await Order.updateOne(
+      { _id: order._id },
+      { $set: { licensePayload: activated } }
+    );
+
+    logger.info('private-license', `License activated: orderNo=${order.orderNo} fingerprint=${fingerprint.slice(0, 12)}...`);
+    res.json({ success: true, data: activated });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+
+// 获取用户已购买的 License 列表（用于"我的订单"中展示下载按钮）
+router.get("/private-license/my-licenses", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const orders = await Order.find({
+      userId: req.user!.id,
+      orderType: "private_license",
+      paymentStatus: "paid",
+    }).sort({ paidAt: -1 }).select("orderNo packageId amount licensePayload createdAt paidAt").lean();
+
+    const licenses = orders.map((o: any) => ({
+      orderNo: o.orderNo,
+      packageId: o.packageId,
+      amount: o.amount,
+      paidAt: o.paidAt,
+      activated: o.licensePayload?.fingerprint && o.licensePayload?.fingerprint !== "PENDING_ACTIVATION",
+      license: o.licensePayload,
+      downloadUrl: `/api/billing/private-license/download?orderNo=${o.orderNo}`,
+    }));
+
+    res.json({ success: true, data: licenses });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+
+
+
+
+export default router;
+

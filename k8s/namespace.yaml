@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-agent-platform
+  labels:
+    app: reasonix-ai
+    env: production

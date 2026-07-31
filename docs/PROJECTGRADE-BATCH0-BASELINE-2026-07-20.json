@@ -1,0 +1,660 @@
+{
+  "runId": "148b18f4-cfb8-4125-a640-9c772365c45b",
+  "projectName": "AIbak 智评通 ProjectGrade 内部基线",
+  "projectType": "ai_application",
+  "projectUrl": "https://aibak.site",
+  "rulePackKey": "aibak-projectgrade-core",
+  "rulePackVersion": "0.1.0",
+  "assessedAt": "2026-07-20T15:08:43.048Z",
+  "rawTotalScore": 376.4,
+  "finalTotalScore": 376.4,
+  "normalizedScore": 37.6,
+  "grade": "F",
+  "releaseGate": {
+    "status": "BLOCKED",
+    "highestSeverity": "P1",
+    "scoreCap": 590,
+    "blockedForRelease": true,
+    "blockedForPaidSale": true,
+    "reasons": [
+      "核心用户旅程缺少本次生产自动验证",
+      "AI 核心能力缺少版本化测试集和生产证据",
+      "支付、权益与交付闭环未在本次运行中验证",
+      "正式发布四端版本一致性未验证"
+    ]
+  },
+  "snapshots": [
+    {
+      "dimensionKey": "product_strategy",
+      "label": "开发计划与产品战略",
+      "weight": 60,
+      "rawScore": 18,
+      "normalizedScore": 30,
+      "rules": [
+        {
+          "ruleKey": "product_strategy.baseline",
+          "title": "产品战略与交付计划可执行",
+          "weight": 60,
+          "completion": 0.75,
+          "evidenceLevel": "documentation",
+          "evidenceFactor": 0.4,
+          "awardedScore": 18,
+          "notes": "本轮仅验证文档存在，尚未将产品战略与真实客户访谈或转化数据交叉验证。",
+          "evidenceIds": [
+            "evidence_f27aee4f-ce0d-48a4-860b-9048c951bab3"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "requirements_completeness",
+      "label": "需求与产品完整性",
+      "weight": 80,
+      "rawScore": 30,
+      "normalizedScore": 37.5,
+      "rules": [
+        {
+          "ruleKey": "requirements_completeness.baseline",
+          "title": "核心需求和产品路径完整",
+          "weight": 80,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 30,
+          "notes": "源码线索不能证明所有按钮、异常路径和售后路径在生产可用。",
+          "evidenceIds": [
+            "evidence_f887fc2a-5267-4be8-9a40-9ff88c3250c5"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "architecture_engineering",
+      "label": "架构与工程设计",
+      "weight": 90,
+      "rawScore": 50.6,
+      "normalizedScore": 56.2,
+      "rules": [
+        {
+          "ruleKey": "architecture_engineering.baseline",
+          "title": "架构边界清晰且可演进",
+          "weight": 90,
+          "completion": 0.75,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 50.6,
+          "notes": "需要继续补充 ProjectGrade 自身的架构决策、队列边界和故障隔离证据。",
+          "evidenceIds": [
+            "evidence_48a04397-0fd3-4eba-b6b1-7683264c7706"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "code_maintainability",
+      "label": "代码质量与可维护性",
+      "weight": 90,
+      "rawScore": 33.8,
+      "normalizedScore": 37.6,
+      "rules": [
+        {
+          "ruleKey": "code_maintainability.baseline",
+          "title": "代码质量和维护成本受控",
+          "weight": 90,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 33.8,
+          "notes": "服务端 strict=false，且当前尚无 ProjectGrade 专项覆盖率基线。",
+          "evidenceIds": [
+            "evidence_28512a7b-9679-4bb2-978d-7d485973fc61"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "functional_reality",
+      "label": "功能闭环与真实可用性",
+      "weight": 110,
+      "rawScore": 41.3,
+      "normalizedScore": 37.5,
+      "rules": [
+        {
+          "ruleKey": "functional_reality.baseline",
+          "title": "核心功能在真实链路可用",
+          "weight": 110,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 41.3,
+          "notes": "本地源码存在不等于生产链路真实可用，本轮未附带浏览器生产自动证据。",
+          "evidenceIds": [
+            "evidence_b2972458-a0d9-471b-bd3a-90f55ad92493"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "ai_quality",
+      "label": "AI 能力质量",
+      "weight": 90,
+      "rawScore": 33.8,
+      "normalizedScore": 37.6,
+      "rules": [
+        {
+          "ruleKey": "ai_quality.baseline",
+          "title": "AI 输出质量、安全、延迟和成本可验证",
+          "weight": 90,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 33.8,
+          "notes": "尚未发现与本次运行绑定的版本化 AI 测试集、幻觉/注入评测和生产调用证据。",
+          "evidenceIds": [
+            "evidence_39c1961c-cd95-4bd6-83a9-96d40cd89a5b"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "ux_accessibility",
+      "label": "UI/UX 与无障碍",
+      "weight": 70,
+      "rawScore": 26.3,
+      "normalizedScore": 37.6,
+      "rules": [
+        {
+          "ruleKey": "ux_accessibility.baseline",
+          "title": "关键体验在多端和无障碍场景可用",
+          "weight": 70,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 26.3,
+          "notes": "尚未附带移动端、键盘、axe/Lighthouse 或真实用户体验证据。",
+          "evidenceIds": [
+            "evidence_3716152d-671b-4260-a099-b0391b75ad46"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "security_compliance",
+      "label": "安全、隐私与合规",
+      "weight": 100,
+      "rawScore": 37.5,
+      "normalizedScore": 37.5,
+      "rules": [
+        {
+          "ruleKey": "security_compliance.baseline",
+          "title": "安全、隐私和合规红线受控",
+          "weight": 100,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 37.5,
+          "notes": "没有本次运行绑定的渗透、安全扫描和生产越权验证，因此不得宣称安全完成。",
+          "evidenceIds": [
+            "evidence_6669355f-6506-4a12-b7ca-67651dfba9ca"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "commercial_delivery",
+      "label": "收费、交付与商业闭环",
+      "weight": 100,
+      "rawScore": 37.5,
+      "normalizedScore": 37.5,
+      "rules": [
+        {
+          "ruleKey": "commercial_delivery.baseline",
+          "title": "收费、权益和交付闭环真实可用",
+          "weight": 100,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 37.5,
+          "notes": "尚未附带微信支付、回调验签、权益到账、退款、License/下载和客服的生产闭环证据。",
+          "evidenceIds": [
+            "evidence_f8c32481-b155-4fdb-80b1-77e335b1b225"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "devops_reliability",
+      "label": "生产、DevOps 与可靠性",
+      "weight": 80,
+      "rawScore": 30,
+      "normalizedScore": 37.5,
+      "rules": [
+        {
+          "ruleKey": "devops_reliability.baseline",
+          "title": "正式发布链路和可靠性门禁有效",
+          "weight": 80,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 30,
+          "notes": "本轮未核验 CNB main、deploy/production、GitHub 镜像和服务器 revision 四端一致性。",
+          "evidenceIds": [
+            "evidence_aed1f06b-438e-42e5-b0ea-51ca170b34d2"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "performance_cost",
+      "label": "性能、容量与成本",
+      "weight": 60,
+      "rawScore": 11.3,
+      "normalizedScore": 18.8,
+      "rules": [
+        {
+          "ruleKey": "performance_cost.baseline",
+          "title": "性能、容量和成本边界已验证",
+          "weight": 60,
+          "completion": 0.25,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 11.3,
+          "notes": "缺少并发、延迟、队列容量、AI 成本和预算告警的可复验证据。",
+          "evidenceIds": [
+            "evidence_f5bd3986-dfa5-4c45-baac-c873c34e3c1f"
+          ]
+        }
+      ]
+    },
+    {
+      "dimensionKey": "operations_improvement",
+      "label": "运营、服务与持续改进",
+      "weight": 70,
+      "rawScore": 26.3,
+      "normalizedScore": 37.6,
+      "rules": [
+        {
+          "ruleKey": "operations_improvement.baseline",
+          "title": "运营、客服和持续改进机制可执行",
+          "weight": 70,
+          "completion": 0.5,
+          "evidenceLevel": "source_static",
+          "evidenceFactor": 0.75,
+          "awardedScore": 26.3,
+          "notes": "尚未附带 SLA、事故复盘、规则版本趋势和整改复测闭环的运营证据。",
+          "evidenceIds": [
+            "evidence_c84223f7-f24a-40c4-a5e5-4c620383c562",
+            "evidence_0568cf64-3370-4e2a-90c9-21c06bf6160d"
+          ]
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "ruleKey": "product_strategy.baseline",
+      "dimensionKey": "product_strategy",
+      "level": "documentation",
+      "title": "产品与交接文档",
+      "description": "已发现产品定位、评分体系、批次计划和验收原则文档。",
+      "sourceType": "document",
+      "source": "docs/PROJECTGRADE-HANDOFF.md, docs/AIBAK-FULL-PROJECT-HANDOFF.md",
+      "metadata": {
+        "existingPaths": [
+          "docs/PROJECTGRADE-HANDOFF.md",
+          "docs/AIBAK-FULL-PROJECT-HANDOFF.md"
+        ]
+      },
+      "id": "evidence_f27aee4f-ce0d-48a4-860b-9048c951bab3",
+      "factor": 0.4,
+      "collectedAt": "2026-07-20T15:08:43.037Z"
+    },
+    {
+      "ruleKey": "requirements_completeness.baseline",
+      "dimensionKey": "requirements_completeness",
+      "level": "source_static",
+      "title": "前后端入口与需求实现线索",
+      "description": "发现前后端路由入口，但尚未形成完整的需求—路由—API—测试追踪矩阵。",
+      "sourceType": "source_file",
+      "source": "client/src/router.tsx, server/src/index.ts",
+      "metadata": {
+        "existingPaths": [
+          "client/src/router.tsx",
+          "server/src/index.ts"
+        ]
+      },
+      "id": "evidence_f887fc2a-5267-4be8-9a40-9ff88c3250c5",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.038Z"
+    },
+    {
+      "ruleKey": "architecture_engineering.baseline",
+      "dimensionKey": "architecture_engineering",
+      "level": "source_static",
+      "title": "分层架构与容器化线索",
+      "description": "发现 React、Express、服务层和 Docker Compose 结构。",
+      "sourceType": "source_file",
+      "source": "server/src/index.ts, server/src/services, client/src/router.tsx, docker-compose.yml",
+      "metadata": {
+        "existingPaths": [
+          "server/src/index.ts",
+          "server/src/services",
+          "client/src/router.tsx",
+          "docker-compose.yml"
+        ]
+      },
+      "id": "evidence_48a04397-0fd3-4eba-b6b1-7683264c7706",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.040Z"
+    },
+    {
+      "ruleKey": "code_maintainability.baseline",
+      "dimensionKey": "code_maintainability",
+      "level": "source_static",
+      "title": "类型检查与自动化测试基础",
+      "description": "测试基础存在，但服务端 strict 仍关闭。",
+      "sourceType": "source_file",
+      "source": "server/tsconfig.json, server/jest.config.cjs, server/src/test/setup.ts",
+      "metadata": {
+        "existingPaths": [
+          "server/tsconfig.json",
+          "server/jest.config.cjs",
+          "server/src/test/setup.ts"
+        ]
+      },
+      "id": "evidence_28512a7b-9679-4bb2-978d-7d485973fc61",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.041Z"
+    },
+    {
+      "ruleKey": "functional_reality.baseline",
+      "dimensionKey": "functional_reality",
+      "level": "source_static",
+      "title": "核心功能源码入口",
+      "description": "发现认证、AI、计费和前端路由源码入口。",
+      "sourceType": "source_file",
+      "source": "server/src/routes/auth.ts, server/src/routes/ai.ts, server/src/routes/billing.ts, client/src/router.tsx",
+      "metadata": {
+        "existingPaths": [
+          "server/src/routes/auth.ts",
+          "server/src/routes/ai.ts",
+          "server/src/routes/billing.ts",
+          "client/src/router.tsx"
+        ]
+      },
+      "id": "evidence_b2972458-a0d9-471b-bd3a-90f55ad92493",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.042Z"
+    },
+    {
+      "ruleKey": "ai_quality.baseline",
+      "dimensionKey": "ai_quality",
+      "level": "source_static",
+      "title": "AI 网关、RAG 与模型调用源码",
+      "description": "发现统一网关、RAG 和模型配置相关源码。",
+      "sourceType": "source_file",
+      "source": "server/src/gateway, server/src/routes/ai-gateway.ts, server/src/services/rag.ts, server/src/routes/model-config.ts",
+      "metadata": {
+        "existingPaths": [
+          "server/src/gateway",
+          "server/src/routes/ai-gateway.ts",
+          "server/src/services/rag.ts",
+          "server/src/routes/model-config.ts"
+        ]
+      },
+      "id": "evidence_39c1961c-cd95-4bd6-83a9-96d40cd89a5b",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.042Z"
+    },
+    {
+      "ruleKey": "ux_accessibility.baseline",
+      "dimensionKey": "ux_accessibility",
+      "level": "source_static",
+      "title": "前端页面与路由实现",
+      "description": "发现 React 页面、路由和 Ant Design UI 实现。",
+      "sourceType": "source_file",
+      "source": "client/src/router.tsx, client/src/App.tsx, client/src/pages",
+      "metadata": {
+        "existingPaths": [
+          "client/src/router.tsx",
+          "client/src/App.tsx",
+          "client/src/pages"
+        ]
+      },
+      "id": "evidence_3716152d-671b-4260-a099-b0391b75ad46",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.043Z"
+    },
+    {
+      "ruleKey": "security_compliance.baseline",
+      "dimensionKey": "security_compliance",
+      "level": "source_static",
+      "title": "认证、支付和安全控制源码",
+      "description": "发现认证、支付、响应头和沙箱安全控制源码。",
+      "sourceType": "source_file",
+      "source": "server/src/middleware/auth.ts, server/src/middleware/security-headers.ts, server/src/services/payment.service.ts, server/src/services/sandbox.service.ts",
+      "metadata": {
+        "existingPaths": [
+          "server/src/middleware/auth.ts",
+          "server/src/middleware/security-headers.ts",
+          "server/src/services/payment.service.ts",
+          "server/src/services/sandbox.service.ts"
+        ]
+      },
+      "id": "evidence_6669355f-6506-4a12-b7ca-67651dfba9ca",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.044Z"
+    },
+    {
+      "ruleKey": "commercial_delivery.baseline",
+      "dimensionKey": "commercial_delivery",
+      "level": "source_static",
+      "title": "订单、支付、退款与额度源码",
+      "description": "发现订单、支付、退款、额度和账户交付相关源码。",
+      "sourceType": "source_file",
+      "source": "server/src/routes/billing.ts, server/src/models/Order.ts, server/src/models/Refund.ts, server/src/models/CreditLot.ts, server/src/routes/account.ts",
+      "metadata": {
+        "existingPaths": [
+          "server/src/routes/billing.ts",
+          "server/src/models/Order.ts",
+          "server/src/models/Refund.ts",
+          "server/src/models/CreditLot.ts",
+          "server/src/routes/account.ts"
+        ]
+      },
+      "id": "evidence_f8c32481-b155-4fdb-80b1-77e335b1b225",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.045Z"
+    },
+    {
+      "ruleKey": "devops_reliability.baseline",
+      "dimensionKey": "devops_reliability",
+      "level": "source_static",
+      "title": "容器与发布配置",
+      "description": "发现容器和发布链路配置线索。",
+      "sourceType": "source_file",
+      "source": "docker-compose.yml, .cnb.yml",
+      "metadata": {
+        "existingPaths": [
+          "docker-compose.yml",
+          ".cnb.yml"
+        ]
+      },
+      "id": "evidence_aed1f06b-438e-42e5-b0ea-51ca170b34d2",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.045Z"
+    },
+    {
+      "ruleKey": "performance_cost.baseline",
+      "dimensionKey": "performance_cost",
+      "level": "source_static",
+      "title": "限流、监控与性能线索",
+      "description": "发现部分限流或监控源码线索，但未发现本次容量与成本测试结果。",
+      "sourceType": "source_file",
+      "source": "server/src/middleware/rate-limit.ts, server/src/middleware/apm.ts, server/src/lib/prometheus.ts",
+      "metadata": {
+        "existingPaths": [
+          "server/src/middleware/rate-limit.ts",
+          "server/src/middleware/apm.ts",
+          "server/src/lib/prometheus.ts"
+        ]
+      },
+      "id": "evidence_f5bd3986-dfa5-4c45-baac-c873c34e3c1f",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.046Z"
+    },
+    {
+      "ruleKey": "operations_improvement.baseline",
+      "dimensionKey": "operations_improvement",
+      "level": "source_static",
+      "title": "客服与运营源码",
+      "description": "发现客服与运营看板相关源码。",
+      "sourceType": "source_file",
+      "source": "server/src/routes/customer-service.ts, server/src/routes/ops.ts",
+      "metadata": {
+        "existingPaths": [
+          "server/src/routes/customer-service.ts",
+          "server/src/routes/ops.ts"
+        ]
+      },
+      "id": "evidence_c84223f7-f24a-40c4-a5e5-4c620383c562",
+      "factor": 0.75,
+      "collectedAt": "2026-07-20T15:08:43.046Z"
+    },
+    {
+      "ruleKey": "operations_improvement.baseline",
+      "dimensionKey": "operations_improvement",
+      "level": "documentation",
+      "title": "交接与持续开发记录",
+      "description": "发现历史开发记录和跨窗口交接文档。",
+      "sourceType": "document",
+      "source": "MEMORY.md, docs/AIBAK-FULL-PROJECT-HANDOFF.md",
+      "metadata": {
+        "existingPaths": [
+          "MEMORY.md",
+          "docs/AIBAK-FULL-PROJECT-HANDOFF.md"
+        ]
+      },
+      "id": "evidence_0568cf64-3370-4e2a-90c9-21c06bf6160d",
+      "factor": 0.4,
+      "collectedAt": "2026-07-20T15:08:43.046Z"
+    }
+  ],
+  "findings": [
+    {
+      "ruleKey": "functional_reality.baseline",
+      "dimensionKey": "functional_reality",
+      "severity": "P1",
+      "title": "核心用户旅程缺少本次生产自动验证",
+      "description": "当前只有源码线索，无法证明登录、AI、保存、分享、下载和异常恢复在生产真实可用。",
+      "recommendation": "建立 Playwright 生产只读探针，保存请求、响应、截图、控制台和失败证据。",
+      "evidenceIds": [
+        "evidence_b2972458-a0d9-471b-bd3a-90f55ad92493"
+      ],
+      "id": "finding_915eb019-2771-4e13-88b3-f33bc5eb59fa",
+      "status": "open",
+      "createdAt": "2026-07-20T15:08:43.047Z"
+    },
+    {
+      "ruleKey": "ai_quality.baseline",
+      "dimensionKey": "ai_quality",
+      "severity": "P1",
+      "title": "AI 核心能力缺少版本化测试集和生产证据",
+      "description": "尚未用固定测试集验证真实模型回复、引用、幻觉、Prompt 注入、延迟和成本。",
+      "recommendation": "建立基准测试集、多模型运行记录和生产调用追踪，禁止 Mock 结果计入生产证据。",
+      "evidenceIds": [
+        "evidence_39c1961c-cd95-4bd6-83a9-96d40cd89a5b"
+      ],
+      "id": "finding_9186d4b1-49eb-48b3-8e54-ca2d80947d6a",
+      "status": "open",
+      "createdAt": "2026-07-20T15:08:43.047Z"
+    },
+    {
+      "ruleKey": "commercial_delivery.baseline",
+      "dimensionKey": "commercial_delivery",
+      "severity": "P1",
+      "title": "支付、权益与交付闭环未在本次运行中验证",
+      "description": "源码存在不能证明支付验签、幂等发权、退款、下载或 License 在真实环境工作。",
+      "recommendation": "完成微信支付沙箱/生产验签、订单幂等、权益到账、退款和交付的端到端验证。",
+      "evidenceIds": [
+        "evidence_f8c32481-b155-4fdb-80b1-77e335b1b225"
+      ],
+      "id": "finding_8027b017-7650-46e3-9daf-beb6ac26fc7c",
+      "status": "open",
+      "createdAt": "2026-07-20T15:08:43.047Z"
+    },
+    {
+      "ruleKey": "devops_reliability.baseline",
+      "dimensionKey": "devops_reliability",
+      "severity": "P1",
+      "title": "正式发布四端版本一致性未验证",
+      "description": "本轮没有 CNB main、deploy/production、GitHub 镜像和服务器镜像 revision 的一致性证据。",
+      "recommendation": "在 CNB 正式链路成功后核验四端 revision、健康探针和回滚路径。",
+      "evidenceIds": [
+        "evidence_aed1f06b-438e-42e5-b0ea-51ca170b34d2"
+      ],
+      "id": "finding_2b09ad70-da17-463c-bd35-bb34ad947c36",
+      "status": "open",
+      "createdAt": "2026-07-20T15:08:43.047Z"
+    },
+    {
+      "ruleKey": "code_maintainability.baseline",
+      "dimensionKey": "code_maintainability",
+      "severity": "P2",
+      "title": "服务端严格类型检查尚未开启",
+      "description": "server/tsconfig.json 当前 strict=false，降低重构和规则引擎演进的类型安全。",
+      "recommendation": "分模块收敛 any 和隐式类型，再逐步开启 strict 或严格子配置。",
+      "evidenceIds": [
+        "evidence_28512a7b-9679-4bb2-978d-7d485973fc61"
+      ],
+      "id": "finding_a804982e-2380-4518-a29b-c46f217b5b57",
+      "status": "open",
+      "createdAt": "2026-07-20T15:08:43.047Z"
+    },
+    {
+      "ruleKey": "ux_accessibility.baseline",
+      "dimensionKey": "ux_accessibility",
+      "severity": "P2",
+      "title": "移动端和无障碍证据缺失",
+      "description": "未发现本次运行绑定的手机、键盘、对比度和 axe/Lighthouse 结果。",
+      "recommendation": "为 ProjectGrade 和核心购买路径增加响应式、键盘和无障碍自动检查。",
+      "evidenceIds": [
+        "evidence_3716152d-671b-4260-a099-b0391b75ad46"
+      ],
+      "id": "finding_c854c217-e27d-4420-b8cf-a899d910bbdf",
+      "status": "open",
+      "createdAt": "2026-07-20T15:08:43.047Z"
+    },
+    {
+      "ruleKey": "performance_cost.baseline",
+      "dimensionKey": "performance_cost",
+      "severity": "P3",
+      "title": "性能、容量和 AI 成本基线缺失",
+      "description": "当前没有目标并发、P95 延迟、队列容量和单次评估成本证据。",
+      "recommendation": "定义 SLO，执行负载测试并记录容量与成本预算。",
+      "evidenceIds": [
+        "evidence_f5bd3986-dfa5-4c45-baac-c873c34e3c1f"
+      ],
+      "id": "finding_2359ecef-6074-4faf-b32d-2fb895d8176b",
+      "status": "open",
+      "createdAt": "2026-07-20T15:08:43.047Z"
+    },
+    {
+      "ruleKey": "operations_improvement.baseline",
+      "dimensionKey": "operations_improvement",
+      "severity": "P3",
+      "title": "规则版本、整改 SLA 和复测趋势尚未形成闭环",
+      "description": "已有文档和客服源码，但缺少 ProjectGrade 规则治理、负责人、截止时间和提分趋势。",
+      "recommendation": "建立规则版本、整改任务、SLA、复测和趋势报告。",
+      "evidenceIds": [
+        "evidence_c84223f7-f24a-40c4-a5e5-4c620383c562",
+        "evidence_0568cf64-3370-4e2a-90c9-21c06bf6160d"
+      ],
+      "id": "finding_457a91e8-51b1-4adc-b7fb-86eec389eb7f",
+      "status": "open",
+      "createdAt": "2026-07-20T15:08:43.047Z"
+    }
+  ],
+  "productionVerified": false,
+  "summary": "ProjectGrade 评分 37.6/100（F），原始分 376.4/1000，门禁 P1。优先补强：性能、容量与成本、开发计划与产品战略、需求与产品完整性。"
+}

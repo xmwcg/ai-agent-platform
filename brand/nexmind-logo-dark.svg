@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" width="600" height="200">
+  <defs>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366F1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366F1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A78BFA;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="600" height="200" fill="#0F172A" rx="20" />
+
+  <!-- LOGO 图标：六边形蜂巢 -->
+  <g transform="translate(80, 100)">
+    <!-- 外六边形 -->
+    <polygon points="0,-36 31,-18 31,18 0,36 -31,18 -31,-18"
+             fill="none" stroke="url(#iconGrad)" stroke-width="2.5"
+             transform="rotate(0)" />
+    <!-- 内六边形 -->
+    <polygon points="0,-20 17,-10 17,10 0,20 -17,10 -17,-10"
+             fill="url(#iconGrad)" opacity="0.15"
+             transform="rotate(0)" />
+    <!-- 中心闪电 -->
+    <polygon points="4,-14 -2,0 6,0 0,14 8,-2 -4,-2"
+             fill="url(#iconGrad)" />
+    <!-- 连接线 -->
+    <line x1="36" y1="0" x2="48" y2="0" stroke="#6366F1" stroke-width="2" opacity="0.6" />
+    <line x1="-36" y1="0" x2="-48" y2="0" stroke="#6366F1" stroke-width="2" opacity="0.6" />
+    <!-- 节点圆点 -->
+    <circle cx="48" cy="0" r="3" fill="#8B5CF6" />
+    <circle cx="-48" cy="0" r="3" fill="#6366F1" />
+    <circle cx="0" cy="-40" r="2" fill="#A78BFA" opacity="0.5" />
+    <circle cx="0" cy="40" r="2" fill="#A78BFA" opacity="0.5" />
+  </g>
+
+  <!-- 品牌文字 NexMind -->
+  <text x="150" y="90" font-family="'Inter','SF Pro Display',-apple-system,sans-serif"
+        font-size="42" font-weight="700" fill="#FFFFFF" letter-spacing="-0.5">
+    NexMind
+  </text>
+
+  <!-- 副标题 by AIbak -->
+  <text x="152" y="120" font-family="'Inter','SF Pro Display',-apple-system,sans-serif"
+        font-size="16" font-weight="400" fill="#94A3B8" letter-spacing="0.5">
+    by AIbak
+  </text>
+
+  <!-- 标语 -->
+  <text x="152" y="148" font-family="'Inter','SF Pro Display',-apple-system,sans-serif"
+        font-size="13" font-weight="400" fill="#64748B" letter-spacing="0.3">
+    Your AI Nexus. Build Smarter.
+  </text>
+</svg>

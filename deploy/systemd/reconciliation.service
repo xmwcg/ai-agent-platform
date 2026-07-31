@@ -1,0 +1,10 @@
+[Unit]
+Description=AIbak 每日自动对账
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/ai-agent-platform/deploy/cron-reconciliation.sh
+Environment=API_BASE=http://127.0.0.1:3000
+StandardOutput=journal
+StandardError=journal

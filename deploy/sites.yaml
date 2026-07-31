@@ -1,0 +1,37 @@
+# ============================================================
+# 多项目部署配置 — Auto Deploy System
+# 用法：bash deploy/batch.sh deploy --all
+#       bash deploy/batch.sh status
+#       bash deploy/batch.sh deploy --site ai-agent-platform
+# ============================================================
+
+server:
+  host: "159.75.124.59"
+  user: "root"
+  port: 22
+  # SSH 私钥路径（留空则用密码）
+  ssh_key: ""
+  # 项目存放根目录
+  base_path: "/opt"
+
+sites:
+  - name: "ai-agent-platform"
+    path: "."
+    domain: ""           # 填写域名后自动配置 SSL
+    port: 80
+    enabled: true
+    # 如果需要不同的环境变量模板
+    # env_template: "server/.env.production.example"
+
+  # ------ 未来项目模板（取消注释即可用） ------
+  # - name: "site-2"
+  #   path: "../site-2"
+  #   domain: "site2.example.com"
+  #   port: 8080
+  #   enabled: false
+  #
+  # - name: "site-3"
+  #   path: "../site-3"
+  #   domain: "site3.example.com"
+  #   port: 8081
+  #   enabled: false

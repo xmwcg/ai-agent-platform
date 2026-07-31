@@ -1,0 +1,9 @@
+{
+  "name": "ai-page",
+  "version": "1.0.0",
+  "description": "Serve AI chat page HTML",
+  "main": "index.js",
+  "dependencies": {},
+  "author": "aibak.site",
+  "license": "MIT"
+}

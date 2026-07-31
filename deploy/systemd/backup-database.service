@@ -1,0 +1,13 @@
+[Unit]
+Description=AIbak 数据库备份定时任务
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/ai-agent-platform/deploy/backup-database.sh
+StandardOutput=journal
+StandardError=journal
+
+# 备份失败不影响后续调度
+SuccessExitStatus=0 1

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- 首页 -->
+  <url><loc>https://aibak.site/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+
+  <!-- 核心产品页 -->
+  <url><loc>https://aibak.site/ai-chat</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://aibak.site/knowledge</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://aibak.site/pricing</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+
+  <!-- 金网通产品页面（高优先级引流） -->
+  <url><loc>https://aibak.site/jinwangtong</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://aibak.site/jinwangtong-demo</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+
+  <!-- 智评通 -->
+  <url><loc>https://aibak.site/project-grade</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://aibak.site/project-grade/demo</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+
+  <!-- AI 工具 -->
+  <url><loc>https://aibak.site/tools</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://aibak.site/compare</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://aibak.site/query-center</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+
+  <!-- 技能市场 -->
+  <url><loc>https://aibak.site/marketplace</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://aibak.site/skills</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://aibak.site/plugins</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+
+  <!-- 内容 -->
+  <url><loc>https://aibak.site/courses</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://aibak.site/learning-path</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://aibak.site/code</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://aibak.site/creative</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://aibak.site/calendar</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+
+  <!-- Landing 页（SEM落地） -->
+  <url><loc>https://aibak.site/landing/saas</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://aibak.site/landing/ecommerce</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://aibak.site/landing/fintech</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+
+  <!-- NexMind 新产品与知识商业化 -->
+  <url><loc>https://aibak.site/shop</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://aibak.site/guard</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://aibak.site/transync</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://aibak.site/flow</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://aibak.site/about</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://aibak.site/contact</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <!-- 用户相关 -->
+  <url><loc>https://aibak.site/login</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://aibak.site/register</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://aibak.site/referral</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+
+  <!-- 合规 -->
+  <url><loc>https://aibak.site/terms</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://aibak.site/privacy</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://aibak.site/refund-policy</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+</urlset>

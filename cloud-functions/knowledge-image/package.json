@@ -1,0 +1,9 @@
+{
+  "name": "ai-image-knowledge",
+  "version": "1.0.0",
+  "description": "aibak.site AI Image - jymkj-knowlage direct (小程序成长计划)",
+  "main": "index.js",
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.16.0"
+  }
+}

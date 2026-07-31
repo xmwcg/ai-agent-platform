@@ -1,0 +1,22 @@
+version: '3.8'
+
+# 仅用于在服务器本地构建镜像（替代从 registry 拉取不可变镜像）。
+# 由 cnb-watcher.sh 的 build_local_images 调用，镜像以提交 SHA 打标签，
+# 便于 watcher 精确引用与按 SHA 回滚。
+# 注意：build context 相对本文件所在目录（仓库根），故使用 ./server、./client。
+services:
+  server:
+    build:
+      context: ./server
+      args:
+        APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+    image: aibak-platform-server:${APP_COMMIT_SHA:-unknown}
+    init: true
+
+  client:
+    build:
+      context: ./client
+      args:
+        APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+    image: aibak-platform-client:${APP_COMMIT_SHA:-unknown}
+    init: true

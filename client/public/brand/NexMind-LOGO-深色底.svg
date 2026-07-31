@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="200" viewBox="0 0 420 200">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <rect width="420" height="200" rx="20" fill="#0F172A"/>
+  <!-- 蜂巢六边形 -->
+  <polygon points="60,60 82,48 104,60 104,84 82,96 60,84" fill="none" stroke="url(#g)" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="82,96 104,84 126,96 126,120 104,132 82,120" fill="none" stroke="#8B5CF6" stroke-width="2" stroke-linejoin="round" opacity="0.7"/>
+  <!-- 闪电 -->
+  <polygon points="82,65 76,90 86,88 80,112 96,82 86,84 92,65" fill="url(#g)" opacity="0.9"/>
+  <!-- 品牌文字 -->
+  <text x="155" y="90" font-family="system-ui,sans-serif" font-size="52" font-weight="900" fill="#FFFFFF" letter-spacing="-1.5">Nex</text>
+  <text x="260" y="90" font-family="system-ui,sans-serif" font-size="52" font-weight="900" fill="url(#g)" letter-spacing="-1.5">Mind</text>
+  <text x="155" y="118" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#8B5CF6" letter-spacing="5">BY AIBAK</text>
+  <text x="155" y="148" font-family="system-ui,sans-serif" font-size="12" fill="#94A3B8" letter-spacing="1">YOUR AI NEXUS. BUILD SMARTER.</text>
+</svg>

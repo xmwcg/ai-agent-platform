@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <!-- 修复 nginx 缺 mime.types：拦截所有 JS 请求，自动修正 Content-Type -->
+    <script>
+      (function(){
+        var origFetch = window.fetch;
+        window.fetch = function(input, init) {
+          var url = typeof input === 'string' ? input : (input && input.url);
+          if (url && url.endsWith('.js')) {
+            return origFetch.call(window, input, init).then(function(resp){
+              if (resp.ok && resp.headers && resp.headers.get('Content-Type') && !resp.headers.get('Content-Type').includes('javascript')) {
+                return resp.blob().then(function(blob){
+                  return new Response(blob, {status:resp.status,statusText:resp.statusText,headers:new Headers({'Content-Type':'application/javascript'})});
+                });
+              }
+              return resp;
+            });
+          }
+          return origFetch.call(window, input, init);
+        };
+      })();
+    </script>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NexMind by AIbak · Your AI Nexus</title>
+  <meta name="description" content="NexMind by AIbak：全栈 AI 应用平台。覆盖 AI 对话、知识中枢、智能工具箱、智评通项目质量评估、技能市场、MCP 插件与 Agent 工作流。专业版 ¥9.9/月起，支持多模型接入与开放 API 变现。" />
+    <meta name="keywords" content="AI Agent, 智能体平台, AI 对话, RAG 知识库, MCP, 工作流, 技能市场, 大模型, 开放API, AIbak" />
+  <meta name="author" content="NexMind by AIbak" />
+    <meta name="robots" content="index, follow" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="NexMind by AIbak · Your AI Nexus" />
+    <meta property="og:description" content="NexMind by AIbak 全栈 AI 平台：AI 对话 · 知识库 · 智能工具 · 智评通项目评估 · 技能市场。专业版 ¥9.9/月起。" />
+    <meta property="og:url" content="https://aibak.site/" />
+    <meta property="og:site_name" content="NexMind by AIbak" />
+    <meta property="og:image" content="https://aibak.site/og-image.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NexMind by AIbak · Your AI Nexus" />
+    <meta name="twitter:description" content="NexMind by AIbak 全栈 AI 平台：AI 对话 · 知识库 · 智能工具 · 智评通项目评估 · 技能市场。专业版 ¥9.9/月起。" />
+    <meta name="twitter:image" content="https://aibak.site/og-image.svg" />
+    <!-- 结构化数据：站点搜索 + 软件应用，获得百度/Google 富结果 -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "NexMind by AIbak",
+      "url": "https://aibak.site/",
+      "description": "打造您的全栈 AI 应用平台：AI 对话、通用知识库、智能工具箱、技能市场、MCP 插件与 Agent 工作流。",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://aibak.site/knowledge?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "NexMind by AIbak",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "url": "https://aibak.site/",
+      "description": "商业级智能体平台：覆盖 AI 对话、RAG 知识库、MCP、技能市场与 Agent 工作流，支持多模型接入与开放 API 变现。",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "CNY"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

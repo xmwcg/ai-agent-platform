@@ -1,0 +1,609 @@
+import { Router, Request, Response } from 'express';
+import { Course } from '../models/Course';
+import { UserCourseProgress } from '../models/UserCourseProgress';
+import { AuthRequest, requireAuth, optionalAuth } from '../middleware/auth';
+import { sendError } from '../lib/http-error';
+import { resolveUserPlan } from '../middleware/subscription';
+import { PlanId } from '../config/billing';
+import { canAccessCourseChapter, getCourseAccess } from '../services/course-access';
+import { logger } from '../lib/logger';
+
+const router = Router();
+
+// 创建课程（需登录）
+router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { title, description, category, level, tags, price, chapters, freePreviewChapters, requiredPlan } = req.body;
+
+    if (!title || !description) {
+      return res.status(400).json({ error: 'Title and description are required' });
+    }
+
+    const course = new Course({
+      title,
+      description,
+      category,
+      level: level || 'beginner',
+      tags: tags || [],
+      price: price ?? 0,
+      freePreviewChapters: freePreviewChapters ?? 2,
+      requiredPlan: requiredPlan ?? 'free',
+      chapters: chapters ?? [],
+      instructor: req.user!.id
+    });
+
+    await course.save();
+
+    res.status(201).json({
+      success: true,
+      data: course
+    });
+  } catch (error) {
+    logger.error('courses', '创建课程失败', error);
+    sendError(res, error);
+  }
+});
+
+// 获取课程列表
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const {
+      page = '1',
+      limit = '10',
+      category,
+      level,
+      search,
+      sortBy = 'createdAt',
+      order = 'desc'
+    } = req.query;
+
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const skip = (pageNum - 1) * limitNum;
+
+    // 构建查询
+    let query: any = { isPublished: true };
+
+    if (category) query.category = category;
+    if (level) query.level = level;
+    if (search) query.$text = { $search: search };
+
+    // 排序
+    const sort: any = {};
+    sort[sortBy as string] = order === 'asc' ? 1 : -1;
+
+    const [courses, total] = await Promise.all([
+      Course.find(query)
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum)
+        .select('-chapters.quiz -chapters.content -chapters.videoUrl -chapters.resources'), // 目录页只返回章节元数据
+      Course.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: courses.map(sanitizeCourseForCatalog),
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (error) {
+    logger.error('courses', '获取课程列表失败', error);
+    sendError(res, error);
+  }
+});
+
+// ─── 获取用户所有课程进度列表（需登录，必须在 /:id 之前注册）───
+router.get('/user/progress-list', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const progresses = await UserCourseProgress.find({ userId })
+      .populate('courseId', 'title thumbnail chapters')
+      .lean();
+
+    const data = progresses.map((p: any) => {
+      const course = p.courseId || {};
+      const chapterCount = course.chapters?.length || 0;
+      return {
+        courseId: p.courseId?._id || p.courseId,
+        courseTitle: course.title || '未知课程',
+        courseThumbnail: course.thumbnail,
+        enrolled: p.enrolled,
+        completedChapters: p.completedChapters || [],
+        quizScores: p.quizScores || {},
+        completionPct: chapterCount > 0 ? Math.round((p.completedChapters?.length || 0) / chapterCount * 100) : 0,
+        isCompleted: p.isCompleted,
+        totalStudySeconds: p.totalStudySeconds || 0,
+        lastStudyAt: p.lastStudyAt,
+        totalChapters: chapterCount,
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    logger.error('courses', '获取用户进度列表失败', error);
+    sendError(res, error);
+  }
+});
+
+// 获取已发布课程详情（公开响应不得泄漏测验答案与解析）
+router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const course = await Course.findById(req.params.id);
+
+    if (!course || !course.isPublished) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    const plan: PlanId = req.user ? (await resolveUserPlan(req.user.id)).plan : 'free';
+    res.json({
+      success: true,
+      data: sanitizeCourseForLearner(course, plan)
+    });
+  } catch (error) {
+    logger.error('courses', '获取课程详情失败', error);
+    sendError(res, error);
+  }
+});
+
+// 更新课程（需登录 + 仅作者）
+router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const course = await Course.findById(req.params.id);
+
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    if (course.instructor.toString() !== req.user!.id) {
+      return res.status(403).json({ error: '无权修改他人课程' });
+    }
+
+    const updates = req.body;
+    Object.assign(course, updates);
+    await course.save();
+
+    res.json({
+      success: true,
+      data: course
+    });
+  } catch (error) {
+    logger.error('courses', '更新课程失败', error);
+    sendError(res, error);
+  }
+});
+
+// 发布/取消发布课程（需登录 + 仅作者）
+router.patch('/:id/publish', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { isPublished } = req.body;
+
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    if (course.instructor.toString() !== req.user!.id) {
+      return res.status(403).json({ error: '无权发布他人课程' });
+    }
+
+    course.isPublished = isPublished;
+    await course.save();
+
+    res.json({
+      success: true,
+      message: `Course ${isPublished ? 'published' : 'unpublished'} successfully`
+    });
+  } catch (error) {
+    logger.error('courses', '更新发布状态失败', error);
+    sendError(res, error);
+  }
+});
+
+// 添加章节（需登录 + 仅作者）
+router.post('/:id/chapters', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    if (course.instructor.toString() !== req.user!.id) {
+      return res.status(403).json({ error: '无权向他人课程添加章节' });
+    }
+
+    course.chapters.push(req.body);
+    await course.save();
+
+    res.json({
+      success: true,
+      data: course
+    });
+  } catch (error) {
+    logger.error('courses', '添加章节失败', error);
+    sendError(res, error);
+  }
+});
+
+// ─── 课程报名（需登录）───
+router.post('/:id/enroll', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const courseId = req.params.id;
+    const userId = req.user!.id;
+
+    const course = await Course.findById(courseId);
+    if (!course || !course.isPublished) {
+      return res.status(404).json({ error: '课程不存在或未发布' });
+    }
+
+    const { plan } = await resolveUserPlan(userId);
+    const access = getCourseAccess(course, plan);
+    if (!access.hasFullAccess) {
+      return res.status(403).json({
+        error: '该课程需要会员权益',
+        code: 'COURSE_PLAN_REQUIRED',
+        requiredPlan: access.requiredPlan,
+        currentPlan: plan,
+        message: `请升级${access.requiredPlan === 'max' ? '旗舰版' : '专业版'}后开始学习`,
+      });
+    }
+
+
+    let progress = await UserCourseProgress.findOne({ userId, courseId });
+    if (progress) {
+      if (progress.enrolled) {
+        return res.json({ success: true, data: { enrolled: true, progress: formatProgress(progress, course.chapters.length) } });
+      }
+      progress.enrolled = true;
+      progress.enrolledAt = new Date();
+      await progress.save();
+    } else {
+      progress = await UserCourseProgress.create({
+        userId,
+        courseId,
+        enrolled: true,
+        enrolledAt: new Date(),
+      });
+    }
+
+    // 递增报名人数
+    await Course.findByIdAndUpdate(courseId, { $inc: { enrolledStudents: 1 } });
+
+    res.json({ success: true, data: { enrolled: true, progress: formatProgress(progress, course.chapters.length) } });
+  } catch (error) {
+    logger.error('courses', '课程报名失败', error);
+    sendError(res, error);
+  }
+});
+
+// ─── 获取用户课程进度（需登录）───
+router.get('/:id/progress', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const courseId = req.params.id;
+    const userId = req.user!.id;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ error: '课程不存在' });
+    }
+
+    const progress = await UserCourseProgress.findOne({ userId, courseId });
+
+    res.json({
+      success: true,
+      data: progress ? formatProgress(progress, course.chapters.length) : {
+        enrolled: false,
+        completedChapters: [],
+        quizScores: {},
+        completionPct: 0,
+        totalChapters: course.chapters.length,
+      },
+    });
+  } catch (error) {
+    logger.error('courses', '获取课程进度失败', error);
+    sendError(res, error);
+  }
+});
+
+// ─── 标记章节完成（需登录）───
+router.post('/:id/complete-chapter', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const courseId = req.params.id;
+    const userId = req.user!.id;
+    const { chapterIndex } = req.body;
+
+    if (chapterIndex === undefined || chapterIndex === null) {
+      return res.status(400).json({ error: 'chapterIndex 必填' });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course || !course.isPublished) {
+      return res.status(404).json({ error: '课程不存在或未发布' });
+    }
+    if (!Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= course.chapters.length) {
+      return res.status(400).json({ error: '章节索引无效' });
+    }
+
+    const { plan } = await resolveUserPlan(userId);
+    const access = getCourseAccess(course, plan);
+    if (!access.hasFullAccess) {
+      return res.status(403).json({
+        error: '当前套餐无权记录该课程进度',
+        code: 'COURSE_PLAN_REQUIRED',
+        requiredPlan: access.requiredPlan,
+        currentPlan: plan,
+      });
+    }
+
+    const enrolled = await UserCourseProgress.findOne({ userId, courseId, enrolled: true });
+    if (!enrolled) {
+      return res.status(409).json({
+        error: '请先加入课程后记录学习进度',
+        code: 'COURSE_ENROLLMENT_REQUIRED',
+      });
+    }
+
+    const progress = await UserCourseProgress.findOneAndUpdate(
+      { _id: enrolled._id, enrolled: true },
+      {
+        $addToSet: { completedChapters: chapterIndex },
+        $set: { lastStudyAt: new Date() },
+      },
+      { new: true }
+    );
+
+    // 检查是否全部完成
+    const allDone = course.chapters.every((_, i) => progress!.completedChapters.includes(i));
+    if (allDone && !progress!.isCompleted) {
+      progress!.isCompleted = true;
+      await progress!.save();
+    }
+
+    res.json({ success: true, data: formatProgress(progress!, course.chapters.length) });
+  } catch (error) {
+    logger.error('courses', '标记章节完成失败', error);
+    sendError(res, error);
+  }
+});
+
+// ─── 获取章节测验（需登录；正确答案与解析仅在提交后返回）───
+router.get('/:id/quiz/:chapterIdx', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const courseId = req.params.id;
+    const chapterIdx = Number.parseInt(req.params.chapterIdx, 10);
+
+    if (!Number.isInteger(chapterIdx) || chapterIdx < 0) {
+      return res.status(400).json({ error: '章节索引无效' });
+    }
+
+    const course = await Course.findById(courseId).select('title chapters isPublished price requiredPlan freePreviewChapters');
+    if (!course || !course.isPublished) {
+      return res.status(404).json({ error: '课程不存在或未发布' });
+    }
+    if (chapterIdx >= course.chapters.length) {
+      return res.status(400).json({ error: '章节索引无效' });
+    }
+
+    const { plan } = await resolveUserPlan(req.user!.id);
+    if (!canAccessCourseChapter(course, plan, chapterIdx)) {
+      const access = getCourseAccess(course, plan);
+      return res.status(403).json({
+        error: '当前套餐无权访问该章节测验',
+        code: 'COURSE_CHAPTER_LOCKED',
+        requiredPlan: access.requiredPlan,
+        currentPlan: plan,
+      });
+    }
+
+    const quiz = course.chapters[chapterIdx].quiz;
+    if (!quiz) {
+      return res.status(404).json({ error: '该章节没有测验' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        title: quiz.title,
+        description: quiz.description,
+        timeLimit: quiz.timeLimit,
+        passingScore: quiz.passingScore,
+        questions: quiz.questions.map((question) => ({
+          type: question.type,
+          question: question.question,
+          options: question.options,
+          points: question.points,
+        })),
+      },
+    });
+  } catch (error) {
+    logger.error('courses', '获取章节测验失败', error);
+    sendError(res, error);
+  }
+});
+
+// ─── 提交测验答案 + 自动评分（需登录）───
+router.post('/:id/quiz/:chapterIdx/submit', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const courseId = req.params.id;
+    const chapterIdx = Number.parseInt(req.params.chapterIdx, 10);
+    const userId = req.user!.id;
+    const { answers } = req.body; // { [questionIdx]: userAnswer }
+
+    if (!Number.isInteger(chapterIdx) || chapterIdx < 0) {
+      return res.status(400).json({ error: '章节索引无效' });
+    }
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+      return res.status(400).json({ error: 'answers 必须是题号到答案的对象' });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course || !course.isPublished) {
+      return res.status(404).json({ error: '课程不存在或未发布' });
+    }
+    if (chapterIdx < 0 || chapterIdx >= course.chapters.length) {
+      return res.status(400).json({ error: '章节索引无效' });
+    }
+
+    const { plan } = await resolveUserPlan(userId);
+    if (!canAccessCourseChapter(course, plan, chapterIdx)) {
+      const access = getCourseAccess(course, plan);
+      return res.status(403).json({
+        error: '当前套餐无权提交该章节测验',
+        code: 'COURSE_CHAPTER_LOCKED',
+        requiredPlan: access.requiredPlan,
+        currentPlan: plan,
+      });
+    }
+
+    const chapter = course.chapters[chapterIdx];
+    const quiz = chapter.quiz;
+    if (!quiz) {
+      return res.status(400).json({ error: '该章节没有测验' });
+    }
+
+    // 自动评分
+    let totalPoints = 0;
+    let earnedPoints = 0;
+    const results: { idx: number; correct: boolean; userAnswer: any; correctAnswer: any; points: number; explanation?: string }[] = [];
+
+    quiz.questions.forEach((q, i) => {
+      totalPoints += q.points;
+      const userAnswer = (answers && answers[i] !== undefined) ? answers[i] : null;
+      let correct = false;
+
+      if (q.type === 'multiple') {
+        // 多选：数组排序后比较
+        const userArr = Array.isArray(userAnswer) ? [...userAnswer].sort() : [];
+        const correctArr = Array.isArray(q.correctAnswer) ? [...q.correctAnswer].sort() : [q.correctAnswer];
+        correct = JSON.stringify(userArr) === JSON.stringify(correctArr);
+      } else if (q.type === 'code') {
+        // 代码题：宽松匹配（trim 后比对）
+        correct = typeof userAnswer === 'string' && userAnswer.trim() === String(q.correctAnswer).trim();
+      } else {
+        // 单选/判断/填空
+        correct = String(userAnswer) === String(q.correctAnswer);
+      }
+
+      if (correct) earnedPoints += q.points;
+
+      results.push({
+        idx: i,
+        correct,
+        userAnswer,
+        correctAnswer: q.correctAnswer,
+        points: correct ? q.points : 0,
+        explanation: q.explanation,
+      });
+    });
+
+    const score = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+    const passed = score >= quiz.passingScore;
+
+    // 持久化成绩到进度
+    const update: any = {
+      $set: {
+        [`quizScores.${chapterIdx}`]: score,
+        lastStudyAt: new Date(),
+      },
+    };
+    if (passed) {
+      update.$addToSet = { completedChapters: chapterIdx };
+    }
+
+    const progress = await UserCourseProgress.findOneAndUpdate(
+      { userId, courseId },
+      update,
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        score,
+        passed,
+        passingScore: quiz.passingScore,
+        totalPoints,
+        earnedPoints,
+        results,
+        progress: formatProgress(progress!, course.chapters.length),
+      },
+    });
+  } catch (error) {
+    logger.error('courses', '提交测验失败', error);
+    sendError(res, error);
+  }
+});
+
+export default router;
+
+/** 课程目录只返回展示所需元数据，禁止批量接口泄漏正文、资源和测验。 */
+function sanitizeCourseForCatalog(course: any) {
+  const plain = typeof course?.toObject === 'function' ? course.toObject() : course;
+  return {
+    ...plain,
+    chapters: Array.isArray(plain?.chapters)
+      ? plain.chapters.map((chapter: any) => {
+        const { content, videoUrl, resources, quiz, ...summary } = chapter;
+        return summary;
+      })
+      : [],
+  };
+}
+
+/** 课程公开详情只返回作答所需字段，正确答案与解析必须在提交评分后返回。 */
+function sanitizeCourseForLearner(course: any, plan: PlanId = 'free') {
+  const plain = typeof course?.toObject === 'function' ? course.toObject() : course;
+  const access = getCourseAccess(plain, plan);
+
+  return {
+    ...plain,
+    access,
+    chapters: Array.isArray(plain?.chapters)
+      ? plain.chapters.map((chapter: any, index: number) => {
+        const unlocked = access.hasFullAccess || index < access.freePreviewChapters;
+        return {
+          ...chapter,
+          locked: !unlocked,
+          content: unlocked ? chapter.content : undefined,
+          videoUrl: unlocked ? chapter.videoUrl : undefined,
+          resources: unlocked ? chapter.resources : [],
+          quiz: unlocked && chapter.quiz
+            ? {
+              title: chapter.quiz.title,
+              description: chapter.quiz.description,
+              timeLimit: chapter.quiz.timeLimit,
+              passingScore: chapter.quiz.passingScore,
+              questions: Array.isArray(chapter.quiz.questions)
+                ? chapter.quiz.questions.map((question: any) => ({
+                  type: question.type,
+                  question: question.question,
+                  options: question.options,
+                  points: question.points,
+                }))
+                : [],
+            }
+            : undefined,
+        };
+      })
+      : [],
+  };
+}
+
+/** 格式化进度对象 */
+function formatProgress(progress: any, totalChapters: number) {
+  const completed = progress.completedChapters?.length || 0;
+  return {
+    enrolled: progress.enrolled,
+    completedChapters: progress.completedChapters || [],
+    quizScores: progress.quizScores || {},
+    completionPct: totalChapters > 0 ? Math.round(completed / totalChapters * 100) : 0,
+    isCompleted: progress.isCompleted,
+    totalChapters,
+    lastStudyAt: progress.lastStudyAt,
+    totalStudySeconds: progress.totalStudySeconds || 0,
+  };
+}

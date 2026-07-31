@@ -1,0 +1,13 @@
+# 自动部署覆盖配置
+# 将此文件放到服务器上 /opt/ai-agent-platform/deploy/docker-compose.override.yml
+# 然后运行: docker compose -f docker-compose.production.yml -f docker-compose.override.yml up -d
+
+services:
+  server:
+    pull_policy: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+  client:
+    pull_policy: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"

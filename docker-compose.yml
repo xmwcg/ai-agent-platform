@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: ai-platform-mongodb
+    restart: unless-stopped
+    networks:
+      - ai-platform-network
+    environment:
+      MONGO_INITDB_DATABASE: ai-agent-platform
+    volumes:
+      - mongodb_data:/data/db
+    
+  sandbox-executor:
+    build: ./sandbox-executor
+    container_name: sandbox-executor
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4090
+      - SANDBOX_AUTH_TOKEN=
+      - SANDBOX_TMPDIR=/tmp/sandbox
+    volumes:
+      - sandbox_tmp:/tmp/sandbox
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - ai-platform-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "const h=require('http');const r=h.get('http://127.0.0.1:4090/health',x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)"]
+      interval: 15s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-platform-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-platform-network
+    # 安全加固：不对外暴露端口，仅 docker 内网可访问
+
+  # 后端服务
+  server:
+    build: ./server
+    container_name: ai-platform-server
+    restart: always
+    # 仅本机回环可访问，便于健康检查；公网不可直达（由前端 nginx 反代）
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - mongodb
+      - redis
+    # 进程级崩溃兜底 + 健康探针：异常退出后 Docker 自动重启；连续不健康则强杀重建
+    healthcheck:
+      # 用 node 直接请求 127.0.0.1:3000/api/health（避免 localhost 解析到 IPv6 ::1 挂起，
+      # 并加内部 3s 硬超时，杜绝 busybox wget keep-alive 误判 unhealthy）
+      test: ["CMD", "node", "-e", "const h=require('http');const r=h.get('http://127.0.0.1:3000/api/health',x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)"]
+      interval: 15s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+    # 仅保留基础设施变量；密钥与业务开关一律来自挂载的 server/.env
+    # （Docker environment 会作为 process.env 注入且 dotenv 默认不覆盖，
+    #   故切勿在此写 JWT_SECRET / ENABLE_MOCK_MODE / DEFAULT_PAY_PROVIDER，
+    #   否则会覆盖 .env 中的真实值）
+    environment:
+      - PUBLIC_STATUS_ROUTE_TARGET=cloud
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/ai-agent-platform
+      - REDIS_URL=redis://redis:6379
+      - APP_COMMIT_SHA=${APP_COMMIT_SHA:-unknown}
+    # 运行时挂载生产 .env（不烤进镜像，避免密钥泄露到镜像层）
+    volumes:
+      - ./server/.env:/usr/src/app/.env:ro
+      - server_uploads:/usr/src/app/uploads
+    networks:
+      - ai-platform-network
+
+  # 前端服务（Nginx 托管静态 + 反代 /api 到 server）
+  # 注意：生产环境由宿主机 caddy 提供 Web（直接读 /opt/ai-agent-platform/client/dist
+  # 并提供 HTTPS + 反代 /api 到 server:3000），故 client 容器不再映射 80/443，
+  # 否则会与 caddy 抢端口导致容器启动失败。保留服务本体仅用于构建前端产物。
+  client:
+    build: ./client
+    container_name: ai-platform-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    volumes:
+      - ./client/nginx.ssl.runtime.conf:/etc/nginx/conf.d/default.conf:ro
+      - /opt/certs:/etc/nginx/certs:ro
+      - /opt/certs-webroot:/usr/share/nginx/html/.well-known/acme-challenge:ro
+    networks:
+      - ai-platform-network
+
+networks:
+  ai-platform-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  server_uploads:
+  sandbox_tmp:

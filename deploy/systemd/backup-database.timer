@@ -1,0 +1,13 @@
+[Unit]
+Description=AIbak 数据库备份调度器
+
+[Timer]
+# 每日 02:00 全量备份
+OnCalendar=daily
+Persistent=true
+
+# 每小时增量备份（如果脚本支持）
+OnActiveSec=3600
+
+[Install]
+WantedBy=timers.target

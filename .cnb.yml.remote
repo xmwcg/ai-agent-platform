@@ -1,0 +1,393 @@
+main:
+  push:
+    - name: production-release
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 2
+      docker:
+        image: node:22-bookworm
+      services:
+        - docker
+      env:
+        PRODUCTION_BASE_URL: https://aibak.site
+        DEPLOY_BRANCH: deploy/production
+        IMAGE_REPOSITORY: ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG}
+        TRIVY_IMAGE: aquasec/trivy:0.58.2
+      lock:
+        key: deploy-production
+        wait: true
+        cancel-in-wait: true
+      stages:
+        - name: install-locked-dependencies
+          script: |
+            set -eu
+
+            # CNB 会终止连续 10 分钟没有输出的任务；长时间安装必须定期输出心跳，
+            # 同时通过 wait 原样传播 npm ci 的真实退出码。
+            run_with_heartbeat() {
+              label=$1
+              shift
+              "$@" &
+              command_pid=$!
+              (
+                while kill -0 "$command_pid" 2>/dev/null; do
+                  sleep 60
+                  if kill -0 "$command_pid" 2>/dev/null; then
+                    echo "[$label] 仍在执行..."
+                  fi
+                done
+              ) &
+              heartbeat_pid=$!
+
+              if wait "$command_pid"; then
+                command_status=0
+              else
+                command_status=$?
+              fi
+              kill "$heartbeat_pid" 2>/dev/null || true
+              wait "$heartbeat_pid" 2>/dev/null || true
+              return "$command_status"
+            }
+
+            cd server
+            run_with_heartbeat server-npm-ci npm ci --no-audit --no-fund
+            cd ../client
+            run_with_heartbeat client-npm-ci env NODE_OPTIONS=--max-old-space-size=8192 \
+              npm ci --no-audit --no-fund
+
+        - name: typescript-and-build-gate
+          script: |
+            set -eu
+            cd server
+            npm run build
+            cd ../client
+            npm run build
+            cd ..
+            node scripts/verify-dist-integrity.mjs client/dist
+
+        - name: project-grade-batch-0-deterministic-gate
+          script: |
+            set -eu
+            cd server
+            # 仅验证 AIbak 内部仓库的确定性规则、证据投影、整改与审计边界。
+            # 不接收用户 URL/Git/CI/生产环境作为扫描目标。
+            npm test -- --runInBand --detectOpenHandles --no-forceExit --runTestsByPath \
+              src/models/project-grade.models.test.ts \
+              src/routes/project-grade.test.ts \
+              src/services/project-grade.service.test.ts \
+              src/services/project-grade.persistence.test.ts \
+              src/services/project-grade.workflow.test.ts
+        - name: project-grade-batch-1-url-safety-gate
+          script: |
+            set -eu
+            cd server
+            # Batch 1 安全门禁只使用 mock DNS/HTTP；Feature Flag 强制关闭，禁止 CI 访问真实外部目标。
+            export PROJECT_GRADE_EXTERNAL_SCANNING_ENABLED=false
+            npm test -- --runInBand --detectOpenHandles --no-forceExit --runTestsByPath \
+              src/lib/network-safety.test.ts \
+              src/services/project-grade-url-scan.service.test.ts \
+              src/routes/project-grade.test.ts \
+              src/services/project-grade.persistence.test.ts
+        - name: project-grade-batch-2-authorized-source-safety-gate
+          script: |
+            set -eu
+            cd server
+            # Batch 2 首切片仅扫描测试创建的本地授权目录；不执行源码、不安装依赖、不访问网络。
+            # 不开放任意绝对路径、外部仓库 clone、ZIP 上传或生产验收声明。
+            export PROJECT_GRADE_EXTERNAL_SCANNING_ENABLED=false
+            npm test -- --runInBand --detectOpenHandles --no-forceExit --runTestsByPath \
+              src/services/project-grade-source-scan.service.test.ts
+
+        - name: unit-integration-and-release-tests
+          script: |
+            set -eu
+            cd server
+            npm test -- --runInBand
+            cd ..
+            node scripts/check-superpowers-sync.cjs
+            npm run test:release
+            cd client
+            npm test
+
+        - name: production-config-static-gate
+          script: |
+            set -eu
+            cd server
+            # CI 只验证生产配置契约和密钥/证书格式，不读取真实生产密钥。
+            # 真实 /etc/aibak/server.env 由服务器 watcher 在切换容器前验证。
+            npm run validate:production-contract
+
+        - name: dependency-security-scan
+          script: |
+            set -eu
+            cd server
+            npm_config_registry=https://registry.npmjs.org npm audit --audit-level=high
+            cd ../client
+            npm_config_registry=https://registry.npmjs.org npm audit --audit-level=high
+
+        - name: build-and-push-immutable-images
+          image: docker:27-cli
+          script: |
+            set -eu
+            test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
+            echo "$CNB_TOKEN" | docker login "$CNB_DOCKER_REGISTRY" \
+              --username "$CNB_TOKEN_USER_NAME" --password-stdin
+
+            server_tag="$IMAGE_REPOSITORY/server:$CNB_COMMIT"
+            client_tag="$IMAGE_REPOSITORY/client:$CNB_COMMIT"
+            export DOCKER_BUILDKIT=1
+
+            # CNB 会终止连续 10 分钟没有输出的任务。Docker BuildKit 虽启用 plain
+            # 进度，也使用心跳兜底；wait 必须传播 docker build 的真实退出码。
+            run_with_heartbeat() {
+              label=$1
+              shift
+              "$@" &
+              command_pid=$!
+              (
+                while kill -0 "$command_pid" 2>/dev/null; do
+                  sleep 60
+                  if kill -0 "$command_pid" 2>/dev/null; then
+                    echo "[$label] 仍在执行..."
+                  fi
+                done
+              ) &
+              heartbeat_pid=$!
+
+              if wait "$command_pid"; then
+                command_status=0
+              else
+                command_status=$?
+              fi
+              kill "$heartbeat_pid" 2>/dev/null || true
+              wait "$heartbeat_pid" 2>/dev/null || true
+              return "$command_status"
+            }
+
+            # 全局返回值，保持脚本兼容 docker:27-cli 的 POSIX /bin/sh。
+            RESOLVED_IMAGE=''
+            resolve_existing_image() {
+              tag=$1
+              repository=$2
+              inspection_file=$(mktemp)
+              inspection_error=$(mktemp)
+              RESOLVED_IMAGE=''
+
+              attempt=1
+              while [ "$attempt" -le 3 ]; do
+                if docker manifest inspect "$tag" >"$inspection_file" 2>"$inspection_error"; then
+                  docker pull "$tag"
+                  revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$tag")
+                  if [ "$revision" != "$CNB_COMMIT" ]; then
+                    echo "已存在的 SHA 镜像 revision 不匹配，拒绝覆盖: tag=$tag revision=$revision"
+                    rm -f "$inspection_file" "$inspection_error"
+                    return 1
+                  fi
+                  immutable_ref=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$tag" \
+                    | awk -v prefix="${repository}@" 'index($0, prefix) == 1 { print; exit }')
+                  immutable_digest=${immutable_ref##*@}
+                  if [ "${immutable_ref%@*}" != "$repository" ] \
+                    || ! echo "$immutable_digest" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
+                    echo "已存在镜像未返回合法 digest: $tag"
+                    rm -f "$inspection_file" "$inspection_error"
+                    return 1
+                  fi
+                  RESOLVED_IMAGE=$immutable_ref
+                  echo "复用已存在的不可变 SHA 镜像: $immutable_ref"
+                  rm -f "$inspection_file" "$inspection_error"
+                  return 0
+                fi
+
+                if grep -Eqi 'manifest unknown|no such manifest|manifest.*not found|not found.*manifest|resource not found|package .* not found|artifact .* not found|repository .* not found' "$inspection_error"; then
+                  rm -f "$inspection_file" "$inspection_error"
+                  return 2
+                fi
+
+                if [ "$attempt" -lt 3 ]; then
+                  echo "Registry 查询失败，第 $attempt 次重试: $tag"
+                  sleep $((attempt * 3))
+                fi
+                attempt=$((attempt + 1))
+              done
+
+              echo "Registry 查询失败，不能将网络或鉴权错误当作镜像不存在: $tag"
+              cat "$inspection_error"
+              rm -f "$inspection_file" "$inspection_error"
+              return 1
+            }
+
+            build_or_reuse_image() {
+              context=$1
+              tag=$2
+              repository=$3
+
+              if resolve_existing_image "$tag" "$repository"; then
+                return 0
+              else
+                lookup_status=$?
+              fi
+              [ "$lookup_status" -eq 2 ] || return "$lookup_status"
+
+              echo "SHA 镜像不存在，首次构建: $tag"
+              run_with_heartbeat "docker-build-$context" docker build --progress=plain --pull \
+                --build-arg APP_COMMIT_SHA="$CNB_COMMIT" \
+                -t "$tag" "$context"
+              docker push "$tag"
+              resolve_existing_image "$tag" "$repository"
+            }
+
+            build_or_reuse_image server "$server_tag" "$IMAGE_REPOSITORY/server"
+            server_ref=$RESOLVED_IMAGE
+            build_or_reuse_image client "$client_tag" "$IMAGE_REPOSITORY/client"
+            client_ref=$RESOLVED_IMAGE
+
+            server_digest=${server_ref##*@}
+            client_digest=${client_ref##*@}
+            echo "$server_digest" | grep -Eq '^sha256:[a-f0-9]{64}$'
+            echo "$client_digest" | grep -Eq '^sha256:[a-f0-9]{64}$'
+
+            mkdir -p .release
+            cat >.release/image-metadata.env <<EOF
+            SERVER_IMAGE_TAG=$server_tag
+            CLIENT_IMAGE_TAG=$client_tag
+            SERVER_IMAGE=$server_ref
+            CLIENT_IMAGE=$client_ref
+            SERVER_IMAGE_DIGEST=$server_digest
+            CLIENT_IMAGE_DIGEST=$client_digest
+            EOF
+            cat .release/image-metadata.env
+
+
+        - name: build-sandbox-executor-image
+          image: docker:27-cli
+          script: |
+            set -eu
+            test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
+            echo "$CNB_TOKEN" | docker login "$CNB_DOCKER_REGISTRY" \
+              --username "$CNB_TOKEN_USER_NAME" --password-stdin
+
+            sandbox_tag="$IMAGE_REPOSITORY/sandbox-executor:$CNB_COMMIT"
+            export DOCKER_BUILDKIT=1
+
+            cd sandbox-executor
+            docker build \
+              --progress=plain \
+              --tag "$sandbox_tag" \
+              .
+            docker push "$sandbox_tag"
+
+            sandbox_digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$sandbox_tag" || echo "")
+            echo "SANDBOX_IMAGE=$sandbox_tag" >> ../.release/image-metadata.env
+            echo "SANDBOX_IMAGE_DIGEST=$sandbox_digest" >> ../.release/image-metadata.env
+            echo "sandbox-executor image: $sandbox_tag"
+
+        - name: image-security-scan
+          image: docker:27-cli
+          script: |
+            set -eu
+            . .release/image-metadata.env
+            # Trivy 通过只读 Docker 登录配置直接扫描私有 Registry，
+            # 不把宿主 Docker socket 暴露给扫描容器。
+            docker run --rm \
+              -v "$HOME/.docker:/root/.docker:ro" \
+              "$TRIVY_IMAGE" image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 1 \
+              "$SERVER_IMAGE"
+            docker run --rm \
+              -v "$HOME/.docker:/root/.docker:ro" \
+              "$TRIVY_IMAGE" image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --exit-code 1 \
+              "$CLIENT_IMAGE"
+
+        - name: mirror-github-safely
+          image: alpine:3.21.3
+          imports:
+            - https://cnb.cool/aibak.site/cnb-github-migration-guide/-/blob/main/secrets.yml
+          script: |
+            set -eu
+            apk add --no-cache git ca-certificates
+            test -n "${GH_TOKEN:-}" || { echo "GH_TOKEN 未配置"; exit 1; }
+
+            export GIT_TERMINAL_PROMPT=0
+            git config user.name "cnb-release-bot"
+            git config user.email "cnb-release-bot@users.noreply.github.com"
+            git fetch --unshallow origin >/dev/null 2>&1 || git fetch --prune origin
+            git remote remove github-mirror >/dev/null 2>&1 || true
+            git remote add github-mirror "https://x-access-token:${GH_TOKEN}@github.com/xmwcg/ai-agent-platform.git"
+
+            if git fetch --prune github-mirror main; then
+              github_sha=$(git rev-parse refs/remotes/github-mirror/main)
+              if git merge-base --is-ancestor "$github_sha" "$CNB_COMMIT"; then
+                echo "GitHub main 可快进，执行普通 push"
+                git push github-mirror "$CNB_COMMIT:refs/heads/main"
+              else
+                unique_github_commits=$(git log --cherry-pick --right-only --format='%H' \
+                  "$CNB_COMMIT...$github_sha")
+                if git diff --quiet "$github_sha" "$CNB_COMMIT" \
+                  && [ -z "$unique_github_commits" ]; then
+                  echo "GitHub 最终内容一致且无独立补丁，执行受控 force-with-lease"
+                  git push github-mirror "$CNB_COMMIT:refs/heads/main" \
+                    --force-with-lease="refs/heads/main:$github_sha"
+                else
+                  echo "GitHub main 含 CNB 未包含的独立提交或内容，拒绝覆盖"
+                  exit 1
+                fi
+              fi
+            else
+              echo "GitHub main 尚不存在，创建镜像分支"
+              git push github-mirror "$CNB_COMMIT:refs/heads/main"
+            fi
+
+            mirrored_sha=$(git ls-remote github-mirror refs/heads/main | awk '{print $1}')
+            test "$mirrored_sha" = "$CNB_COMMIT" || {
+              echo "GitHub 镜像校验失败: expected=$CNB_COMMIT actual=$mirrored_sha"
+              exit 1
+            }
+
+        - name: promote-production-ref
+          image: alpine:3.21.3
+          script: |
+            set -eu
+            apk add --no-cache git ca-certificates
+            test -n "${CNB_TOKEN:-}" || { echo "CNB_TOKEN 未配置"; exit 1; }
+
+            export GIT_TERMINAL_PROMPT=0
+            cnb_url="https://${CNB_TOKEN_USER_NAME}:${CNB_TOKEN}@${CNB_WEB_HOST}/${CNB_REPO_SLUG}.git"
+            git remote remove cnb-release >/dev/null 2>&1 || true
+            git remote add cnb-release "$cnb_url"
+
+            if git fetch cnb-release "$DEPLOY_BRANCH"; then
+              deployed_sha=$(git rev-parse FETCH_HEAD)
+              git merge-base --is-ancestor "$deployed_sha" "$CNB_COMMIT" || {
+                echo "生产发布分支发生非快进分叉，拒绝自动覆盖"
+                exit 1
+              }
+            fi
+
+            git push cnb-release "$CNB_COMMIT:refs/heads/$DEPLOY_BRANCH"
+            promoted_sha=$(git ls-remote cnb-release "refs/heads/$DEPLOY_BRANCH" | awk '{print $1}')
+            test "$promoted_sha" = "$CNB_COMMIT" || {
+              echo "CNB 生产发布分支校验失败: expected=$CNB_COMMIT actual=$promoted_sha"
+              exit 1
+            }
+
+        - name: verify-production-release
+          script: |
+            set -eu
+            . .release/image-metadata.env
+            node deploy/verify-release.mjs \
+              --base-url "$PRODUCTION_BASE_URL" \
+              --expected-sha "$CNB_COMMIT" \
+              --expected-github-sha "$CNB_COMMIT" \
+              --expected-server-digest "$SERVER_IMAGE_DIGEST" \
+              --expected-client-digest "$CLIENT_IMAGE_DIGEST" \
+              --timeout-seconds 900 \
+              --interval-seconds 15 \
+              --evidence-file .release/production-evidence.json
+            cat .release/production-evidence.json

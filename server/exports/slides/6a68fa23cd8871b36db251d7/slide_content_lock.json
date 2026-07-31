@@ -1,0 +1,19 @@
+{
+  "projectId": "6a68fa23cd8871b36db251d7",
+  "style": {
+    "styleId": "cyber-04",
+    "name": "象牙白深蓝",
+    "colors": {
+      "primary": "#12355B",
+      "accent": "#12355B",
+      "background": "#F7F6F0",
+      "text": "#101820",
+      "secondaryText": "#6F7275",
+      "line": "#C9CDD1"
+    },
+    "fontFamily": "微软雅黑, Microsoft YaHei, sans-serif"
+  },
+  "pages": [],
+  "generatedAt": "2026-07-28T18:51:15.709Z",
+  "generationMode": "quick"
+}

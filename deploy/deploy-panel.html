@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AIbak 一键部署</title>
+<style>
+  body { font-family: system-ui; max-width: 600px; margin: 40px auto; padding: 20px; }
+  .btn { display: block; width: 100%; padding: 16px; margin: 12px 0; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; color: white; }
+  .btn-deploy { background: #6366F1; }
+  .btn-deploy:hover { background: #4F46E5; }
+  .btn-check { background: #059669; }
+  .btn-check:hover { background: #047857; }
+  .log { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow-y: auto; margin-top: 16px; }
+  h2 { color: #1f2937; }
+  .status { padding: 12px; border-radius: 8px; margin: 12px 0; }
+  .ok { background: #d1fae5; color: #065f46; }
+  .fail { background: #fee2e2; color: #991b1b; }
+</style>
+</head>
+<body>
+<h2>🚀 AIbak 生产部署面板</h2>
+
+<p>点击下方按钮触发部署。部署脚本会：拉取最新代码 → 构建前后端 → Docker Compose 重启。</p>
+
+<button class="btn btn-deploy" onclick="deploy()">🔧 一键部署到生产环境</button>
+<button class="btn btn-check" onclick="check()">✅ 验证线上状态</button>
+
+<div id="status"></div>
+<div id="log" class="log" style="display:none"></div>
+
+<script>
+const BASE = "https://www.aibak.site";
+const LOG = document.getElementById("log");
+const STATUS = document.getElementById("status");
+
+function log(msg) {
+  LOG.style.display = "block";
+  LOG.textContent += msg + "\n";
+  LOG.scrollTop = LOG.scrollHeight;
+}
+
+async function check() {
+  STATUS.innerHTML = "";
+  LOG.style.display = "block";
+  LOG.textContent = "正在检测...\n";
+  
+  const endpoints = [
+    ["/api/health", "健康检查"],
+    ["/api/studio/scenes", "Studio 创作工坊"],
+    ["/api/courses", "课程系统"],
+    ["/api/billing/plans", "支付套餐"],
+  ];
+  
+  for (const [path, label] of endpoints) {
+    try {
+      const resp = await fetch(BASE + path);
+      const cls = resp.ok ? "ok" : "fail";
+      const body = await resp.text().catch(() => "(无法读取)");
+      log(`[${resp.status}] ${label}: ${body.slice(0, 100)}`);
+    } catch(e) {
+      log(`[ERROR] ${label}: ${e.message}`);
+    }
+  }
+  log("检测完成");
+}
+
+async function deploy() {
+  STATUS.innerHTML = '<div class="status fail">⚠️ 浏览器无法直接 SSH 到服务器。请复制以下命令在服务器终端执行：</div>';
+  LOG.style.display = "block";
+  LOG.textContent = `# 方法 1: Docker Compose 部署
+cd /opt/ai-agent-platform && git pull origin main
+docker compose build
+docker compose up -d --force-recreate
+
+# 方法 2: 使用部署脚本
+bash <(curl -s https://cnb.cool/aibak.site/ai-agent-platform/-/raw/main/deploy/deploy-now.sh)
+
+# 方法 3: 仅诊断
+bash <(curl -s https://cnb.cool/aibak.site/ai-agent-platform/-/raw/main/deploy/diagnose.sh)
+`;
+}
+</script>
+</body>
+</html>

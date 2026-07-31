@@ -1,0 +1,44 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+coverage/
+
+# 运行时数据
+uploads/
+logs/
+*.log
+test-run*.log
+lint-run*.log
+
+# 密钥与环境变量（禁止提交；保留示例模板）
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# MoneyPrinterTurbo 生产密钥（含真实 API key，禁止提交；仅留模板）
+deploy/mpt/config.toml
+deploy/mpt/config.*.toml
+!deploy/mpt/config.example.toml
+
+# 系统
+.DS_Store
+Thumbs.db
+_cli*.txt
+_cli_log.zip
+_fullci*.txt
+ai-agent-platform-*.html
+server/.cache/
+
+# Temp/scratch files
+.ssh_id_ed25519
+_write_alert.js
+client/src/fix-old.txt
+sandbox-executor/.fix_executor.py
+server/src/middleware/rate-limit.patch.js
+server/src/scripts/validate-production-config.ts.bak
+*.md.bak
+
+
+deploy_key*

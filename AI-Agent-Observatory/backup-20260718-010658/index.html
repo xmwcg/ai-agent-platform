@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codex Token 面板</title>
+<style>
+:root{color-scheme:dark;--bg:#07111f;--panel:#0f1c2e;--line:#20324b;--text:#e7eef9;--muted:#91a4bf;--blue:#52a8ff;--green:#48d597;--purple:#a982ff;--orange:#ffb454;--red:#ff7272}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,"Segoe UI",sans-serif;background:radial-gradient(circle at top right,#183052 0,#07111f 45%);color:var(--text);min-height:100vh}.wrap{max-width:1280px;margin:auto;padding:28px}.header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:24px}.title{font-size:30px;font-weight:750;margin:0 0 7px}.sub{color:var(--muted);font-size:14px}.actions{display:flex;align-items:center;gap:12px}.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}button{border:1px solid var(--line);background:#14243a;color:var(--text);border-radius:10px;padding:9px 14px;cursor:pointer}button:hover{border-color:var(--blue)}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}.card,.panel{background:linear-gradient(145deg,rgba(18,34,55,.96),rgba(12,25,42,.96));border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.18)}.card{padding:18px}.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.value{font-size:25px;font-weight:750;margin-top:8px}.blue{color:var(--blue)}.green{color:var(--green)}.purple{color:var(--purple)}.orange{color:var(--orange)}.panel{padding:20px;margin-top:16px}.panel h2{font-size:16px;margin:0 0 16px}.cols{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.bars{height:220px;display:flex;gap:8px;align-items:flex-end;border-bottom:1px solid var(--line);padding:15px 5px 0}.bar-wrap{height:100%;flex:1;display:flex;align-items:flex-end;position:relative}.bar{width:100%;min-height:2px;background:linear-gradient(180deg,var(--blue),#2862d7);border-radius:5px 5px 0 0}.bar-wrap:hover:after{content:attr(data-tip);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);white-space:nowrap;background:#030a13;border:1px solid var(--line);padding:6px 8px;border-radius:7px;font-size:11px;z-index:3}.days{display:flex;gap:8px;padding:8px 5px 0;color:var(--muted);font-size:10px}.days span{flex:1;text-align:center;overflow:hidden}.models{display:flex;flex-wrap:wrap;gap:9px}.chip{background:#172a43;border:1px solid #28415f;border-radius:999px;padding:7px 11px;font-size:12px}.month-row{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:11px 0}.month-row:last-child{border:0}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:var(--muted);font-weight:500;padding:10px;border-bottom:1px solid var(--line)}td{padding:11px 10px;border-bottom:1px solid rgba(32,50,75,.65)}tbody tr:hover{background:rgba(82,168,255,.04)}.right{text-align:right}.empty,.error{color:var(--muted);padding:35px;text-align:center}.error{color:var(--red)}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}.header{flex-direction:column}}@media(max-width:520px){.wrap{padding:16px}.grid{grid-template-columns:1fr}.title{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div><h1 class="title">Codex Token 面板</h1><div class="sub" id="meta">正在读取本机 Codex 记录…</div></div>
+    <div class="actions"><span class="dot"></span><span class="sub">本机运行</span><button id="refresh">刷新</button></div>
+  </div>
+  <div class="grid" id="cards"></div>
+  <div class="cols">
+    <section class="panel"><h2>最近 6 个月 Token</h2><div id="chart"></div></section>
+    <section class="panel"><h2>使用模型</h2><div class="models" id="models"></div><h2 style="margin-top:24px">最近月份</h2><div id="months"></div></section>
+  </div>
+  <section class="panel"><h2>最近会话</h2><div style="overflow:auto"><table><thead><tr><th>最后活动</th><th>模型</th><th class="right">输入</th><th class="right">输出</th><th class="right">推理</th><th class="right">缓存</th><th class="right">总量</th></tr></thead><tbody id="sessions"></tbody></table></div></section>
+</div>
+<script>
+const fmt=n=>new Intl.NumberFormat('zh-CN',{notation:n>=1e7?'compact':'standard',maximumFractionDigits:1}).format(n||0);
+const exact=n=>new Intl.NumberFormat('zh-CN').format(n||0);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function localDate(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date())}
+function modelNames(row){return Object.keys(row?.models||{})}
+function lastSixMonths(rows){
+ const byMonth=new Map(rows.map(x=>[x.month||x.date,x])),now=new Date();
+ return Array.from({length:6},(_,i)=>{const date=new Date(now.getFullYear(),now.getMonth()-5+i,1),month=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;return byMonth.get(month)||{month,totalTokens:0}});
+}
+function render(d){
+ const today=d.daily.find(x=>x.date===localDate())||d.daily.at(-1)||{};
+ const cards=[['输入',today.inputTokens,'blue'],['输出',today.outputTokens,'green'],['推理',today.reasoningOutputTokens,'purple'],['缓存读取',today.cacheReadTokens,'orange'],['今日总量',today.totalTokens,'']];
+ document.querySelector('#cards').innerHTML=cards.map(x=>`<div class="card"><div class="label">${x[0]}</div><div class="value ${x[2]}" title="${exact(x[1])}">${fmt(x[1])}</div></div>`).join('');
+ document.querySelector('#meta').textContent=`${d.codexVersion} · ${d.ccusageVersion} · 更新 ${new Date(d.generatedAt).toLocaleString('zh-CN')}`;
+ const months=lastSixMonths(d.monthly),max=Math.max(...months.map(x=>x.totalTokens||0),1);
+ document.querySelector('#chart').innerHTML=months.length?`<div class="bars">${months.map(x=>`<div class="bar-wrap" data-tip="${x.month||x.date} · ${exact(x.totalTokens)}"><div class="bar" style="height:${Math.max(1,(x.totalTokens||0)/max*100)}%"></div></div>`).join('')}</div><div class="days">${months.map(x=>`<span>${String(x.month||x.date).slice(2)}</span>`).join('')}</div>`:'<div class="empty">没有记录</div>';
+ const models=[...new Set(d.daily.flatMap(modelNames))];
+ document.querySelector('#models').innerHTML=models.length?models.map(x=>`<span class="chip">${esc(x)}</span>`).join(''):'<div class="empty">没有记录</div>';
+ document.querySelector('#months').innerHTML=months.slice().reverse().map(x=>`<div class="month-row"><span>${esc(x.month||x.date)}</span><strong>${fmt(x.totalTokens)}</strong></div>`).join('');
+ document.querySelector('#sessions').innerHTML=d.sessions.slice().sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,15).map(x=>`<tr><td>${new Date(x.lastActivity).toLocaleString('zh-CN')}</td><td>${esc(modelNames(x).join(', '))}</td><td class="right">${fmt(x.inputTokens)}</td><td class="right">${fmt(x.outputTokens)}</td><td class="right">${fmt(x.reasoningOutputTokens)}</td><td class="right">${fmt(x.cacheReadTokens)}</td><td class="right"><strong>${fmt(x.totalTokens)}</strong></td></tr>`).join('');
+}
+async function load(){
+ const b=document.querySelector('#refresh');b.disabled=true;b.textContent='读取中…';
+ try{const r=await fetch('/api/data',{cache:'no-store'});if(!r.ok)throw new Error((await r.json()).error||r.statusText);render(await r.json())}
+ catch(e){document.querySelector('#meta').innerHTML=`<span class="error">读取失败：${esc(e.message)}</span>`}
+ finally{b.disabled=false;b.textContent='刷新'}
+}
+document.querySelector('#refresh').onclick=load;load();setInterval(load,30000);
+</script>
+</body>
+</html>

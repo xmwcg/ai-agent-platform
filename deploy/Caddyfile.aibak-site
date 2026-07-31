@@ -1,0 +1,17 @@
+# AI Agent Platform 生产域名权威配置。
+# aibak.site 与 www.aibak.site 必须始终服务 NexMind Platform。
+
+aibak.site www.aibak.site {
+	tls /etc/caddy/certs/aibak.site.crt /etc/caddy/certs/aibak.site.key
+
+	root * /opt/ai-agent-platform/client/dist
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,306 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  RobotOutlined, SendOutlined, PlusOutlined, UserOutlined,
+  CopyOutlined, GiftOutlined,
+} from '@ant-design/icons';
+import { message } from 'antd';
+import { useChatStore } from '@/stores/chat';
+import { aiAPI, aibakAPI } from '@/services/api';
+import { useAuthStore } from '@/stores/auth';
+
+// ─── Codex 风格深色配色 ───
+const C = {
+  bg: '#0d0e10',
+  panel: '#16171a',
+  surface: '#1d1f23',
+  border: '#2a2c31',
+  text: '#ececf1',
+  sub: '#9aa0a6',
+  accent: '#6366f1',
+  userBubble: '#2b2d33',
+  aiBubble: '#1d1f23',
+};
+
+/**
+ * 首页免费体验面板仅暴露「平台允许的三个免费模型」，与全站免费阵容严格一致：
+ *   - agnes/agnes-2.0-flash      （默认，免费，agnes 通道）
+ *   - zhipu/glm-4.7-flash        （GLM-4.7-Flash 免费层，智谱通道）
+ *   - cloudbase/hy3              （云函数小程序 · 走 /api/aibak/chat 免费额度）
+ * 不在此列表中的付费模型一律不可在首页面板选择，避免绕过免费阵容约束。
+ * 后端免费额度 / 次数限制 / 阀门 / 免费→付费引导 全部由服务端统一中间件强制，
+ * 本组件仅做 UI 与通道路由，不触碰任何业务逻辑。
+ */
+const FREE_MODELS: { value: string; label: string; channel: 'gateway' | 'aibak' }[] = [
+  { value: 'agnes/agnes-2.0-flash', label: 'Agnes 2.0 Flash', channel: 'gateway' },
+  { value: 'zhipu/glm-4.7-flash', label: 'GLM-4.7-Flash', channel: 'gateway' },
+  { value: 'cloudbase/hy3', label: '云函数小程序 · Hunyuan', channel: 'aibak' },
+];
+
+const SUGGESTIONS = [
+  '帮我写一个 Python 快速排序',
+  '用通俗语言解释什么是 RAG',
+  '帮我写一份产品上线方案',
+  '把这段话翻译成英文',
+];
+
+export default function HomeChatPanel() {
+  const navigate = useNavigate();
+  const {
+    sessions, activeSessionId,
+    createSession, switchSession, addMessage, updateMessage, setLoading,
+  } = useChatStore();
+  const user = useAuthStore((s) => s.user);
+  const status = useAuthStore((s) => s.status);
+
+  const [model, setModel] = useState(FREE_MODELS[0].value); // 默认 agnes
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const messages = activeSession?.messages || [];
+  const loading = useChatStore((s) => s.loading);
+
+  // 确保进入首页就有可对话的活跃会话
+  useEffect(() => {
+    if (!activeSessionId) {
+      if (sessions.length > 0) switchSession(sessions[0].id);
+      else createSession();
+    }
+  }, [activeSessionId, sessions.length, createSession, switchSession]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages.length, loading]);
+
+  const handleSend = useCallback(async (raw: string) => {
+    const text = raw.trim();
+    const isLoading = useChatStore.getState().loading;
+    if (!text || isLoading) return;
+    let sid = useChatStore.getState().activeSessionId;
+    if (!sid) sid = createSession();
+    addMessage({ role: 'user', content: text, model, mode: 'qa' });
+    const aiMsgId = addMessage({ role: 'assistant', content: '思考中…', model, mode: 'qa' });
+    setLoading(true);
+    try {
+      const hist = (useChatStore.getState().getActiveSession()?.messages || [])
+        .filter((m) => !(m.role === 'assistant' && m.content === '思考中…'))
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      const sel = FREE_MODELS.find((m) => m.value === model) || FREE_MODELS[0];
+      let reply = '（AI 无响应，请稍后重试）';
+
+      if (sel.channel === 'aibak') {
+        // 云函数小程序免费通道：/api/aibak/chat（匿名可用，受匿名免费额度限制）
+        const res: any = await aibakAPI.chat({
+          message: text,
+          history: hist.slice(-10),
+          model: 'hy3',
+        });
+        reply = res?.data?.text || res?.text || res?.data?.message || res?.message || reply;
+      } else {
+        // agnes / GLM-4.7-Flash：走统一网关 /api/ai/chat（匿名可用，受免费额度+阀门+配额限制）
+        const res: any = await aiAPI.chat({
+          message: text,
+          history: hist.slice(-10),
+          model,
+        });
+        reply =
+          res?.text || res?.message || res?.reply ||
+          res?.data?.message || res?.data?.text || reply;
+      }
+      updateMessage(aiMsgId, { content: reply });
+    } catch (err: any) {
+      const errMsg =
+        err?.response?.data?.error || err?.response?.data?.message || err?.message || '请求失败';
+      updateMessage(aiMsgId, { content: `⚠️ 请求失败：${errMsg}` });
+    } finally {
+      setLoading(false);
+    }
+  }, [addMessage, createSession, updateMessage, setLoading, model]);
+
+  const [input, setInput] = useState('');
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = taRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+    }
+  }, [input]);
+
+  const onSend = () => {
+    const v = input.trim();
+    if (!v) return;
+    handleSend(v);
+    setInput('');
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  const copy = (content: string) => {
+    navigator.clipboard?.writeText(content)
+      .then(() => message.success('已复制'))
+      .catch(() => message.error('复制失败'));
+  };
+
+  const openLogin = () => navigate('/login?redirect=' + encodeURIComponent('/'));
+
+  return (
+    <div className="hc-panel">
+      {/* 顶栏 */}
+      <div className="hc-head">
+        <div className="hc-brand">
+          <span className="hc-logo"><RobotOutlined /></span>
+          <div>
+            <div className="hc-title">AIbak AI</div>
+            <div className="hc-sub">免费体验 · 由平台免费额度驱动</div>
+          </div>
+        </div>
+        <button className="hc-new" onClick={() => createSession()} title="新建对话">
+          <PlusOutlined /> 新对话
+        </button>
+      </div>
+
+      {/* 引流条（未登录时 · 免费→付费引导，UI 层） */}
+      {(!user && status !== 'loading') && (
+        <div className="hc-lead" onClick={openLogin}>
+          <GiftOutlined /> 注册免费领 100 积分，解锁全部 AI 模型
+          <span className="hc-lead-arrow">→</span>
+        </div>
+      )}
+
+      {/* 免费模型选择（仅三个平台免费模型，agnes 默认） */}
+      <div className="hc-modelrow">
+        <span className="hc-model-label">免费模型</span>
+        <select
+          className="hc-select"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+        >
+          {FREE_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}（免费）</option>
+          ))}
+        </select>
+      </div>
+
+      {/* 消息区 */}
+      <div className="hc-messages" ref={scrollRef}>
+        {messages.length === 0 ? (
+          <div className="hc-empty">
+            <div className="hc-empty-icon"><RobotOutlined /></div>
+            <div className="hc-empty-title">今天想让我帮你做什么？</div>
+            <div className="hc-empty-sub">直接提问，或选个示例开始</div>
+            <div className="hc-chips">
+              {SUGGESTIONS.map((s) => (
+                <button key={s} className="hc-chip" onClick={() => handleSend(s)}>{s}</button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="hc-msglist">
+            {messages.map((m: any) => {
+              const isUser = m.role === 'user';
+              return (
+                <div key={m.id} className={`hc-msg ${isUser ? 'hc-user' : 'hc-ai'}`}>
+                  <div className="hc-avatar">{isUser ? <UserOutlined /> : <RobotOutlined />}</div>
+                  <div className="hc-bubblewrap">
+                    <div className="hc-bubble">{m.content}</div>
+                    {!isUser && (
+                      <button className="hc-copy" onClick={() => copy(m.content)}>
+                        <CopyOutlined /> 复制
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {loading && (
+              <div className="hc-msg hc-ai">
+                <div className="hc-avatar"><RobotOutlined /></div>
+                <div className="hc-bubble">
+                  <span className="hc-dot" /><span className="hc-dot" /><span className="hc-dot" />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 输入区 */}
+      <div className="hc-inputarea">
+        <textarea
+          ref={taRef}
+          className="hc-textarea"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKey}
+          placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+          rows={1}
+        />
+        <button className="hc-send" onClick={onSend} disabled={!input.trim() || loading}>
+          <SendOutlined />
+        </button>
+      </div>
+
+      <style>{`
+        .hc-panel {
+          display: flex; flex-direction: column; height: 100%;
+          background: ${C.bg}; border-radius: 16px; overflow: hidden;
+          border: 1px solid ${C.border};
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+        .hc-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid ${C.border}; }
+        .hc-brand { display: flex; align-items: center; gap: 10px; }
+        .hc-logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg,#6c5ce7,#a29bfe); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 17px; }
+        .hc-title { font-size: 15px; font-weight: 700; color: ${C.text}; }
+        .hc-sub { font-size: 11px; color: ${C.sub}; }
+        .hc-new { display: flex; align-items: center; gap: 4px; font-size: 12px; color: ${C.text}; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 9px; padding: 6px 10px; cursor: pointer; }
+        .hc-new:hover { border-color: ${C.accent}; }
+        .hc-lead { display: flex; align-items: center; gap: 6px; margin: 10px 12px 0; padding: 8px 12px; font-size: 12px; color: #ffe9b3; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px; cursor: pointer; }
+        .hc-lead-arrow { margin-left: auto; }
+        .hc-modelrow { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid ${C.border}; }
+        .hc-model-label { font-size: 12px; color: ${C.sub}; white-space: nowrap; }
+        .hc-select { flex: 1; font-size: 12px; color: ${C.text}; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 8px; padding: 6px 8px; outline: none; font-family: inherit; cursor: pointer; }
+        .hc-select:focus { border-color: ${C.accent}; }
+        .hc-select option { background: ${C.surface}; color: ${C.text}; }
+        .hc-messages { flex: 1; overflow-y: auto; padding: 16px; }
+        .hc-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+        .hc-empty-icon { width: 64px; height: 64px; border-radius: 50%; background: ${C.surface}; display: flex; align-items: center; justify-content: center; color: #a29bfe; font-size: 30px; margin-bottom: 14px; }
+        .hc-empty-title { font-size: 18px; font-weight: 700; color: ${C.text}; }
+        .hc-empty-sub { font-size: 13px; color: ${C.sub}; margin-top: 6px; }
+        .hc-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; max-width: 340px; }
+        .hc-chip { font-size: 12px; color: ${C.text}; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; padding: 7px 12px; cursor: pointer; transition: all .15s; }
+        .hc-chip:hover { border-color: ${C.accent}; background: #222; }
+        .hc-msglist { display: flex; flex-direction: column; gap: 14px; }
+        .hc-msg { display: flex; gap: 10px; align-items: flex-start; }
+        .hc-msg.hc-user { flex-direction: row-reverse; }
+        .hc-avatar { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; }
+        .hc-ai .hc-avatar { background: ${C.accent}; }
+        .hc-user .hc-avatar { background: #10b981; }
+        .hc-bubblewrap { max-width: 82%; display: flex; flex-direction: column; }
+        .hc-user .hc-bubblewrap { align-items: flex-end; }
+        .hc-bubble { padding: 10px 13px; border-radius: 12px; font-size: 14px; line-height: 1.6; color: ${C.text}; word-break: break-word; white-space: pre-wrap; }
+        .hc-ai .hc-bubble { background: ${C.aiBubble}; border: 1px solid ${C.border}; border-top-left-radius: 4px; }
+        .hc-user .hc-bubble { background: ${C.userBubble}; border-top-right-radius: 4px; }
+        .hc-copy { align-self: flex-end; margin-top: 4px; font-size: 12px; color: ${C.sub}; background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+        .hc-copy:hover { color: ${C.text}; }
+        .hc-dot { display: inline-block; width: 6px; height: 6px; margin: 0 2px; background: ${C.sub}; border-radius: 50%; animation: hcPulse 1.2s ease-in-out infinite; }
+        .hc-dot:nth-child(2) { animation-delay: .2s } .hc-dot:nth-child(3) { animation-delay: .4s }
+        @keyframes hcPulse { 0%,80%,100% { opacity: .3; transform: scale(.8) } 40% { opacity: 1; transform: scale(1) } }
+        .hc-inputarea { display: flex; align-items: flex-end; gap: 8px; padding: 12px; border-top: 1px solid ${C.border}; background: ${C.panel}; }
+        .hc-textarea { flex: 1; resize: none; background: ${C.surface}; border: 1px solid ${C.border}; border-radius: 12px; color: ${C.text}; padding: 10px 12px; font-size: 14px; line-height: 1.5; max-height: 140px; outline: none; font-family: inherit; }
+        .hc-textarea:focus { border-color: ${C.accent}; }
+        .hc-textarea::placeholder { color: #5b6068; }
+        .hc-send { width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; border: none; background: ${C.accent}; color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .hc-send:disabled { background: #3a3d44; color: #777; cursor: not-allowed; }
+        .hc-send:not(:disabled):hover { background: #7c7ff5; }
+        .hc-messages::-webkit-scrollbar { width: 6px } .hc-messages::-webkit-scrollbar-thumb { background: #33363c; border-radius: 3px }
+      `}</style>
+    </div>
+  );
+}

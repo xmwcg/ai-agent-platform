@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f0a2e"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="900" cy="200" r="250" fill="#8b5cf6" opacity="0.15"/>
+  <circle cx="400" cy="500" r="180" fill="#6c5ce7" opacity="0.1"/>
+  <text x="80" y="140" font-family="Microsoft YaHei,PingFang SC,sans-serif" font-size="64" fill="#ffffff" font-weight="bold">AIbak · 打造您的全栈 AI 应用平台</text>
+  <line x1="80" y1="170" x2="480" y2="170" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/>
+  <text x="80" y="250" font-family="Microsoft YaHei,PingFang SC,sans-serif" font-size="28" fill="#a1a1aa">AI 对话 · RAG 知识库 · 智能工具箱 · 技能市场</text>
+  <text x="80" y="300" font-family="Microsoft YaHei,PingFang SC,sans-serif" font-size="28" fill="#a1a1aa">MCP 插件 · Agent 工作流 · 智评通项目评估 · 开放 API 变现</text>
+  <text x="80" y="420" font-family="Microsoft YaHei,PingFang SC,sans-serif" font-size="22" fill="#71717a">支持多模型接入 · 团队协作 · 免费版可用 · 专业版 9.9元/月起</text>
+  <text x="80" y="470" font-family="Microsoft YaHei,PingFang SC,sans-serif" font-size="22" fill="#52525b">aibak.site · AI Agent Platform · 商业级智能体平台</text>
+  <rect x="80" y="510" width="200" height="48" rx="24" fill="url(#accent)"/>
+  <text x="180" y="542" font-family="Microsoft YaHei,PingFang SC,sans-serif" font-size="22" fill="#ffffff" text-anchor="middle" font-weight="bold">立即体验</text>
+</svg>
