@@ -1,8 +1,7 @@
 import { buildRagAccessFilter } from './rag-access';
 
 describe('RAG knowledge access filter (fail-closed)', () => {
-  const publicClause = {
-    isPublic: true,
+  const freeFullText = {
     requiredPlan: { $in: [null, 'free'] },
     $and: [
       { $or: [{ creditsCost: { $exists: false } }, { creditsCost: { $lte: 0 } }] },
@@ -12,22 +11,24 @@ describe('RAG knowledge access filter (fail-closed)', () => {
   };
 
   it('only exposes free, full-text public knowledge to anonymous callers', () => {
-    expect(buildRagAccessFilter()).toEqual(publicClause);
+    expect(buildRagAccessFilter()).toEqual({ $and: [{ isPublic: true }, freeFullText] });
   });
 
   it('adds owned documents but never an unrestricted team predicate', () => {
     expect(buildRagAccessFilter('user-a')).toEqual({
-      $or: [publicClause, { author: 'user-a' }],
+      $and: [{ $or: [{ isPublic: true }, { author: 'user-a' }] }, freeFullText],
     });
   });
 
-  it('limits team documents to explicitly resolved memberships', () => {
+  it('requires free full-text entitlement for every team or owned document', () => {
     expect(buildRagAccessFilter('user-a', ['team-a', 'team-b'])).toEqual({
-      $or: [
-        publicClause,
-        { author: 'user-a' },
-        { teamId: { $in: ['team-a', 'team-b'] } },
-      ],
+      $and: [{
+        $or: [
+          { isPublic: true },
+          { author: 'user-a' },
+          { teamId: { $in: ['team-a', 'team-b'] } },
+        ],
+      }, freeFullText],
     });
   });
 });
