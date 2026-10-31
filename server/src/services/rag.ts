@@ -4,6 +4,8 @@ import { callCloudbaseChat } from '../routes/aibak-chat';
 import { KnowledgeDocument, IKnowledgeDocument } from '../models/KnowledgeDocument';
 import { logger } from '../lib/logger';
 import { measure } from '../lib/trace';
+import type { FilterQuery } from 'mongoose';
+import { buildRagAccessFilter } from './rag-access';
 
 /** RAG 检索结果的来源文档（已收敛 document: any 为强类型） */
 export interface RAGSource {
@@ -46,7 +48,8 @@ class RAGService {
   async ragChat(
     sessionId: string | undefined,
     question: string,
-    userId: string = 'default-user'
+    userId: string = 'default-user',
+    accessFilter: FilterQuery<IKnowledgeDocument> = buildRagAccessFilter()
   ): Promise<{ answer: string; sources: RAGSource[]; sessionId: string }> {
     try {
       // 1. 检索相关文档（向量检索失败则回退关键词检索，保证知识库问答始终可用）
@@ -55,11 +58,12 @@ class RAGService {
       try {
         searchResults = await embeddingService.searchSimilarDocuments(question, {
           limit: this.config.maxDocuments,
-          minSimilarity: this.config.minSimilarity
+          minSimilarity: this.config.minSimilarity,
+          filter: accessFilter
         });
       } catch (embedErr) {
         logger.warn('rag', `Embedding search failed, falling back to keyword search: ${(embedErr as Error)?.message}`);
-        searchResults = await this.keywordSearch(question, this.config.maxDocuments);
+        searchResults = await this.keywordSearch(question, this.config.maxDocuments, accessFilter);
       }
 
       if (searchResults.length === 0) {
@@ -139,7 +143,8 @@ class RAGService {
   // 基于标题/正文/标签/分类的文本匹配返回相关文档，保证知识库问答不崩溃。
   private async keywordSearch(
     query: string,
-    limit: number
+    limit: number,
+    accessFilter: FilterQuery<IKnowledgeDocument>
   ): Promise<Array<{ document: IKnowledgeDocument; similarity: number }>> {
     const terms = query.split(/\s+/).map(t => t.trim()).filter(t => t.length > 1);
     const or: Record<string, any>[] = [
@@ -149,7 +154,7 @@ class RAGService {
     if (terms.length) {
       or.push({ tags: { $in: terms } }, { categories: { $in: terms } });
     }
-    const docs = await KnowledgeDocument.find({ $or: or })
+    const docs = await KnowledgeDocument.find({ $and: [accessFilter, { $or: or }] })
       .limit(limit)
       .lean();
     return docs.map(d => ({ document: d as unknown as IKnowledgeDocument, similarity: 0.72 }));

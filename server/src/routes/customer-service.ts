@@ -4,6 +4,7 @@ import { CustomerService, CustomerServiceSession, CustomerServiceAuditLog, build
 import { KnowledgeDocument } from '../models/KnowledgeDocument';
 import { Team, ITeam, ITeamMember } from '../models/Team';
 import { embeddingService } from '../services/embedding';
+import { buildRagAccessFilter } from '../services/rag-access';
 import { aiModelManager, getPreferredAgnesTextModel } from '../config/ai-models';
 import { route } from '../gateway/ai-gateway.service';
 import { logger } from '../lib/logger';
@@ -215,19 +216,33 @@ router.post('/chat/:embedCode', optionalAuth, enforceQuota('cs_query'), async (r
     let context = '';
     let sources: SourceRef[] = [];
     if (cs.knowledgeBaseIds.length > 0) {
-      const docs = await KnowledgeDocument.find({ _id: { $in: cs.knowledgeBaseIds } });
+      // 嵌入客服是匿名入口：只有公开、免费且可阅读全文的文档才能作为上下文。
+      // 每次读取重新校验，避免绑定后被改为私有/付费的文档继续泄露。
+      const publicFullTextFilter = buildRagAccessFilter();
+      const docs = await KnowledgeDocument.find({
+        _id: { $in: cs.knowledgeBaseIds },
+        ...publicFullTextFilter,
+      });
       if (docs.length > 0) {
+        const allowedById = new Map(docs.map((doc) => [String(doc._id), doc]));
         const searchResults = await withCustomerServiceTimeout(
-          embeddingService.searchSimilarDocuments(message, { limit: 5, minSimilarity: 0.6 }),
+          embeddingService.searchSimilarDocuments(message, {
+            limit: 5,
+            minSimilarity: 0.6,
+            filter: publicFullTextFilter,
+          }),
           CUSTOMER_SERVICE_RAG_TIMEOUT_MS,
           '知识库检索'
         ).catch(() => [] as ScoredDoc[]);
-        const scoped = (searchResults as ScoredDoc[])
-          .filter((r) => cs.knowledgeBaseIds.includes(r.document._id!.toString()))
-          .slice(0, 5);
+        // 向量库返回的 payload 及正文不可信，只使用其 ID/相似度，
+        // 正文和来源必须重新取自已通过 MongoDB 权限过滤的文档。
+        const scoped: ScoredDoc[] = (searchResults as ScoredDoc[]).flatMap((r) => {
+          const doc = allowedById.get(String(r.document?._id ?? r.document?.id ?? ''));
+          return doc ? [{ document: doc, similarity: r.similarity }] : [];
+        }).slice(0, 5);
         const used: ScoredDoc[] = scoped.length > 0
           ? scoped
-          : docs.slice(0, 3).map((d: { _id: { toString(): string }; title: string; content: string }) => ({ document: d, similarity: 1 }));
+          : docs.slice(0, 3).map((d) => ({ document: d, similarity: 1 }));
         sources = extractSources(used);
         context = used
           .map((r, i: number) => `【文档${i + 1}】${r.document.title}\n${r.document.content.substring(0, 800)}`)
