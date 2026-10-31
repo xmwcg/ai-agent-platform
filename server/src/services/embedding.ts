@@ -1,6 +1,7 @@
 import { createAIClient } from '../config/ai-models';
 import { KnowledgeDocument, IKnowledgeDocument } from '../models/KnowledgeDocument';
 import { FilterQuery } from 'mongoose';
+import { buildRagAccessFilter } from './rag-access';
 import { logger } from '../lib/logger';
 import { getVectorStore, cosineSimilarity, rankByCosine, VectorCandidate } from './vector-store';
 
@@ -130,7 +131,7 @@ class EmbeddingService {
       filter?: FilterQuery<IKnowledgeDocument>;
     } = {}
   ): Promise<Array<{ document: IKnowledgeDocument; similarity: number }>> {
-    const { limit = 5, minSimilarity = 0.7, filter = {} } = options;
+    const { limit = 5, minSimilarity = 0.7, filter = buildRagAccessFilter() } = options;
 
     try {
       // 生成查询向量
@@ -157,12 +158,16 @@ class EmbeddingService {
         }));
       }
 
-      // 专业向量库（qdrant / pinecone）：远程检索，payload 携带必要字段
+      // 远程向量 payload 不可信：只把它当候选 ID，重新读取 Mongo 并应用权限过滤。
       const hits = await store.search(queryEmbedding, { topK: limit, minSimilarity });
-      return hits.map((h) => ({
-        document: (h.payload?.doc ?? { _id: h.id, title: h.payload?.title ?? '(远程向量)', content: '' }) as IKnowledgeDocument,
-        similarity: h.similarity,
-      }));
+      const ids = hits.map((h) => h.id).filter((id) => /^[a-f0-9]{24}$/i.test(id));
+      if (!ids.length) return [];
+      const documents = await KnowledgeDocument.find({ $and: [filter, { _id: { $in: ids } }] });
+      const authorized = new Map(documents.map((doc) => [String(doc._id), doc]));
+      return hits.flatMap((hit) => {
+        const doc = authorized.get(hit.id);
+        return doc ? [{ document: doc, similarity: hit.similarity }] : [];
+      });
     } catch (error) {
       logger.error('embedding', 'Search similar documents error', error instanceof Error ? error.message : error);
       throw error;

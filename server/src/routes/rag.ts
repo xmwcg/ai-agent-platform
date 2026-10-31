@@ -6,6 +6,7 @@ import { optionalAuth, requireAuth, AuthRequest } from '../middleware/auth';
 import { enforceQuota, quotaIncrement } from '../middleware/subscription';
 import { sendError } from '../lib/http-error';
 import { validate, ValidationSchema } from '../lib/validation';
+import { resolveRagAccessFilter } from '../services/rag-access';
 
 const router = Router();
 
@@ -30,13 +31,14 @@ router.get("/", (_req, res) => {
 });
 router.post('/chat', optionalAuth, enforceQuota('rag_query'), async (req: AuthRequest, res: Response) => {
   try {
-    const { question, sessionId, userId = 'default-user' } = req.body;
+    const { question, sessionId } = req.body;
 
     if (!question) {
       return res.status(400).json({ error: 'Question is required' });
     }
 
-    const result = await ragService.ragChat(sessionId, question, userId);
+    const accessFilter = await resolveRagAccessFilter(req.user?.id);
+    const result = await ragService.ragChat(sessionId, question, req.user?.id || 'default-user', accessFilter);
     if (req.user?.id) await quotaIncrement(req.user.id, 'rag_query');
 
     res.json({
@@ -108,9 +110,11 @@ router.post('/search', optionalAuth, enforceQuota('rag_query'), async (req: Auth
       return res.status(400).json({ error: 'Query is required' });
     }
 
+    const accessFilter = await resolveRagAccessFilter(req.user?.id);
     const results = await embeddingService.searchSimilarDocuments(query, {
       limit,
-      minSimilarity
+      minSimilarity,
+      filter: accessFilter
     });
     if (req.user?.id) await quotaIncrement(req.user.id, 'rag_query');
 
